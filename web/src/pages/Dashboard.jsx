@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { dbHelpers } from '../lib/supabase'
 import { format } from 'date-fns'
-import { ja } from 'date-fns/locale'統合させてください。必要
+import { ja } from 'date-fns/locale'
 
 export default function Dashboard() {
   const { user } = useAuth()
