@@ -110,7 +110,7 @@ export function ThemeProvider({ children }) {
 
   // 現在のテーマの取得
   const getCurrentTheme = () => {
-    if (isSystemTheme) return 'system'
+    if (isSystemTheme) {return 'system'}
     return theme
   }
 
@@ -124,7 +124,7 @@ export function ThemeProvider({ children }) {
 
   // テーマ名の取得
   const getThemeName = () => {
-    if (isSystemTheme) return 'システム'
+    if (isSystemTheme) {return 'システム'}
     return theme === 'dark' ? 'ダークモード' : 'ライトモード'
   }
 
@@ -273,7 +273,7 @@ export function useTheme() {
 
 // テーマ切り替えボタンコンポーネント
 export function ThemeToggle({ className = '' }) {
-  const { theme, toggleTheme, getThemeIcon, getThemeName } = useTheme()
+  const { toggleTheme, getThemeIcon, getThemeName } = useTheme()
   
   return (
     <button

@@ -25,7 +25,7 @@ const ExtensionBridge = () => {
         window.chrome.runtime.sendMessage(
           'extension-id-here', // 実際の拡張機能IDに置き換える必要がある
           { action: 'ping' },
-          (response) => {
+          (_response) => {
             if (window.chrome.runtime.lastError) {
               console.warn('Extension not found:', window.chrome.runtime.lastError)
               setExtensionInstalled(false)
@@ -77,7 +77,7 @@ const ExtensionBridge = () => {
   }
 
   const syncAuthToken = () => {
-    if (!session || !extensionInstalled) return
+    if (!session || !extensionInstalled) {return}
 
     try {
       const authData = {
@@ -98,7 +98,7 @@ const ExtensionBridge = () => {
             action: 'syncAuth',
             data: authData
           },
-          (response) => {
+          (_response) => {
             if (window.chrome.runtime.lastError) {
               console.warn('Failed to sync auth via extension API:', window.chrome.runtime.lastError)
               // フォールバック: DOM経由

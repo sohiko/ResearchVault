@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { toast } from 'react-hot-toast'
 
-const AddReferenceModal = ({ onClose, onAdd, projectId }) => {
+const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
   const [formData, setFormData] = useState({
     url: '',
     title: '',

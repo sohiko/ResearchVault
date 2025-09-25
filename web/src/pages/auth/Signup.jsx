@@ -59,7 +59,7 @@ export default function Signup() {
     }
 
     try {
-      const { data, error } = await signUp(formData.email, formData.password, {
+      const { error } = await signUp(formData.email, formData.password, {
         name: formData.name
       })
       

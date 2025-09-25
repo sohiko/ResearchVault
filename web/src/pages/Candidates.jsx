@@ -80,7 +80,7 @@ export default function Candidates() {
       setSaving(true)
       setError(null)
 
-      const { data: reference, error } = await supabase
+      const { error } = await supabase
         .from('references')
         .insert({
           title: candidate.title,
@@ -227,14 +227,14 @@ function CandidateCard({ candidate, projects, onSave, onDismiss, saving }) {
   const [selectedProject, setSelectedProject] = useState('')
 
   const getConfidenceColor = (confidence) => {
-    if (confidence >= 0.9) return 'bg-green-100 text-green-800'
-    if (confidence >= 0.7) return 'bg-yellow-100 text-yellow-800'
+    if (confidence >= 0.9) {return 'bg-green-100 text-green-800'}
+    if (confidence >= 0.7) {return 'bg-yellow-100 text-yellow-800'}
     return 'bg-red-100 text-red-800'
   }
 
   const getConfidenceText = (confidence) => {
-    if (confidence >= 0.9) return '高'
-    if (confidence >= 0.7) return '中'
+    if (confidence >= 0.9) {return '高'}
+    if (confidence >= 0.7) {return '中'}
     return '低'
   }
 

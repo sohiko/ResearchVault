@@ -121,7 +121,7 @@ const ERROR_MESSAGES = {
 /**
  * ユーザーフレンドリーなエラーメッセージを取得
  */
-export function getUserFriendlyMessage(error, type = ERROR_TYPES.UNKNOWN) {
+export function getUserFriendlyMessage(error, _type = ERROR_TYPES.UNKNOWN) {
   if (typeof error === 'string') {
     return ERROR_MESSAGES[error] || ERROR_MESSAGES.default
   }
@@ -297,7 +297,7 @@ export class ErrorHandler {
   /**
    * エラー報告（外部サービス連携）
    */
-  async reportError(rvError) {
+  async reportError(_rvError) {
     try {
       // プロダクション環境でのエラー報告
       if (import.meta.env.PROD) {
@@ -375,7 +375,7 @@ export const withRetry = (fn, context) => errorHandler.withRetry(fn, context)
 /**
  * 非同期処理のエラーハンドリング用デコレータ
  */
-export function handleAsync(_target, propertyKey, descriptor) {
+export function handleAsync(__target, propertyKey, descriptor) {
   const originalMethod = descriptor.value
   
   descriptor.value = async function (...args) {

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { supabase, dbHelpers, realtimeHelpers } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { toast } from 'react-hot-toast'
 
@@ -52,7 +52,7 @@ export function ProjectProvider({ children }) {
         .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
         .order('updated_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {throw error}
 
       // データの整形
       const formattedProjects = data.map(project => ({
@@ -87,7 +87,7 @@ export function ProjectProvider({ children }) {
 
   // リアルタイム購読の設定
   useEffect(() => {
-    if (!user) return
+    if (!user) {return}
 
     // プロジェクトの変更を監視
     const projectSubscription = supabase
@@ -139,7 +139,7 @@ export function ProjectProvider({ children }) {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {throw error}
 
       // プロファイルが存在しない場合は作成
       await ensureProfile(user)
@@ -183,7 +183,7 @@ export function ProjectProvider({ children }) {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('プロジェクトを更新しました')
       await fetchProjects() // プロジェクト一覧を更新
@@ -227,7 +227,7 @@ export function ProjectProvider({ children }) {
         .delete()
         .eq('id', projectId)
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('プロジェクトを削除しました')
       
@@ -280,13 +280,13 @@ export function ProjectProvider({ children }) {
         .insert({
           project_id: projectId,
           user_id: userData.id,
-          role: role,
+          role,
           joined_at: new Date().toISOString()
         })
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('メンバーを招待しました')
       await fetchProjects() // プロジェクト一覧を更新
@@ -308,7 +308,7 @@ export function ProjectProvider({ children }) {
         .eq('project_id', projectId)
         .eq('user_id', userId)
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('メンバーを削除しました')
       await fetchProjects() // プロジェクト一覧を更新
@@ -332,7 +332,7 @@ export function ProjectProvider({ children }) {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('メンバーロールを更新しました')
       await fetchProjects() // プロジェクト一覧を更新
@@ -410,17 +410,17 @@ export function ProjectProvider({ children }) {
 
   // ユーザーの権限チェック
   const canEditProject = (project) => {
-    if (!user || !project) return false
+    if (!user || !project) {return false}
     return project.owner_id === user.id || project.userRole === 'admin'
   }
 
   const canDeleteProject = (project) => {
-    if (!user || !project) return false
+    if (!user || !project) {return false}
     return project.owner_id === user.id
   }
 
   const canInviteMembers = (project) => {
-    if (!user || !project) return false
+    if (!user || !project) {return false}
     return project.owner_id === user.id || project.userRole === 'admin'
   }
 

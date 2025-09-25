@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { supabase } from '../lib/supabase'
+// import { supabase } from '../lib/supabase' // 未使用のためコメントアウト
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 

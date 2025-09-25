@@ -244,7 +244,7 @@ export const authHelpers = {
   async signOut() {
     try {
       const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      if (error) {throw error}
       return { error: null }
     } catch (error) {
       console.error('Sign out error:', error)
@@ -259,7 +259,7 @@ export const authHelpers = {
         redirectTo: `${window.location.origin}/auth/reset-password`
       })
       
-      if (error) throw error
+      if (error) {throw error}
       return { data, error: null }
     } catch (error) {
       console.error('Password reset error:', error)
@@ -274,7 +274,7 @@ export const authHelpers = {
         data: updates
       })
       
-      if (error) throw error
+      if (error) {throw error}
       return { data, error: null }
     } catch (error) {
       console.error('Profile update error:', error)
@@ -298,7 +298,7 @@ export const dbHelpers = {
         .or(`owner_id.eq.${userId},project_members.user_id.eq.${userId}`)
         .order('updated_at', { ascending: false })
       
-      if (error) throw error
+      if (error) {throw error}
       
       // 参照数を計算
       return data.map(project => ({
@@ -333,7 +333,7 @@ export const dbHelpers = {
       }
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) {throw error}
       
       return data
     } catch (error) {

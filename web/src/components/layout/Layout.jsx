@@ -5,7 +5,7 @@ import { useTheme } from '../../hooks/useTheme'
 
 export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { theme } = useTheme()
+  useTheme() // テーマの読み込みのため
 
   return (
     <div className="min-h-screen bg-secondary-50 dark:bg-secondary-900">

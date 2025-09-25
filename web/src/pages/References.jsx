@@ -101,7 +101,7 @@ export default function References() {
 
   const handleAddReference = async (referenceData) => {
     try {
-      const { data: reference, error } = await supabase
+      const { error } = await supabase
         .from('references')
         .insert({
           title: referenceData.title.trim(),

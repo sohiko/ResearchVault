@@ -8,7 +8,7 @@ const ReferenceCard = ({ reference, onDelete }) => {
   const [showActions, setShowActions] = useState(false)
 
   const truncateText = (text, maxLength = 150) => {
-    if (!text || text.length <= maxLength) return text
+    if (!text || text.length <= maxLength) {return text}
     return text.substring(0, maxLength) + '...'
   }
 

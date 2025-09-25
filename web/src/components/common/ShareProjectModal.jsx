@@ -70,7 +70,7 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
   }
 
   const handleRemoveMember = async (memberId) => {
-    if (!confirm('このメンバーをプロジェクトから削除しますか？')) return
+    if (!confirm('このメンバーをプロジェクトから削除しますか？')) {return}
 
     try {
       const { error } = await supabase
@@ -78,7 +78,7 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
         .delete()
         .eq('id', memberId)
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('メンバーを削除しました')
       onUpdate()
@@ -95,7 +95,7 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
         .update({ role: newRole })
         .eq('id', memberId)
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('権限を更新しました')
       onUpdate()

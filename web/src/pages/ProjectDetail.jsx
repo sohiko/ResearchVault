@@ -105,7 +105,7 @@ export default function ProjectDetail() {
 
     const { data, error } = await query
 
-    if (error) throw error
+    if (error) {throw error}
 
     // データの整形
     const formattedReferences = data.map(ref => ({
@@ -127,14 +127,14 @@ export default function ProjectDetail() {
       `)
       .eq('project_id', id)
 
-    if (error) throw error
+    if (error) {throw error}
 
     setMembers(data)
   }
 
   const handleAddReference = async (referenceData) => {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('references')
         .insert([{
           ...referenceData,
@@ -144,7 +144,7 @@ export default function ProjectDetail() {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {throw error}
 
       await loadReferences()
       setShowAddReference(false)
@@ -156,7 +156,7 @@ export default function ProjectDetail() {
   }
 
   const handleDeleteReference = async (referenceId) => {
-    if (!confirm('この参照を削除しますか？')) return
+    if (!confirm('この参照を削除しますか？')) {return}
 
     try {
       const { error } = await supabase
@@ -164,7 +164,7 @@ export default function ProjectDetail() {
         .delete()
         .eq('id', referenceId)
 
-      if (error) throw error
+      if (error) {throw error}
 
       await loadReferences()
       toast.success('参照を削除しました')
@@ -186,7 +186,7 @@ export default function ProjectDetail() {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {throw error}
 
       setProject(data)
       setShowEditModal(false)
