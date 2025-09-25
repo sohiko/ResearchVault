@@ -1,0 +1,59 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: web/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        cd web
+        npm ci
+    
+    - name: Run linting
+      run: |
+        cd web
+        npm run lint
+    
+    - name: Run tests
+      run: |
+        cd web
+        npm run test
+    
+    - name: Build application
+      run: |
+        cd web
+        npm run build
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-files
+        path: web/dist/
+
+  extension-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate Chrome Extension
+      run: |
+        cd extension
+        # Chrome拡張機能のマニフェストファイルの検証
+        node -p "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
