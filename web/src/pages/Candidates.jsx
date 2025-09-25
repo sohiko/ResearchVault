@@ -25,11 +25,11 @@ export default function Candidates() {
     try {
       setLoading(true)
       
-      // プロジェクトを取得
+      // プロジェクトを取得（所有プロジェクトのみ簡略化）
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select('id, name, color, icon')
-        .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
+        .eq('owner_id', user.id)
         .order('name')
 
       if (projectsError) {

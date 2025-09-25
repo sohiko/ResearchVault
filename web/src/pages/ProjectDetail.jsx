@@ -40,27 +40,48 @@ export default function ProjectDetail() {
   const loadProject = useCallback(async () => {
     if (!id || !user) {return}
     
-    const { data, error } = await supabase
+    // プロジェクトの基本情報を取得
+    const { data: projectData, error: projectError } = await supabase
       .from('projects')
       .select(`
         *,
-        project_members!inner(role),
-        profiles!inner(name, email)
+        profiles!owner_id(name, email)
       `)
       .eq('id', id)
-      .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
       .single()
 
-    if (error) {
-      if (error.code === 'PGRST116') {
+    if (projectError) {
+      if (projectError.code === 'PGRST116') {
         navigate('/projects')
-        toast.error('プロジェクトが見つからないか、アクセス権限がありません')
+        toast.error('プロジェクトが見つかりません')
         return
       }
-      throw error
+      throw projectError
     }
 
-    setProject(data)
+    // アクセス権限をチェック
+    const isOwner = projectData.owner_id === user.id
+    let hasAccess = isOwner
+
+    if (!isOwner) {
+      // メンバーかどうかチェック
+      const { data: memberData } = await supabase
+        .from('project_members')
+        .select('role')
+        .eq('project_id', id)
+        .eq('user_id', user.id)
+        .single()
+
+      hasAccess = !!memberData
+    }
+
+    if (!hasAccess) {
+      navigate('/projects')
+      toast.error('このプロジェクトにアクセスする権限がありません')
+      return
+    }
+
+    setProject(projectData)
   }, [id, user, navigate])
 
   const loadReferences = useCallback(async () => {

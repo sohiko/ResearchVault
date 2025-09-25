@@ -37,41 +37,79 @@ export function ProjectProvider({ children }) {
     try {
       setLoading(true)
       
-      const { data, error } = await supabase
+      // 所有プロジェクトを取得
+      const { data: ownedProjects, error: ownedError } = await supabase
         .from('projects')
         .select(`
           *,
-          project_members!inner(
-            role,
-            joined_at,
-            profiles(name, email)
-          ),
           references(id),
           owner:profiles!owner_id(name, email)
         `)
-        .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
+        .eq('owner_id', user.id)
         .order('updated_at', { ascending: false })
 
-      if (error) {throw error}
+      if (ownedError) {throw ownedError}
 
-      // データの整形
-      const formattedProjects = data.map(project => ({
-        ...project,
-        referenceCount: project.references?.length || 0,
-        memberCount: project.project_members?.length || 0,
-        members: project.project_members?.map(member => ({
-          role: member.role,
-          joinedAt: member.joined_at,
-          user: member.profiles
-        })) || [],
-        owner: project.owner,
-        isOwner: project.owner_id === user.id,
-        userRole: project.project_members?.find(member => 
-          member.profiles?.email === user.email
-        )?.role || (project.owner_id === user.id ? 'admin' : 'viewer')
-      }))
+      // メンバープロジェクトを取得
+      const { data: memberData, error: memberError } = await supabase
+        .from('project_members')
+        .select(`
+          role,
+          joined_at,
+          profiles(name, email),
+          projects(
+            *,
+            references(id),
+            owner:profiles!owner_id(name, email),
+            project_members(
+              role,
+              joined_at,
+              profiles(name, email)
+            )
+          )
+        `)
+        .eq('user_id', user.id)
 
-      setProjects(formattedProjects)
+      if (memberError) {throw memberError}
+
+      // データを統合・整形
+      const allProjects = [
+        // 所有プロジェクト
+        ...(ownedProjects || []).map(project => ({
+          ...project,
+          referenceCount: project.references?.length || 0,
+          memberCount: 1, // 所有者のみ
+          members: [{
+            role: 'owner',
+            joinedAt: project.created_at,
+            user: project.owner
+          }],
+          isOwner: true,
+          userRole: 'owner'
+        })),
+        // メンバープロジェクト
+        ...(memberData || []).map(member => ({
+          ...member.projects,
+          referenceCount: member.projects.references?.length || 0,
+          memberCount: member.projects.project_members?.length || 0,
+          members: member.projects.project_members?.map(pm => ({
+            role: pm.role,
+            joinedAt: pm.joined_at,
+            user: pm.profiles
+          })) || [],
+          isOwner: false,
+          userRole: member.role
+        }))
+      ]
+
+      // 重複を排除して更新日順でソート
+      const uniqueProjects = allProjects
+        .filter((project, index, self) => 
+          index === self.findIndex(p => p.id === project.id)
+        )
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+
+      setProjects(uniqueProjects)
     } catch (error) {
       console.error('Failed to fetch projects:', error)
       toast.error('プロジェクトの取得に失敗しました')

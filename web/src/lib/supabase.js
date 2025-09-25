@@ -288,20 +288,20 @@ export const dbHelpers = {
   // プロジェクト関連
   async getProjects(userId) {
     try {
+      // 所有プロジェクトのみ取得（簡略化）
       const { data, error } = await supabase
         .from('projects')
         .select(`
           *,
-          project_members!inner(role),
           references(id)
         `)
-        .or(`owner_id.eq.${userId},project_members.user_id.eq.${userId}`)
+        .eq('owner_id', userId)
         .order('updated_at', { ascending: false })
       
       if (error) {throw error}
       
       // 参照数を計算
-      return data.map(project => ({
+      return (data || []).map(project => ({
         ...project,
         referenceCount: project.references?.length || 0,
         references: undefined // 参照リストは削除（メモリ節約）

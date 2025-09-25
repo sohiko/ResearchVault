@@ -23,28 +23,58 @@ export default function Projects() {
       setLoading(true)
       setError(null)
       
-      const { data: projects, error } = await supabase
+      // 所有プロジェクトを取得
+      const { data: ownedProjects, error: ownedError } = await supabase
         .from('projects')
         .select(`
           *,
-          project_members!inner(role),
           references(id)
         `)
-        .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
+        .eq('owner_id', user.id)
         .order('updated_at', { ascending: false })
 
-      if (error) {
-        throw error
+      if (ownedError) {
+        throw ownedError
       }
 
-      // 参照数を計算
-      const formattedProjects = projects.map(project => ({
-        ...project,
-        referenceCount: project.references?.length || 0,
-        role: project.owner_id === user.id ? 'owner' : project.project_members?.[0]?.role || 'viewer'
-      }))
+      // メンバープロジェクトを取得
+      const { data: memberProjects, error: memberError } = await supabase
+        .from('project_members')
+        .select(`
+          role,
+          projects(
+            *,
+            references(id)
+          )
+        `)
+        .eq('user_id', user.id)
 
-      setProjects(formattedProjects)
+      if (memberError) {
+        throw memberError
+      }
+
+      // データを統合
+      const allProjects = [
+        ...(ownedProjects || []).map(project => ({
+          ...project,
+          role: 'owner',
+          referenceCount: project.references?.length || 0
+        })),
+        ...(memberProjects || []).map(member => ({
+          ...member.projects,
+          role: member.role,
+          referenceCount: member.projects?.references?.length || 0
+        }))
+      ]
+
+      // 重複を排除して更新日順でソート
+      const uniqueProjects = allProjects
+        .filter((project, index, self) => 
+          index === self.findIndex(p => p.id === project.id)
+        )
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+
+      setProjects(uniqueProjects)
     } catch (error) {
       console.error('Failed to load projects:', error)
       setError('プロジェクトの読み込みに失敗しました')
