@@ -26,6 +26,7 @@ import NotFound from './pages/NotFound'
 import Candidates from './pages/Candidates'
 import Trash from './pages/Trash'
 import Feedback from './pages/Feedback'
+import Test from './pages/Test'
 
 // プロテクトされたルートコンポーネント
 function ProtectedRoute({ children }) {
@@ -201,6 +202,7 @@ function App() {
                         <Route path="/candidates" element={<Candidates />} />
                         <Route path="/trash" element={<Trash />} />
                         <Route path="/feedback" element={<Feedback />} />
+                        <Route path="/test" element={<Test />} />
                         
                         {/* ルートパスはダッシュボードにリダイレクト */}
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
