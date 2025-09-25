@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { ResearchVaultError, ERROR_TYPES, ERROR_LEVELS, handleError, withRetry } from '../utils/errorHandler.js'
 
 // 環境変数からSupabaseの設定を取得
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -6,17 +7,23 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // 環境変数が設定されていない場合のエラーハンドリング
 if (!supabaseUrl) {
-  throw new Error(
-    'VITE_SUPABASE_URL is not set. Please add it to your .env.local file.\n' +
-    'You can find this in your Supabase project settings.'
+  const error = new ResearchVaultError(
+    'VITE_SUPABASE_URL is not set. Please add it to your .env.local file.\nYou can find this in your Supabase project settings.',
+    ERROR_TYPES.SERVER,
+    ERROR_LEVELS.CRITICAL,
+    { configKey: 'VITE_SUPABASE_URL' }
   )
+  throw error
 }
 
 if (!supabaseAnonKey) {
-  throw new Error(
-    'VITE_SUPABASE_ANON_KEY is not set. Please add it to your .env.local file.\n' +
-    'You can find this in your Supabase project settings.'
+  const error = new ResearchVaultError(
+    'VITE_SUPABASE_ANON_KEY is not set. Please add it to your .env.local file.\nYou can find this in your Supabase project settings.',
+    ERROR_TYPES.SERVER,
+    ERROR_LEVELS.CRITICAL,
+    { configKey: 'VITE_SUPABASE_ANON_KEY' }
   )
+  throw error
 }
 
 // Supabaseクライアントの作成
@@ -43,6 +50,15 @@ export const authStateManager = {
   listeners: new Set(),
   
   subscribe(callback) {
+    if (typeof callback !== 'function') {
+      throw new ResearchVaultError(
+        'Callback must be a function',
+        ERROR_TYPES.VALIDATION,
+        ERROR_LEVELS.LOW,
+        { callbackType: typeof callback }
+      )
+    }
+    
     this.listeners.add(callback)
     
     // 購読解除関数を返す
@@ -51,21 +67,37 @@ export const authStateManager = {
     }
   },
   
-  notify(session, event) {
-    this.listeners.forEach(callback => {
+  async notify(session, event) {
+    const promises = Array.from(this.listeners).map(async (callback) => {
       try {
-        callback(session, event)
+        await callback(session, event)
       } catch (error) {
-        console.error('Auth state listener error:', error)
+        await handleError(error, {
+          method: 'authStateListener',
+          component: 'authStateManager',
+          event: event,
+          hasSession: !!session
+        })
       }
     })
+    
+    // 全てのリスナーの完了を待つ（エラーは個別に処理済み）
+    await Promise.allSettled(promises)
   }
 }
 
 // 認証状態の変更を監視
-supabase.auth.onAuthStateChange((event, session) => {
+supabase.auth.onAuthStateChange(async (event, session) => {
   console.log('Auth state changed:', event, session?.user?.email)
-  authStateManager.notify(session, event)
+  try {
+    await authStateManager.notify(session, event)
+  } catch (error) {
+    await handleError(error, {
+      method: 'onAuthStateChange',
+      component: 'supabase',
+      event: event
+    })
+  }
 })
 
 // ユーティリティ関数
@@ -74,10 +106,25 @@ export const authHelpers = {
   async getCurrentUser() {
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
-      if (error) throw error
+      if (error) {
+        throw new ResearchVaultError(
+          error.message,
+          ERROR_TYPES.AUTH,
+          ERROR_LEVELS.MEDIUM,
+          { operation: 'getCurrentUser' },
+          error
+        )
+      }
       return user
     } catch (error) {
-      console.error('Failed to get current user:', error)
+      if (error instanceof ResearchVaultError) {
+        await handleError(error)
+      } else {
+        await handleError(error, {
+          method: 'getCurrentUser',
+          component: 'authHelpers'
+        })
+      }
       return null
     }
   },
@@ -86,10 +133,25 @@ export const authHelpers = {
   async getCurrentSession() {
     try {
       const { data: { session }, error } = await supabase.auth.getSession()
-      if (error) throw error
+      if (error) {
+        throw new ResearchVaultError(
+          error.message,
+          ERROR_TYPES.AUTH,
+          ERROR_LEVELS.MEDIUM,
+          { operation: 'getCurrentSession' },
+          error
+        )
+      }
       return session
     } catch (error) {
-      console.error('Failed to get current session:', error)
+      if (error instanceof ResearchVaultError) {
+        await handleError(error)
+      } else {
+        await handleError(error, {
+          method: 'getCurrentSession',
+          component: 'authHelpers'
+        })
+      }
       return null
     }
   },
@@ -97,36 +159,96 @@ export const authHelpers = {
   // サインアップ
   async signUp(email, password, metadata = {}) {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: metadata,
-          emailRedirectTo: `${window.location.origin}/auth/callback`
-        }
+      // 入力値検証
+      if (!email || !password) {
+        throw new ResearchVaultError(
+          'メールアドレスとパスワードが必要です',
+          ERROR_TYPES.VALIDATION,
+          ERROR_LEVELS.LOW,
+          { hasEmail: !!email, hasPassword: !!password }
+        )
+      }
+
+      const { data, error } = await withRetry(async () => {
+        return await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: metadata,
+            emailRedirectTo: `${window.location.origin}/auth/callback`
+          }
+        })
       })
       
-      if (error) throw error
+      if (error) {
+        throw new ResearchVaultError(
+          error.message,
+          ERROR_TYPES.AUTH,
+          ERROR_LEVELS.MEDIUM,
+          { operation: 'signUp', email, metadata: Object.keys(metadata) },
+          error
+        )
+      }
+      
       return { data, error: null }
     } catch (error) {
-      console.error('Sign up error:', error)
-      return { data: null, error }
+      if (error instanceof ResearchVaultError) {
+        await handleError(error)
+        return { data: null, error }
+      } else {
+        const rvError = await handleError(error, {
+          method: 'signUp',
+          component: 'authHelpers',
+          email
+        })
+        return { data: null, error: rvError }
+      }
     }
   },
 
   // サインイン
   async signIn(email, password) {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      // 入力値検証
+      if (!email || !password) {
+        throw new ResearchVaultError(
+          'メールアドレスとパスワードが必要です',
+          ERROR_TYPES.VALIDATION,
+          ERROR_LEVELS.LOW,
+          { hasEmail: !!email, hasPassword: !!password }
+        )
+      }
+
+      const { data, error } = await withRetry(async () => {
+        return await supabase.auth.signInWithPassword({
+          email,
+          password
+        })
       })
       
-      if (error) throw error
+      if (error) {
+        throw new ResearchVaultError(
+          error.message,
+          ERROR_TYPES.AUTH,
+          ERROR_LEVELS.MEDIUM,
+          { operation: 'signIn', email },
+          error
+        )
+      }
+      
       return { data, error: null }
     } catch (error) {
-      console.error('Sign in error:', error)
-      return { data: null, error }
+      if (error instanceof ResearchVaultError) {
+        await handleError(error)
+        return { data: null, error }
+      } else {
+        const rvError = await handleError(error, {
+          method: 'signIn',
+          component: 'authHelpers',
+          email
+        })
+        return { data: null, error: rvError }
+      }
     }
   },
 

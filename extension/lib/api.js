@@ -1,5 +1,7 @@
 // ResearchVault API Client for Chrome Extension
 
+import { extensionErrorHandler, handleExtensionError, withExtensionRetry } from './errorHandler.js'
+
 export class API {
     constructor() {
         // 本番環境とローカル環境を自動判定
@@ -12,14 +14,32 @@ export class API {
         
         this.authToken = null;
         this.supabaseClient = null;
+        this.connectionStatus = 'unknown' // unknown, online, offline
+        this.requestQueue = [] // オフライン時のリクエストキュー
+        this.retryConfig = {
+            maxRetries: 3,
+            delay: 1000,
+            backoff: 2
+        }
         
         this.initSupabase();
+        this.checkConnection();
     }
 
-    initSupabase() {
-        // Supabaseクライアントの初期化
-        // 本来はSupabaseのJSクライアントを使用するが、拡張機能では簡単なfetch APIを使用
-        console.log('Supabase client initialized');
+    async initSupabase() {
+        try {
+            // Supabaseクライアントの初期化
+            // 本来はSupabaseのJSクライアントを使用するが、拡張機能では簡単なfetch APIを使用
+            console.log('Supabase client initialized');
+            
+            // 接続テスト
+            await this.checkConnection()
+        } catch (error) {
+            await handleExtensionError(error, {
+                method: 'initSupabase',
+                component: 'API'
+            })
+        }
     }
 
     async setAuthToken(token) {
@@ -27,44 +47,143 @@ export class API {
     }
 
     async request(endpoint, options = {}) {
-        const url = `${this.baseURL}${endpoint}`;
-        const config = {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            },
-            ...options
-        };
-
-        if (this.authToken) {
-            config.headers['Authorization'] = `Bearer ${this.authToken}`;
+        const requestContext = {
+            method: 'request',
+            endpoint,
+            component: 'API',
+            options: { ...options, headers: undefined } // ヘッダーは機密情報を含む可能性があるため除外
         }
 
-        try {
-            const response = await fetch(url, config);
-            const data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error?.message || 'API request failed');
+        return await withExtensionRetry(async () => {
+            const url = `${this.baseURL}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Client-Info': 'researchvault-extension@1.0.0',
+                    ...options.headers
+                },
+                timeout: options.timeout || 10000, // 10秒タイムアウト
+                ...options
+            };
+
+            if (this.authToken) {
+                config.headers['Authorization'] = `Bearer ${this.authToken}`;
             }
+
+            try {
+                // AbortController for timeout
+                const controller = new AbortController()
+                const timeoutId = setTimeout(() => controller.abort(), config.timeout)
+                config.signal = controller.signal
+
+                const response = await fetch(url, config);
+                clearTimeout(timeoutId)
+                
+                // レスポンスの検証
+                if (!response.ok) {
+                    const errorData = await this.safeJsonParse(response)
+                    const errorMessage = errorData?.error?.message || 
+                                       errorData?.message || 
+                                       `HTTP ${response.status}: ${response.statusText}`
+                    
+                    const error = new Error(errorMessage)
+                    error.status = response.status
+                    error.response = response
+                    throw error
+                }
+                
+                const data = await this.safeJsonParse(response)
+                
+                // 接続状態を更新
+                this.updateConnectionStatus('online')
+                
+                return { success: true, data };
+            } catch (error) {
+                await this.handleRequestError(error, requestContext)
+                throw error
+            }
+        }, this.retryConfig).catch(async (error) => {
+            const errorDetails = await handleExtensionError(error, requestContext)
+            return { 
+                success: false, 
+                error: extensionErrorHandler.getUserMessage(error),
+                details: errorDetails
+            }
+        })
+    }
+
+    /**
+     * 安全なJSON解析
+     */
+    async safeJsonParse(response) {
+        try {
+            return await response.json()
+        } catch (parseError) {
+            console.warn('Failed to parse response as JSON:', parseError)
+            return { message: await response.text() }
+        }
+    }
+
+    /**
+     * リクエストエラーの処理
+     */
+    async handleRequestError(error, context) {
+        // 接続状態の更新
+        if (error.name === 'AbortError') {
+            this.updateConnectionStatus('offline')
+        } else if (error.message.includes('fetch')) {
+            this.updateConnectionStatus('offline')
+        }
+
+        // 認証エラーの場合はトークンをクリア
+        if (error.status === 401) {
+            this.authToken = null
+            await chrome.storage.sync.remove(['authToken'])
+        }
+
+        // エラーをログに記録
+        await handleExtensionError(error, context)
+    }
+
+    /**
+     * 接続状態の更新
+     */
+    updateConnectionStatus(status) {
+        if (this.connectionStatus !== status) {
+            this.connectionStatus = status
+            console.log(`Connection status changed to: ${status}`)
             
-            return { success: true, data };
-        } catch (error) {
-            console.error('API request error:', error);
-            return { success: false, error: error.message };
+            // バックグラウンドスクリプトに通知
+            chrome.runtime.sendMessage({
+                action: 'connectionStatusChanged',
+                status: status
+            }).catch(() => {
+                // バックグラウンドスクリプトが利用できない場合は無視
+            })
         }
     }
 
     // 認証関連
     async login(email, password) {
         try {
+            if (!email || !password) {
+                throw new Error('メールアドレスとパスワードが必要です')
+            }
+
             const response = await this.request('/auth/login', {
                 method: 'POST',
                 body: JSON.stringify({ email, password })
             });
 
-            if (response.success) {
+            if (response.success && response.data?.token) {
                 this.authToken = response.data.token;
+                
+                // 成功時にはトークンをストレージに保存
+                await chrome.storage.sync.set({ 
+                    authToken: response.data.token,
+                    lastLoginTime: new Date().toISOString()
+                })
+                
                 return {
                     success: true,
                     token: response.data.token,
@@ -74,7 +193,15 @@ export class API {
             
             return response;
         } catch (error) {
-            return { success: false, error: error.message };
+            await handleExtensionError(error, {
+                method: 'login',
+                component: 'API',
+                email: email // パスワードは記録しない
+            })
+            return { 
+                success: false, 
+                error: extensionErrorHandler.getUserMessage(error)
+            };
         }
     }
 
@@ -261,28 +388,89 @@ export class API {
     // ユーティリティメソッド
     async checkConnection() {
         try {
-            const response = await fetch(`${this.baseURL}/health`);
-            return response.ok;
+            const response = await fetch(`${this.baseURL}/health`, {
+                method: 'GET',
+                timeout: 5000,
+                signal: AbortSignal.timeout(5000)
+            });
+            
+            const isOnline = response.ok
+            this.updateConnectionStatus(isOnline ? 'online' : 'offline')
+            return isOnline
         } catch (error) {
-            console.error('Connection check failed:', error);
+            await handleExtensionError(error, {
+                method: 'checkConnection',
+                component: 'API'
+            })
+            this.updateConnectionStatus('offline')
             return false;
         }
     }
 
-    // エラーハンドリング
+    // 非推奨メソッド - 統一エラーハンドラーを使用してください
     handleError(error) {
-        console.error('API Error:', error);
-        
-        // よくあるエラーメッセージの日本語化
-        const errorMessages = {
-            'Unauthorized': '認証が必要です',
-            'Forbidden': 'アクセス権限がありません',
-            'Not Found': 'リソースが見つかりません',
-            'Internal Server Error': 'サーバーエラーが発生しました',
-            'Network Error': 'ネットワークエラーが発生しました'
-        };
+        console.warn('handleError is deprecated. Use extensionErrorHandler instead.')
+        return extensionErrorHandler.getUserMessage(error)
+    }
 
-        return errorMessages[error.message] || error.message || '不明なエラーが発生しました';
+    /**
+     * 健康状態のチェック（詳細）
+     */
+    async getHealthStatus() {
+        try {
+            const response = await this.request('/health')
+            return {
+                api: response.success,
+                database: response.data?.database ?? false,
+                timestamp: new Date().toISOString()
+            }
+        } catch (error) {
+            return {
+                api: false,
+                database: false,
+                timestamp: new Date().toISOString(),
+                error: extensionErrorHandler.getUserMessage(error)
+            }
+        }
+    }
+
+    /**
+     * 接続復旧の試行
+     */
+    async attemptReconnection() {
+        try {
+            const isOnline = await this.checkConnection()
+            if (isOnline && this.requestQueue.length > 0) {
+                // キューされたリクエストを処理
+                await this.processRequestQueue()
+            }
+            return isOnline
+        } catch (error) {
+            await handleExtensionError(error, {
+                method: 'attemptReconnection',
+                component: 'API'
+            })
+            return false
+        }
+    }
+
+    /**
+     * リクエストキューの処理
+     */
+    async processRequestQueue() {
+        const queue = [...this.requestQueue]
+        this.requestQueue = []
+
+        for (const queuedRequest of queue) {
+            try {
+                await queuedRequest.retry()
+            } catch (error) {
+                await handleExtensionError(error, {
+                    method: 'processRequestQueue',
+                    component: 'API'
+                })
+            }
+        }
     }
 
     // バッチ処理

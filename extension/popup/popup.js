@@ -1,27 +1,54 @@
 // ResearchVault Popup JavaScript
 
+import { extensionErrorHandler, handleExtensionError } from '../lib/errorHandler.js'
+
 class PopupManager {
     constructor() {
         this.api = null;
         this.currentUser = null;
         this.currentTab = null;
         this.projects = [];
+        this.isLoading = false;
+        this.retryCount = 0;
+        this.maxRetries = 3;
         this.init();
     }
 
     async init() {
-        console.log('Popup initializing...');
-        await this.loadAPIClass();
-        await this.getCurrentTab();
-        await this.checkAuthState();
-        this.bindEvents();
-        this.updatePageInfo();
+        try {
+            console.log('Popup initializing...');
+            this.showLoading(true);
+            
+            await this.loadAPIClass();
+            await this.getCurrentTab();
+            await this.checkAuthState();
+            this.bindEvents();
+            this.updatePageInfo();
+            
+            console.log('Popup initialized successfully');
+        } catch (error) {
+            await handleExtensionError(error, {
+                method: 'init',
+                component: 'PopupManager'
+            });
+            this.showError('初期化に失敗しました');
+        } finally {
+            this.showLoading(false);
+        }
     }
 
     async loadAPIClass() {
-        // APIクラスを動的にロード
-        const { API } = await import('../lib/api.js');
-        this.api = new API();
+        try {
+            // APIクラスを動的にロード
+            const { API } = await import('../lib/api.js');
+            this.api = new API();
+        } catch (error) {
+            await handleExtensionError(error, {
+                method: 'loadAPIClass',
+                component: 'PopupManager'
+            });
+            throw new Error('APIクラスの読み込みに失敗しました');
+        }
     }
 
     async getCurrentTab() {
@@ -238,28 +265,37 @@ class PopupManager {
 
     async extractPageMetadata() {
         try {
-            // コンテンツスクリプトからメタデータを取得
-            const [result] = await chrome.tabs.executeScript(this.currentTab.id, {
-                code: `
-                    (() => {
-                        const getMetaContent = (name) => {
-                            const meta = document.querySelector(\`meta[name="\${name}"], meta[property="\${name}"]\`);
-                            return meta ? meta.content : null;
-                        };
-                        
-                        return {
-                            author: getMetaContent('author') || getMetaContent('og:author'),
-                            publishedDate: getMetaContent('article:published_time') || getMetaContent('date'),
-                            description: getMetaContent('description') || getMetaContent('og:description'),
-                            siteName: getMetaContent('og:site_name'),
-                            type: getMetaContent('og:type')
-                        };
-                    })();
-                `
+            // Manifest V3対応: chrome.scripting.executeScript を使用
+            if (!this.currentTab?.id) {
+                throw new Error('有効なタブが見つかりません');
+            }
+
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: this.currentTab.id },
+                func: () => {
+                    const getMetaContent = (name) => {
+                        const meta = document.querySelector(`meta[name="${name}"], meta[property="${name}"]`);
+                        return meta ? meta.content : null;
+                    };
+                    
+                    return {
+                        author: getMetaContent('author') || getMetaContent('og:author'),
+                        publishedDate: getMetaContent('article:published_time') || getMetaContent('date'),
+                        description: getMetaContent('description') || getMetaContent('og:description'),
+                        siteName: getMetaContent('og:site_name'),
+                        type: getMetaContent('og:type'),
+                        canonical: getMetaContent('og:url') || document.querySelector('link[rel="canonical"]')?.href
+                    };
+                }
             });
-            return result;
+            
+            return results[0]?.result || {};
         } catch (error) {
-            console.error('Failed to extract metadata:', error);
+            await handleExtensionError(error, {
+                method: 'extractPageMetadata',
+                component: 'PopupManager',
+                tabId: this.currentTab?.id
+            });
             return {};
         }
     }
@@ -281,12 +317,24 @@ class PopupManager {
 
     async getSelectedText() {
         try {
-            const [result] = await chrome.tabs.executeScript(this.currentTab.id, {
-                code: 'window.getSelection().toString();'
+            if (!this.currentTab?.id) {
+                throw new Error('有効なタブが見つかりません');
+            }
+
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: this.currentTab.id },
+                func: () => {
+                    return window.getSelection().toString();
+                }
             });
-            return result;
+            
+            return results[0]?.result || null;
         } catch (error) {
-            console.error('Failed to get selected text:', error);
+            await handleExtensionError(error, {
+                method: 'getSelectedText',
+                component: 'PopupManager',
+                tabId: this.currentTab?.id
+            });
             return null;
         }
     }
@@ -343,48 +391,172 @@ class PopupManager {
         document.getElementById('memoInput').value = '';
     }
 
-    showError(message) {
-        this.showMessage(message, 'error');
+    showError(message, options = {}) {
+        this.showMessage(message, 'error', options);
     }
 
-    showSuccess(message) {
-        this.showMessage(message, 'success');
+    showSuccess(message, options = {}) {
+        this.showMessage(message, 'success', options);
     }
 
-    showMessage(message, type) {
+    showWarning(message, options = {}) {
+        this.showMessage(message, 'warning', options);
+    }
+
+    showInfo(message, options = {}) {
+        this.showMessage(message, 'info', options);
+    }
+
+    showMessage(message, type = 'info', options = {}) {
+        const {
+            duration = 3000,
+            persistent = false,
+            actionButton = null,
+            onAction = null
+        } = options;
+
         // 既存のメッセージを削除
-        const existingMessage = document.querySelector('.message');
+        const existingMessage = document.querySelector('.rv-message');
         if (existingMessage) {
             existingMessage.remove();
         }
 
+        // メッセージタイプ別の設定
+        const messageConfig = {
+            error: {
+                bg: '#fef2f2',
+                color: '#dc2626',
+                border: '#fecaca',
+                icon: '❌'
+            },
+            success: {
+                bg: '#f0fdf4',
+                color: '#16a34a',
+                border: '#bbf7d0',
+                icon: '✅'
+            },
+            warning: {
+                bg: '#fffbeb',
+                color: '#d97706',
+                border: '#fed7aa',
+                icon: '⚠️'
+            },
+            info: {
+                bg: '#eff6ff',
+                color: '#2563eb',
+                border: '#dbeafe',
+                icon: 'ℹ️'
+            }
+        };
+
+        const config = messageConfig[type] || messageConfig.info;
+
         // 新しいメッセージを作成
         const messageElement = document.createElement('div');
-        messageElement.className = `message ${type === 'error' ? 'error-message' : 'success-message'}`;
-        messageElement.textContent = message;
+        messageElement.className = 'rv-message';
+        
+        let innerHTML = `
+            <div style="display: flex; align-items: flex-start; gap: 8px;">
+                <span style="font-size: 14px;">${config.icon}</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: 500; margin-bottom: 2px;">${message}</div>
+                </div>
+        `;
+
+        if (actionButton && onAction) {
+            innerHTML += `
+                <button class="rv-message-action" style="
+                    padding: 4px 8px;
+                    background: ${config.color};
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    cursor: pointer;
+                    margin-left: 8px;
+                ">${actionButton}</button>
+            `;
+        }
+
+        if (!persistent) {
+            innerHTML += `
+                <button class="rv-message-close" style="
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    padding: 0;
+                    margin-left: 8px;
+                    color: ${config.color};
+                    font-size: 16px;
+                    line-height: 1;
+                ">×</button>
+            `;
+        }
+
+        innerHTML += '</div></div>';
+        messageElement.innerHTML = innerHTML;
+
         messageElement.style.cssText = `
             position: fixed;
             top: 10px;
             left: 10px;
             right: 10px;
             padding: 12px;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 12px;
-            font-weight: 500;
-            z-index: 1000;
-            background: ${type === 'error' ? '#fef2f2' : '#f0fdf4'};
-            color: ${type === 'error' ? '#dc2626' : '#16a34a'};
-            border: 1px solid ${type === 'error' ? '#fecaca' : '#bbf7d0'};
+            z-index: 10000;
+            background: ${config.bg};
+            color: ${config.color};
+            border: 1px solid ${config.border};
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: slideIn 0.3s ease;
         `;
+
+        // イベントリスナー
+        if (actionButton && onAction) {
+            messageElement.querySelector('.rv-message-action')?.addEventListener('click', () => {
+                onAction();
+                messageElement.remove();
+            });
+        }
+
+        messageElement.querySelector('.rv-message-close')?.addEventListener('click', () => {
+            messageElement.remove();
+        });
 
         document.body.appendChild(messageElement);
 
-        // 3秒後に自動削除
-        setTimeout(() => {
-            if (messageElement.parentNode) {
-                messageElement.remove();
-            }
-        }, 3000);
+        // 自動削除（persistentでない場合）
+        if (!persistent && duration > 0) {
+            setTimeout(() => {
+                if (messageElement.parentNode) {
+                    messageElement.style.animation = 'slideOut 0.3s ease forwards';
+                    setTimeout(() => messageElement.remove(), 300);
+                }
+            }, duration);
+        }
+
+        return messageElement;
+    }
+
+    /**
+     * 再試行可能なエラーの表示
+     */
+    showRetryableError(message, retryAction) {
+        this.showError(message, {
+            actionButton: '再試行',
+            onAction: retryAction,
+            duration: 5000
+        });
+    }
+
+    /**
+     * 永続的な警告の表示
+     */
+    showPersistentWarning(message) {
+        return this.showWarning(message, {
+            persistent: true
+        });
     }
 }
 
