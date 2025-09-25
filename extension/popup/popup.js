@@ -1,10 +1,10 @@
 // ResearchVault Popup JavaScript
 
-import { extensionErrorHandler, handleExtensionError } from '../lib/errorHandler.js'
-
 class PopupManager {
     constructor() {
         this.api = null;
+        this.errorHandler = null;
+        this.handleExtensionError = null;
         this.currentUser = null;
         this.currentTab = null;
         this.projects = [];
@@ -19,7 +19,7 @@ class PopupManager {
             console.log('Popup initializing...');
             this.showLoading(true);
             
-            await this.loadAPIClass();
+            await this.loadModules();
             await this.getCurrentTab();
             await this.checkAuthState();
             this.bindEvents();
@@ -27,27 +27,31 @@ class PopupManager {
             
             console.log('Popup initialized successfully');
         } catch (error) {
-            await handleExtensionError(error, {
-                method: 'init',
-                component: 'PopupManager'
-            });
+            if (this.handleExtensionError) {
+                await this.handleExtensionError(error, {
+                    method: 'init',
+                    component: 'PopupManager'
+                });
+            } else {
+                console.error('Init error:', error);
+            }
             this.showError('初期化に失敗しました');
         } finally {
             this.showLoading(false);
         }
     }
 
-    async loadAPIClass() {
+    async loadModules() {
         try {
-            // APIクラスを動的にロード
-            const { API } = await import('../lib/api.js');
+            // グローバルスコープからクラスを取得
             this.api = new API();
+            this.errorHandler = extensionErrorHandler;
+            this.handleExtensionError = handleExtensionError;
+            
+            console.log('Classes initialized successfully');
         } catch (error) {
-            await handleExtensionError(error, {
-                method: 'loadAPIClass',
-                component: 'PopupManager'
-            });
-            throw new Error('APIクラスの読み込みに失敗しました');
+            console.error('Failed to initialize classes:', error);
+            throw new Error('クラスの初期化に失敗しました');
         }
     }
 
@@ -201,7 +205,13 @@ class PopupManager {
                 this.currentUser = result.user;
                 await this.loadProjects();
                 this.showMainSection();
-                this.showSuccess('ログインしました');
+                
+                // モック認証の場合は通知
+                if (result.isMock) {
+                    this.showSuccess('デモモードでログインしました（APIサーバーが利用できません）');
+                } else {
+                    this.showSuccess('ログインしました');
+                }
             } else {
                 this.showError(result.error || 'ログインに失敗しました');
             }
@@ -291,11 +301,15 @@ class PopupManager {
             
             return results[0]?.result || {};
         } catch (error) {
-            await handleExtensionError(error, {
-                method: 'extractPageMetadata',
-                component: 'PopupManager',
-                tabId: this.currentTab?.id
-            });
+            if (this.handleExtensionError) {
+                await this.handleExtensionError(error, {
+                    method: 'extractPageMetadata',
+                    component: 'PopupManager',
+                    tabId: this.currentTab?.id
+                });
+            } else {
+                console.error('Extract metadata error:', error);
+            }
             return {};
         }
     }
@@ -330,11 +344,15 @@ class PopupManager {
             
             return results[0]?.result || null;
         } catch (error) {
-            await handleExtensionError(error, {
-                method: 'getSelectedText',
-                component: 'PopupManager',
-                tabId: this.currentTab?.id
-            });
+            if (this.handleExtensionError) {
+                await this.handleExtensionError(error, {
+                    method: 'getSelectedText',
+                    component: 'PopupManager',
+                    tabId: this.currentTab?.id
+                });
+            } else {
+                console.error('Get selected text error:', error);
+            }
             return null;
         }
     }

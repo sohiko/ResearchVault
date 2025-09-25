@@ -1,6 +1,7 @@
 // ResearchVault Storage Manager for Chrome Extension
+console.log('Loading storage.js...');
 
-export class StorageManager {
+class StorageManager {
     constructor() {
         this.syncStorage = chrome.storage.sync;
         this.localStorage = chrome.storage.local;

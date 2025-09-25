@@ -1,9 +1,10 @@
 // ResearchVault Chrome Extension Error Handler
+console.log('Loading errorHandler.js...');
 
 /**
  * Chrome拡張機能用のエラーハンドリングクラス
  */
-export class ExtensionErrorHandler {
+class ExtensionErrorHandler {
   constructor() {
     this.errorCount = 0
     this.lastErrors = []
@@ -23,7 +24,7 @@ export class ExtensionErrorHandler {
       timestamp: new Date().toISOString(),
       context: context,
       userAgent: navigator.userAgent,
-      url: window.location?.href || context.url || 'unknown',
+      url: context.url || 'unknown',
       count: this.errorCount
     }
 
@@ -234,12 +235,10 @@ export class ExtensionErrorHandler {
 }
 
 // グローバルインスタンス
-export const extensionErrorHandler = new ExtensionErrorHandler()
+const extensionErrorHandler = new ExtensionErrorHandler()
 
 /**
  * 便利なヘルパー関数
  */
-export const handleExtensionError = (error, context) => extensionErrorHandler.handleError(error, context)
-export const withExtensionRetry = (fn, options) => extensionErrorHandler.withRetry(fn, options)
-
-export default extensionErrorHandler
+const handleExtensionError = (error, context) => extensionErrorHandler.handleError(error, context)
+const withExtensionRetry = (fn, options) => extensionErrorHandler.withRetry(fn, options)

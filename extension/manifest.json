@@ -6,7 +6,11 @@
     "permissions": [
         "activeTab",
         "storage",
-        "contextMenus"
+        "contextMenus",
+        "scripting",
+        "notifications",
+        "alarms",
+        "tabs"
     ],
     "host_permissions": [
         "https://*/*",

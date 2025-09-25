@@ -1,18 +1,36 @@
 // ResearchVault Background Service Worker
 
-import { API } from '../lib/api.js';
-import { StorageManager } from '../lib/storage.js';
+// 依存スクリプトを読み込み
+try {
+    importScripts('../lib/errorHandler.js');
+    importScripts('../lib/storage.js');
+    importScripts('../lib/api.js');
+    console.log('Dependencies loaded successfully');
+} catch (error) {
+    console.error('Failed to load dependencies:', error);
+}
 
 class BackgroundManager {
     constructor() {
-        this.api = new API();
-        this.storage = new StorageManager();
+        this.api = null;
+        this.storage = null;
         this.contextMenuCreated = false;
         this.init();
     }
 
     async init() {
         console.log('ResearchVault service worker starting...');
+        
+        try {
+            // API と StorageManager をグローバルスコープから取得
+            this.api = new API();
+            this.storage = new StorageManager();
+            
+            console.log('API and Storage classes initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize classes:', error);
+            // 初期化に失敗した場合の基本的な機能のみ有効化
+        }
         
         // イベントリスナーの設定
         this.setupEventListeners();
@@ -70,6 +88,11 @@ class BackgroundManager {
     }
 
     async setupDefaultSettings() {
+        if (!this.storage) {
+            console.warn('Storage not available, skipping default settings setup');
+            return;
+        }
+        
         const defaultSettings = {
             theme: 'light',
             citationFormat: 'APA',
@@ -175,6 +198,11 @@ class BackgroundManager {
 
     async saveCurrentPage(tab) {
         try {
+            if (!this.storage || !this.api) {
+                this.showNotification('エラー', 'システムが初期化されていません');
+                return;
+            }
+            
             const authToken = await this.storage.getAuthToken();
             if (!authToken) {
                 this.showNotification('ログインが必要です', 'ダッシュボードでログインしてください');
@@ -217,6 +245,11 @@ class BackgroundManager {
 
     async saveSelectedText(info, tab) {
         try {
+            if (!this.storage) {
+                this.showNotification('エラー', 'システムが初期化されていません');
+                return;
+            }
+            
             const authToken = await this.storage.getAuthToken();
             if (!authToken) {
                 this.showNotification('ログインが必要です', 'ダッシュボードでログインしてください');
@@ -251,6 +284,11 @@ class BackgroundManager {
 
     async createBookmark(tab) {
         try {
+            if (!this.storage) {
+                this.showNotification('エラー', 'システムが初期化されていません');
+                return;
+            }
+            
             // スクロール位置と要素情報を取得
             const bookmarkData = await this.getBookmarkData(tab.id);
             
@@ -268,6 +306,11 @@ class BackgroundManager {
 
     async generateCitation(tab) {
         try {
+            if (!this.storage || !this.api) {
+                this.showNotification('エラー', 'システムが初期化されていません');
+                return;
+            }
+            
             const authToken = await this.storage.getAuthToken();
             if (!authToken) {
                 this.showNotification('ログインが必要です');
@@ -303,9 +346,15 @@ class BackgroundManager {
     }
 
     async openDashboard() {
-        const settings = await this.storage.getSettings();
-        const dashboardUrl = settings.dashboardUrl || 'https://research-vault.vercel.app';
-        chrome.tabs.create({ url: dashboardUrl });
+        try {
+            const dashboardUrl = this.storage 
+                ? (await this.storage.getSettings()).dashboardUrl || 'https://research-vault.vercel.app'
+                : 'https://research-vault.vercel.app';
+            chrome.tabs.create({ url: dashboardUrl });
+        } catch (error) {
+            console.error('Failed to open dashboard:', error);
+            chrome.tabs.create({ url: 'https://research-vault.vercel.app' });
+        }
     }
 
     async handleMessage(message, sender, sendResponse) {
@@ -407,6 +456,11 @@ class BackgroundManager {
 
     async syncPendingData() {
         try {
+            if (!this.storage || !this.api) {
+                console.warn('Storage or API not available, skipping sync');
+                return;
+            }
+            
             const authToken = await this.storage.getAuthToken();
             if (!authToken || !navigator.onLine) return;
 
@@ -445,6 +499,11 @@ class BackgroundManager {
 
     async performDailyCleanup() {
         try {
+            if (!this.storage) {
+                console.warn('Storage not available, skipping cleanup');
+                return;
+            }
+            
             const result = await this.storage.cleanupOldData(30);
             console.log('Daily cleanup completed:', result);
         } catch (error) {
