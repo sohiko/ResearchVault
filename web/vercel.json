@@ -9,10 +9,13 @@
     "VITE_APP_NAME": "ResearchVault",
     "VITE_APP_VERSION": "1.0.0"
   },
-  "rewrites": [
+  "routes": [
     {
-      "source": "/((?!_next|favicon.ico|api).*)",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "headers": [
