@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { dbHelpers } from '../lib/supabase'
 import { format } from 'date-fns'
+import ExtensionBridge from '../components/common/ExtensionBridge'
 import { ja } from 'date-fns/locale'
 
 export default function Dashboard() {
@@ -68,6 +69,9 @@ export default function Dashboard() {
           研究活動の概要と最近の活動を確認できます
         </p>
       </div>
+
+      {/* Chrome拡張機能連携 */}
+      <ExtensionBridge />
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard

@@ -23,6 +23,9 @@ import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
 import AuthCallback from './pages/auth/AuthCallback'
 import NotFound from './pages/NotFound'
+import Candidates from './pages/Candidates'
+import Trash from './pages/Trash'
+import Feedback from './pages/Feedback'
 
 // プロテクトされたルートコンポーネント
 function ProtectedRoute({ children }) {
@@ -193,6 +196,11 @@ function App() {
                         {/* 設定 */}
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/account" element={<Account />} />
+                        
+                        {/* その他の機能 */}
+                        <Route path="/candidates" element={<Candidates />} />
+                        <Route path="/trash" element={<Trash />} />
+                        <Route path="/feedback" element={<Feedback />} />
                         
                         {/* ルートパスはダッシュボードにリダイレクト */}
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />

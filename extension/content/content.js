@@ -67,6 +67,9 @@ class ContentScriptManager {
         
         // ページリサイズ
         window.addEventListener('resize', () => this.updateBookmarkPositions());
+        
+        // WebページからのメッセージをリッスンしてResearchVault拡張機能の存在を通知
+        window.addEventListener('message', (event) => this.handleWebpageMessage(event));
     }
 
     async handleMessage(message, sender, sendResponse) {
@@ -630,6 +633,37 @@ class ContentScriptManager {
                 }
             }, 300);
         }, 3000);
+    }
+
+    handleWebpageMessage(event) {
+        if (event.source !== window) return;
+
+        if (event.data.type === 'RESEARCHVAULT_EXTENSION_CHECK' && event.data.source === 'webpage') {
+            // 拡張機能の存在を通知
+            window.postMessage({
+                type: 'RESEARCHVAULT_EXTENSION_RESPONSE',
+                source: 'content_script',
+                installed: true,
+                version: chrome.runtime.getManifest().version
+            }, '*');
+        }
+
+        if (event.data.type === 'RESEARCHVAULT_AUTH_SYNC' && event.data.source === 'webpage') {
+            // 認証データを拡張機能のストレージに保存
+            this.syncAuthFromWebpage(event.data.data);
+        }
+    }
+
+    async syncAuthFromWebpage(authData) {
+        try {
+            await chrome.runtime.sendMessage({
+                action: 'syncAuthFromWebpage',
+                data: authData
+            });
+            console.log('Auth data synced from webpage to extension');
+        } catch (error) {
+            console.error('Failed to sync auth data:', error);
+        }
     }
 
     getPageData() {

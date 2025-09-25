@@ -1,29 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 import { ResearchVaultError, ERROR_TYPES, ERROR_LEVELS, handleError, withRetry } from '../utils/errorHandler.js'
 
-// 環境変数からSupabaseの設定を取得
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Supabaseの設定（環境変数またはフォールバック値）
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
 
-// 環境変数が設定されていない場合のエラーハンドリング
-if (!supabaseUrl) {
-  const error = new ResearchVaultError(
-    'VITE_SUPABASE_URL is not set. Please add it to your .env.local file.\nYou can find this in your Supabase project settings.',
-    ERROR_TYPES.SERVER,
-    ERROR_LEVELS.CRITICAL,
-    { configKey: 'VITE_SUPABASE_URL' }
-  )
-  throw error
+// 環境変数が設定されていない場合は警告を表示
+if (!import.meta.env.VITE_SUPABASE_URL) {
+  console.warn('VITE_SUPABASE_URL is not set, using fallback value. Please add it to your .env.local file for production.');
 }
 
-if (!supabaseAnonKey) {
-  const error = new ResearchVaultError(
-    'VITE_SUPABASE_ANON_KEY is not set. Please add it to your .env.local file.\nYou can find this in your Supabase project settings.',
-    ERROR_TYPES.SERVER,
-    ERROR_LEVELS.CRITICAL,
-    { configKey: 'VITE_SUPABASE_ANON_KEY' }
-  )
-  throw error
+if (!import.meta.env.VITE_SUPABASE_ANON_KEY) {
+  console.warn('VITE_SUPABASE_ANON_KEY is not set, using fallback value. Please add it to your .env.local file for production.');
 }
 
 // Supabaseクライアントの作成

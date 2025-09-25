@@ -380,6 +380,12 @@ class BackgroundManager {
                     this.showNotification('参照を保存しました', message.data.title);
                     break;
                     
+                case 'syncAuthFromWebpage':
+                    // WebページからのAuth同期
+                    await this.handleAuthSync(message.data);
+                    sendResponse({ success: true });
+                    break;
+                    
                 default:
                     sendResponse({ error: 'Unknown action' });
             }
@@ -604,6 +610,30 @@ class BackgroundManager {
             await navigator.clipboard.writeText(text);
         } catch (error) {
             console.error('Failed to copy to clipboard:', error);
+        }
+    }
+
+    async handleAuthSync(authData) {
+        try {
+            if (!this.storage) {
+                console.warn('Storage not available for auth sync');
+                return;
+            }
+
+            // 認証トークンをChromeストレージに保存
+            await this.storage.setAuthToken(authData.token);
+            await this.storage.setUserInfo(authData.user);
+
+            // APIクライアントに認証トークンを設定
+            if (this.api) {
+                this.api.setAuthToken(authData.token);
+            }
+
+            console.log('Auth synced from webpage:', authData.user.email);
+            this.showNotification('認証を同期しました', `${authData.user.email} としてログインしました`);
+        } catch (error) {
+            console.error('Auth sync failed:', error);
+            this.showNotification('認証同期に失敗しました', 'Webページでもう一度ログインしてください');
         }
     }
 
