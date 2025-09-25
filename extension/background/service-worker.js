@@ -441,9 +441,143 @@ class BackgroundManager {
         }
     }
 
+    async collectHistoryCandidates() {
+        try {
+            if (!this.storage || !this.api) {
+                console.warn('Storage or API not available, skipping history collection');
+                return;
+            }
+            
+            const authToken = await this.storage.getAuthToken();
+            if (!authToken || !navigator.onLine) return;
+
+            this.api.setAuthToken(authToken);
+
+            // 過去24時間の履歴を取得
+            const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+            
+            chrome.history.search({
+                text: '',
+                startTime: oneDayAgo,
+                maxResults: 100
+            }, async (historyItems) => {
+                for (const item of historyItems) {
+                    await this.processHistoryItem(item);
+                }
+            });
+
+        } catch (error) {
+            console.error('Failed to collect history candidates:', error);
+        }
+    }
+
+    async processHistoryItem(historyItem) {
+        try {
+            const url = historyItem.url;
+            const title = historyItem.title;
+            
+            // 内部ページや不要なURLをフィルタリング
+            if (this.shouldSkipUrl(url)) {
+                return;
+            }
+
+            const domain = new URL(url).hostname;
+            
+            // 学術サイトまたは研究関連サイトかチェック
+            const isRelevant = this.isRelevantForResearch(url, title, domain);
+            
+            if (isRelevant) {
+                // favicon取得を試行
+                let favicon = null;
+                try {
+                    favicon = `https://www.google.com/s2/favicons?domain=${domain}`;
+                } catch (e) {
+                    // favicon取得失敗は無視
+                }
+
+                // 候補として送信
+                const result = await this.api.createCandidate({
+                    url: url,
+                    title: title,
+                    favicon: favicon,
+                    visitedAt: new Date(historyItem.lastVisitTime).toISOString(),
+                    domain: domain
+                });
+
+                if (!result.success && !result.skipped) {
+                    console.warn('Failed to create candidate:', result.error);
+                }
+            }
+
+        } catch (error) {
+            console.error('Failed to process history item:', error);
+        }
+    }
+
+    shouldSkipUrl(url) {
+        // スキップすべきURLのパターン
+        const skipPatterns = [
+            /^chrome(-extension)?:\/\//,
+            /^moz-extension:\/\//,
+            /^about:/,
+            /^file:\/\//,
+            /localhost/,
+            /127\.0\.0\.1/,
+            /facebook\.com/,
+            /twitter\.com/,
+            /instagram\.com/,
+            /youtube\.com\/watch/,
+            /netflix\.com/,
+            /amazon\.com\/(?!.*books)/,
+            /google\.com\/search/
+        ];
+
+        return skipPatterns.some(pattern => pattern.test(url));
+    }
+
+    isRelevantForResearch(url, title, domain) {
+        // 学術ドメインリスト
+        const academicDomains = [
+            'scholar.google.com',
+            'pubmed.ncbi.nlm.nih.gov',
+            'arxiv.org',
+            'researchgate.net',
+            'nature.com',
+            'science.org',
+            'ieee.org',
+            'springer.com',
+            'wiley.com',
+            'sciencedirect.com',
+            'jstor.org',
+            'nih.gov',
+            'who.int',
+            'un.org',
+            'ipcc.ch',
+            'academia.edu'
+        ];
+
+        // 明確な学術ドメインの場合
+        if (academicDomains.includes(domain) || domain.match(/\.(edu|ac\.|gov)$/)) {
+            return true;
+        }
+
+        // タイトルや URL に研究関連キーワードが含まれる場合
+        const researchKeywords = [
+            'research', 'study', 'analysis', 'paper', 'journal', 'article',
+            'thesis', 'dissertation', 'conference', 'proceedings', 'academic',
+            'scientific', 'scholar', 'publication', 'bibliography', 'citation'
+        ];
+
+        const textToCheck = `${title || ''} ${url}`.toLowerCase();
+        return researchKeywords.some(keyword => textToCheck.includes(keyword));
+    }
+
     setupPeriodicSync() {
         // 5分ごとに同期チェック
         chrome.alarms.create('periodicSync', { periodInMinutes: 5 });
+        
+        // 1時間ごとに履歴候補チェック
+        chrome.alarms.create('historyCheck', { periodInMinutes: 60 });
         
         // 1日1回のクリーンアップ
         chrome.alarms.create('dailyCleanup', { periodInMinutes: 24 * 60 });
@@ -453,6 +587,9 @@ class BackgroundManager {
         switch (alarm.name) {
             case 'periodicSync':
                 await this.syncPendingData();
+                break;
+            case 'historyCheck':
+                await this.collectHistoryCandidates();
                 break;
             case 'dailyCleanup':
                 await this.performDailyCleanup();

@@ -405,6 +405,32 @@ class API {
         });
     }
 
+    // 記録漏れ候補管理
+    async getCandidates(limit = 20, dismissed = false) {
+        const params = new URLSearchParams({
+            limit: limit.toString(),
+            dismissed: dismissed.toString()
+        });
+        return this.request(`/candidates?${params}`);
+    }
+
+    async createCandidate(data) {
+        return this.request('/candidates', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    }
+
+    async dismissCandidate(candidateId) {
+        return this.request('/candidates', {
+            method: 'PUT',
+            body: JSON.stringify({
+                id: candidateId,
+                action: 'dismiss'
+            })
+        });
+    }
+
     // 検索
     async searchReferences(query, filters = {}) {
         const params = new URLSearchParams({

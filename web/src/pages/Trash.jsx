@@ -27,38 +27,42 @@ export default function Trash() {
       setLoading(true)
       setError(null)
       
-      // 実際のアプリケーションでは、削除された項目を追跡するテーブルが必要
-      // ここでは模擬的なデータを表示
-      const mockTrashedItems = [
-        {
-          id: 'trash_1',
-          type: 'reference',
-          title: '削除された参照の例',
-          url: 'https://example.com/deleted-reference',
-          project: { name: 'Extended Essay', color: '#3B82F6' },
-          deletedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          deletedBy: user.id,
-          originalData: {
-            title: '削除された参照の例',
-            url: 'https://example.com/deleted-reference',
-            memo: 'これは削除されたテスト参照です'
-          }
-        },
-        {
-          id: 'trash_2',
-          type: 'project',
-          title: '削除されたプロジェクト',
-          deletedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          deletedBy: user.id,
-          originalData: {
-            name: '削除されたプロジェクト',
-            description: 'テスト用に削除されたプロジェクト',
-            color: '#10B981'
-          }
-        }
-      ]
+      // 実際の削除アイテムデータを取得
+      const { data: trashedData, error: trashedError } = await supabase
+        .from('trashed_items')
+        .select(`
+          *,
+          projects!trashed_items_project_id_fkey(name, color)
+        `)
+        .eq('deleted_by', user.id)
+        .order('deleted_at', { ascending: false })
 
-      setTrashedItems(mockTrashedItems)
+      if (trashedError) {
+        console.error('Failed to load trashed items:', trashedError)
+        // フォールバック: 空の配列を表示
+        setTrashedItems([])
+        return
+      }
+
+      // データ形式を統一
+      const formattedItems = (trashedData || []).map(item => ({
+        id: item.id,
+        type: item.original_table.replace('s', ''), // 'references' -> 'reference'
+        title: item.original_data?.title || item.original_data?.name || 'タイトルなし',
+        url: item.original_data?.url,
+        project: item.projects ? {
+          name: item.projects.name,
+          color: item.projects.color
+        } : null,
+        deletedAt: item.deleted_at,
+        deletedBy: item.deleted_by,
+        originalData: item.original_data,
+        originalId: item.original_id,
+        originalTable: item.original_table,
+        expiresAt: item.restore_expires_at
+      }))
+
+      setTrashedItems(formattedItems)
     } catch (error) {
       console.error('Failed to load trashed items:', error)
       setError('ゴミ箱の読み込みに失敗しました')
@@ -72,40 +76,40 @@ export default function Trash() {
       setProcessing(true)
       setError(null)
 
-      if (item.type === 'reference') {
-        // 参照を復元
-        const { error } = await supabase
-          .from('references')
-          .insert({
-            ...item.originalData,
-            saved_by: user.id,
-            restored_at: new Date().toISOString()
-          })
+      // 元のテーブルにデータを復元
+      const restoreData = {
+        ...item.originalData,
+        id: item.originalId, // 元のIDを使用
+        updated_at: new Date().toISOString()
+      }
 
-        if (error) {
-          throw error
-        }
-      } else if (item.type === 'project') {
-        // プロジェクトを復元
-        const { error } = await supabase
-          .from('projects')
-          .insert({
-            ...item.originalData,
-            owner_id: user.id,
-            restored_at: new Date().toISOString()
-          })
+      const { error: restoreError } = await supabase
+        .from(item.originalTable)
+        .insert(restoreData)
 
-        if (error) {
-          throw error
-        }
+      if (restoreError) {
+        throw restoreError
       }
 
       // ゴミ箱から削除
+      const { error: deleteError } = await supabase
+        .from('trashed_items')
+        .delete()
+        .eq('id', item.id)
+        .eq('deleted_by', user.id)
+
+      if (deleteError) {
+        console.error('Failed to remove from trash:', deleteError)
+        // 復元は成功したので、UIからは削除する
+      }
+
+      // UIから削除
       setTrashedItems(prev => prev.filter(t => t.id !== item.id))
       toast.success('アイテムを復元しました')
     } catch (error) {
       console.error('Failed to restore item:', error)
       setError('復元に失敗しました')
+      toast.error('復元に失敗しました')
     } finally {
       setProcessing(false)
     }
@@ -121,12 +125,24 @@ export default function Trash() {
       setProcessing(true)
       setError(null)
 
-      // ゴミ箱から削除（実際のアプリケーションでは削除履歴テーブルから削除）
+      // ゴミ箱から完全削除
+      const { error } = await supabase
+        .from('trashed_items')
+        .delete()
+        .eq('id', itemToDelete.id)
+        .eq('deleted_by', user.id)
+
+      if (error) {
+        throw error
+      }
+
+      // UIから削除
       setTrashedItems(prev => prev.filter(t => t.id !== itemToDelete.id))
       toast.success('アイテムを完全に削除しました')
     } catch (error) {
       console.error('Failed to permanently delete item:', error)
       setError('完全削除に失敗しました')
+      toast.error('完全削除に失敗しました')
     } finally {
       setProcessing(false)
       setShowConfirmDelete(false)
@@ -144,11 +160,21 @@ export default function Trash() {
       setError(null)
 
       // すべてのアイテムを完全削除
+      const { error } = await supabase
+        .from('trashed_items')
+        .delete()
+        .eq('deleted_by', user.id)
+
+      if (error) {
+        throw error
+      }
+
       setTrashedItems([])
       toast.success('ゴミ箱を空にしました')
     } catch (error) {
       console.error('Failed to empty trash:', error)
       setError('ゴミ箱を空にできませんでした')
+      toast.error('ゴミ箱を空にできませんでした')
     } finally {
       setProcessing(false)
       setShowConfirmEmptyTrash(false)
