@@ -1,0 +1,10 @@
+# Vercel ignore file - only deploy the web directory
+
+# Ignore everything at root level except web directory
+/*
+!/web
+
+# But include important files at root
+!README.md
+!.gitignore
+!LICENSE
