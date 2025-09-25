@@ -8,11 +8,11 @@
 /* ベーススタイル */
 @layer base {
   * {
-    @apply border-border;
+    @apply border-secondary-200;
   }
   
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-white text-secondary-900 font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   

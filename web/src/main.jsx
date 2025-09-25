@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import App from './App.jsx'
 import './styles/globals.css'
-import { handleComponentError, ErrorHandler, ERROR_LEVELS } from './utils/errorHandler.js'
+import { handleComponentError, ErrorHandler } from './utils/errorHandler.js'
 
 // 高度なエラーバウンダリーコンポーネント
 class ErrorBoundary extends React.Component {
@@ -23,7 +23,7 @@ class ErrorBoundary extends React.Component {
     })
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(_error) {
     return { 
       hasError: true,
       errorId: `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -32,8 +32,8 @@ class ErrorBoundary extends React.Component {
 
   async componentDidCatch(error, errorInfo) {
     this.setState({
-      error: error,
-      errorInfo: errorInfo
+      error,
+      errorInfo
     })
     
     // 統一エラーハンドリングシステムを使用

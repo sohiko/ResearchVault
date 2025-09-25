@@ -169,7 +169,7 @@ export function inferErrorType(error) {
 /**
  * エラーレベルを推定
  */
-export function inferErrorLevel(error, type) {
+export function inferErrorLevel(_error, type) {
   switch (type) {
     case ERROR_TYPES.NETWORK:
       return ERROR_LEVELS.MEDIUM
@@ -375,7 +375,7 @@ export const withRetry = (fn, context) => errorHandler.withRetry(fn, context)
 /**
  * 非同期処理のエラーハンドリング用デコレータ
  */
-export function handleAsync(target, propertyKey, descriptor) {
+export function handleAsync(_target, propertyKey, descriptor) {
   const originalMethod = descriptor.value
   
   descriptor.value = async function (...args) {
@@ -384,7 +384,6 @@ export function handleAsync(target, propertyKey, descriptor) {
     } catch (error) {
       await handleError(error, { 
         method: propertyKey,
-        class: target.constructor.name,
         args: args.length
       })
       throw error

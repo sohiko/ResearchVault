@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { supabase, authHelpers, authStateManager, errorHelpers } from '../lib/supabase'
+import { Navigate } from 'react-router-dom'
+import { supabase, authHelpers, errorHelpers } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
 
 // 認証コンテキストの作成
@@ -232,7 +233,7 @@ export function AuthProvider({ children }) {
       if (user?.email) {
         const { error: reAuthError } = await supabase.auth.signInWithPassword({
           email: user.email,
-          password: password
+          password
         })
 
         if (reAuthError) {

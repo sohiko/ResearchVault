@@ -7,11 +7,13 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  web-app:
+    name: Web Application CI
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -25,30 +27,90 @@ jobs:
         cd web
         npm ci
     
-    - name: Run linting
+    - name: Run ESLint
       run: |
         cd web
         npm run lint
+    
+    - name: Run tests (if available)
+      run: |
+        cd web
+        npm run test
     
     - name: Build application
       run: |
         cd web
         npm run build
     
+    - name: Check build artifacts
+      run: |
+        cd web
+        if [ ! -d "dist" ]; then
+          echo "Build failed: dist directory not found"
+          exit 1
+        fi
+        echo "Build successful: $(ls -la dist/)"
+    
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: build-files
+        name: web-build-files
         path: web/dist/
+        retention-days: 30
 
-  extension-build:
+  extension:
+    name: Chrome Extension CI
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
-    - name: Validate Chrome Extension
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Validate Chrome Extension Manifest
       run: |
         cd extension
-        # Chrome拡張機能のマニフェストファイルの検証
-        node -p "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
+        echo "Validating manifest.json..."
+        
+        # Check if manifest.json exists
+        if [ ! -f "manifest.json" ]; then
+          echo "Error: manifest.json not found"
+          exit 1
+        fi
+        
+        # Validate JSON syntax
+        if ! node -p "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))" > /dev/null 2>&1; then
+          echo "Error: Invalid JSON in manifest.json"
+          exit 1
+        fi
+        
+        echo "Manifest validation successful"
+        
+        # Display manifest content for verification
+        echo "Manifest content:"
+        cat manifest.json | jq .
+    
+    - name: Check extension files
+      run: |
+        cd extension
+        echo "Extension directory structure:"
+        find . -type f -name "*.js" -o -name "*.html" -o -name "*.css" -o -name "*.json" | head -20
+        
+        # Check for required files
+        required_files=("background/service-worker.js" "popup/popup.html" "popup/popup.js" "content/content.js")
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "Warning: Required file $file not found"
+          else
+            echo "✓ Found: $file"
+          fi
+        done
+    
+    - name: Package extension (if needed)
+      run: |
+        cd extension
+        echo "Extension validation completed successfully"

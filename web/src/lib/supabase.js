@@ -75,7 +75,7 @@ export const authStateManager = {
         await handleError(error, {
           method: 'authStateListener',
           component: 'authStateManager',
-          event: event,
+          event,
           hasSession: !!session
         })
       }
@@ -95,7 +95,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     await handleError(error, {
       method: 'onAuthStateChange',
       component: 'supabase',
-      event: event
+      event
     })
   }
 })
