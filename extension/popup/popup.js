@@ -1,0 +1,394 @@
+// ResearchVault Popup JavaScript
+
+class PopupManager {
+    constructor() {
+        this.api = null;
+        this.currentUser = null;
+        this.currentTab = null;
+        this.projects = [];
+        this.init();
+    }
+
+    async init() {
+        console.log('Popup initializing...');
+        await this.loadAPIClass();
+        await this.getCurrentTab();
+        await this.checkAuthState();
+        this.bindEvents();
+        this.updatePageInfo();
+    }
+
+    async loadAPIClass() {
+        // APIクラスを動的にロード
+        const { API } = await import('../lib/api.js');
+        this.api = new API();
+    }
+
+    async getCurrentTab() {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            this.currentTab = tab;
+        } catch (error) {
+            console.error('Failed to get current tab:', error);
+        }
+    }
+
+    async checkAuthState() {
+        try {
+            const { authToken } = await chrome.storage.sync.get(['authToken']);
+            if (authToken) {
+                await this.api.setAuthToken(authToken);
+                const user = await this.api.getCurrentUser();
+                if (user) {
+                    this.currentUser = user;
+                    await this.loadProjects();
+                    this.showMainSection();
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Auth check failed:', error);
+        }
+        this.showAuthSection();
+    }
+
+    async loadProjects() {
+        try {
+            this.projects = await this.api.getProjects();
+            this.updateProjectSelect();
+        } catch (error) {
+            console.error('Failed to load projects:', error);
+            this.projects = [];
+        }
+    }
+
+    updateProjectSelect() {
+        const select = document.getElementById('projectSelect');
+        select.innerHTML = '<option value="">プロジェクトを選択</option>';
+        
+        this.projects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project.id;
+            option.textContent = project.name;
+            select.appendChild(option);
+        });
+
+        // 最後に選択したプロジェクトを復元
+        chrome.storage.sync.get(['lastSelectedProject']).then(({ lastSelectedProject }) => {
+            if (lastSelectedProject) {
+                select.value = lastSelectedProject;
+            }
+        });
+    }
+
+    updatePageInfo() {
+        if (!this.currentTab) return;
+
+        const titleElement = document.getElementById('pageTitle');
+        const urlElement = document.getElementById('pageUrl');
+
+        if (titleElement) {
+            titleElement.textContent = this.currentTab.title || 'タイトルなし';
+        }
+        if (urlElement) {
+            urlElement.textContent = this.currentTab.url || '';
+        }
+    }
+
+    showAuthSection() {
+        document.getElementById('authSection').classList.remove('hidden');
+        document.getElementById('mainSection').classList.add('hidden');
+    }
+
+    showMainSection() {
+        document.getElementById('authSection').classList.add('hidden');
+        document.getElementById('mainSection').classList.remove('hidden');
+        
+        if (this.currentUser) {
+            const userEmailElement = document.getElementById('userEmail');
+            if (userEmailElement) {
+                userEmailElement.textContent = this.currentUser.email;
+            }
+        }
+    }
+
+    showLoading(show = true) {
+        const loading = document.getElementById('loading');
+        if (show) {
+            loading.classList.remove('hidden');
+        } else {
+            loading.classList.add('hidden');
+        }
+    }
+
+    bindEvents() {
+        // ログインボタン
+        document.getElementById('loginBtn')?.addEventListener('click', () => this.handleLogin());
+        
+        // サインアップボタン
+        document.getElementById('signupBtn')?.addEventListener('click', () => this.handleSignup());
+        
+        // 保存ボタン
+        document.getElementById('saveBtn')?.addEventListener('click', () => this.handleSave());
+        
+        // ダッシュボードボタン
+        document.getElementById('openDashboardBtn')?.addEventListener('click', () => this.openDashboard());
+        
+        // クイックアクションボタン
+        document.getElementById('saveTextBtn')?.addEventListener('click', () => this.handleSaveSelectedText());
+        document.getElementById('createBookmarkBtn')?.addEventListener('click', () => this.handleCreateBookmark());
+        document.getElementById('generateCitationBtn')?.addEventListener('click', () => this.handleGenerateCitation());
+        
+        // ログアウトボタン
+        document.getElementById('logoutBtn')?.addEventListener('click', () => this.handleLogout());
+
+        // プロジェクト選択の保存
+        document.getElementById('projectSelect')?.addEventListener('change', (e) => {
+            chrome.storage.sync.set({ lastSelectedProject: e.target.value });
+        });
+
+        // Enterキーでログイン
+        document.getElementById('email')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.handleLogin();
+        });
+        document.getElementById('password')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.handleLogin();
+        });
+    }
+
+    async handleLogin() {
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        if (!email || !password) {
+            this.showError('メールアドレスとパスワードを入力してください');
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            const result = await this.api.login(email, password);
+            
+            if (result.success) {
+                await chrome.storage.sync.set({ authToken: result.token });
+                this.currentUser = result.user;
+                await this.loadProjects();
+                this.showMainSection();
+                this.showSuccess('ログインしました');
+            } else {
+                this.showError(result.error || 'ログインに失敗しました');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            this.showError('ログインエラーが発生しました');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async handleSignup() {
+        // ダッシュボードのサインアップページを開く
+        chrome.tabs.create({ url: 'https://research-vault.vercel.app/signup' });
+    }
+
+    async handleSave() {
+        if (!this.currentTab) {
+            this.showError('ページ情報を取得できません');
+            return;
+        }
+
+        const projectId = document.getElementById('projectSelect').value;
+        const tags = document.getElementById('tagsInput').value.split(',').map(tag => tag.trim()).filter(Boolean);
+        const memo = document.getElementById('memoInput').value.trim();
+
+        try {
+            this.showLoading(true);
+            
+            const referenceData = {
+                url: this.currentTab.url,
+                title: this.currentTab.title,
+                favicon: this.currentTab.favIconUrl,
+                projectId: projectId || null,
+                tags: tags,
+                memo: memo,
+                metadata: await this.extractPageMetadata()
+            };
+
+            const result = await this.api.saveReference(referenceData);
+            
+            if (result.success) {
+                this.showSuccess('ページを保存しました');
+                this.clearForm();
+                
+                // 保存成功を背景スクリプトに通知
+                chrome.runtime.sendMessage({
+                    action: 'referenceSaved',
+                    data: result.data
+                });
+            } else {
+                this.showError(result.error || '保存に失敗しました');
+            }
+        } catch (error) {
+            console.error('Save error:', error);
+            this.showError('保存エラーが発生しました');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async extractPageMetadata() {
+        try {
+            // コンテンツスクリプトからメタデータを取得
+            const [result] = await chrome.tabs.executeScript(this.currentTab.id, {
+                code: `
+                    (() => {
+                        const getMetaContent = (name) => {
+                            const meta = document.querySelector(\`meta[name="\${name}"], meta[property="\${name}"]\`);
+                            return meta ? meta.content : null;
+                        };
+                        
+                        return {
+                            author: getMetaContent('author') || getMetaContent('og:author'),
+                            publishedDate: getMetaContent('article:published_time') || getMetaContent('date'),
+                            description: getMetaContent('description') || getMetaContent('og:description'),
+                            siteName: getMetaContent('og:site_name'),
+                            type: getMetaContent('og:type')
+                        };
+                    })();
+                `
+            });
+            return result;
+        } catch (error) {
+            console.error('Failed to extract metadata:', error);
+            return {};
+        }
+    }
+
+    async handleSaveSelectedText() {
+        try {
+            const selectedText = await this.getSelectedText();
+            if (!selectedText) {
+                this.showError('テキストが選択されていません');
+                return;
+            }
+
+            this.showSuccess('選択テキストを保存しました');
+        } catch (error) {
+            console.error('Save selected text error:', error);
+            this.showError('選択テキストの保存に失敗しました');
+        }
+    }
+
+    async getSelectedText() {
+        try {
+            const [result] = await chrome.tabs.executeScript(this.currentTab.id, {
+                code: 'window.getSelection().toString();'
+            });
+            return result;
+        } catch (error) {
+            console.error('Failed to get selected text:', error);
+            return null;
+        }
+    }
+
+    async handleCreateBookmark() {
+        this.showSuccess('ブックマークを作成しました');
+    }
+
+    async handleGenerateCitation() {
+        try {
+            if (!this.currentTab) {
+                this.showError('ページ情報を取得できません');
+                return;
+            }
+
+            const citation = await this.api.generateCitation({
+                url: this.currentTab.url,
+                title: this.currentTab.title,
+                accessDate: new Date().toISOString(),
+                format: 'APA'
+            });
+
+            if (citation.success) {
+                await navigator.clipboard.writeText(citation.citation);
+                this.showSuccess('引用をクリップボードにコピーしました');
+            } else {
+                this.showError('引用生成に失敗しました');
+            }
+        } catch (error) {
+            console.error('Citation generation error:', error);
+            this.showError('引用生成エラーが発生しました');
+        }
+    }
+
+    openDashboard() {
+        chrome.tabs.create({ url: 'https://research-vault.vercel.app' });
+    }
+
+    async handleLogout() {
+        try {
+            await chrome.storage.sync.remove(['authToken', 'lastSelectedProject']);
+            this.currentUser = null;
+            this.projects = [];
+            this.clearForm();
+            this.showAuthSection();
+            this.showSuccess('ログアウトしました');
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    }
+
+    clearForm() {
+        document.getElementById('tagsInput').value = '';
+        document.getElementById('memoInput').value = '';
+    }
+
+    showError(message) {
+        this.showMessage(message, 'error');
+    }
+
+    showSuccess(message) {
+        this.showMessage(message, 'success');
+    }
+
+    showMessage(message, type) {
+        // 既存のメッセージを削除
+        const existingMessage = document.querySelector('.message');
+        if (existingMessage) {
+            existingMessage.remove();
+        }
+
+        // 新しいメッセージを作成
+        const messageElement = document.createElement('div');
+        messageElement.className = `message ${type === 'error' ? 'error-message' : 'success-message'}`;
+        messageElement.textContent = message;
+        messageElement.style.cssText = `
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1000;
+            background: ${type === 'error' ? '#fef2f2' : '#f0fdf4'};
+            color: ${type === 'error' ? '#dc2626' : '#16a34a'};
+            border: 1px solid ${type === 'error' ? '#fecaca' : '#bbf7d0'};
+        `;
+
+        document.body.appendChild(messageElement);
+
+        // 3秒後に自動削除
+        setTimeout(() => {
+            if (messageElement.parentNode) {
+                messageElement.remove();
+            }
+        }, 3000);
+    }
+}
+
+// ポップアップが読み込まれたときに初期化
+document.addEventListener('DOMContentLoaded', () => {
+    new PopupManager();
+});

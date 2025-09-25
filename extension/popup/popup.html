@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResearchVault</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <header class="popup-header">
+            <div class="header-content">
+                <img src="../icons/icon48.png" alt="ResearchVault" class="logo">
+                <h1 class="title">ResearchVault</h1>
+            </div>
+        </header>
+
+        <main class="popup-main">
+            <div class="auth-section" id="authSection">
+                <div class="auth-form">
+                    <h2>ログイン</h2>
+                    <input type="email" id="email" placeholder="メールアドレス" class="input-field">
+                    <input type="password" id="password" placeholder="パスワード" class="input-field">
+                    <button id="loginBtn" class="btn btn-primary">ログイン</button>
+                    <button id="signupBtn" class="btn btn-secondary">アカウント作成</button>
+                </div>
+            </div>
+
+            <div class="main-section hidden" id="mainSection">
+                <div class="page-info">
+                    <div class="page-title" id="pageTitle">現在のページを保存</div>
+                    <div class="page-url" id="pageUrl"></div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-group">
+                        <label for="projectSelect">プロジェクト:</label>
+                        <select id="projectSelect" class="select-field">
+                            <option value="">プロジェクトを選択</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tagsInput">タグ:</label>
+                        <input type="text" id="tagsInput" placeholder="タグを入力（カンマ区切り）" class="input-field">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="memoInput">メモ:</label>
+                        <textarea id="memoInput" placeholder="メモを入力" class="textarea-field"></textarea>
+                    </div>
+
+                    <div class="button-group">
+                        <button id="saveBtn" class="btn btn-primary">
+                            <span class="btn-icon">📌</span>
+                            保存
+                        </button>
+                        <button id="openDashboardBtn" class="btn btn-outline">
+                            <span class="btn-icon">🔗</span>
+                            ダッシュボード
+                        </button>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <h3>クイックアクション</h3>
+                    <div class="action-buttons">
+                        <button id="saveTextBtn" class="action-btn" title="選択テキストを保存">
+                            <span class="action-icon">✂️</span>
+                            選択テキスト
+                        </button>
+                        <button id="createBookmarkBtn" class="action-btn" title="ページ内ブックマーク作成">
+                            <span class="action-icon">🔖</span>
+                            ブックマーク
+                        </button>
+                        <button id="generateCitationBtn" class="action-btn" title="引用生成">
+                            <span class="action-icon">📝</span>
+                            引用生成
+                        </button>
+                    </div>
+                </div>
+
+                <div class="user-info">
+                    <span id="userEmail" class="user-email"></span>
+                    <button id="logoutBtn" class="btn btn-text">ログアウト</button>
+                </div>
+            </div>
+        </main>
+
+        <div class="loading hidden" id="loading">
+            <div class="spinner"></div>
+            <span>処理中...</span>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
