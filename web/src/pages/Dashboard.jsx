@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { dbHelpers } from '../lib/supabase'
 import { format } from 'date-fns'
-import ExtensionBridge from '../components/common/ExtensionBridge'
 import { ja } from 'date-fns/locale'
+import ExtensionBridge from '../components/common/ExtensionBridge'
 
 export default function Dashboard() {
   const { user } = useAuth()
