@@ -6,7 +6,7 @@ class API {
         // Chrome拡張機能環境では本番URLを使用
         // 開発時にローカルを使用したい場合はここを変更
         this.baseURL = this.isLocalDevelopment() 
-            ? 'http://localhost:3000/api'
+            ? 'http://localhost:3002/api'
             : 'https://research-vault.vercel.app/api';
             
         this.supabaseUrl = 'https://pzplwtvnxikhykqsvcfs.supabase.co'; // ここにSupabaseのURLを設定
