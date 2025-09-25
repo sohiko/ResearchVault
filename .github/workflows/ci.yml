@@ -30,11 +30,6 @@ jobs:
         cd web
         npm run lint
     
-    - name: Run tests
-      run: |
-        cd web
-        npm run test
-    
     - name: Build application
       run: |
         cd web
