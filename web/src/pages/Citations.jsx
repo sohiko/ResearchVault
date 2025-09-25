@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { toast } from 'react-hot-toast'
 
 export default function Citations() {
   const { user } = useAuth()
@@ -16,22 +17,9 @@ export default function Citations() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (user) {
-      loadData()
-    }
-  }, [user])
-
-  useEffect(() => {
-    if (selectedProject) {
-      loadReferences()
-    } else {
-      setReferences([])
-      setSelectedReferences([])
-    }
-  }, [selectedProject])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (!user) {return}
+    
     try {
       setLoading(true)
       
@@ -65,9 +53,11 @@ export default function Citations() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
-  const loadReferences = async () => {
+  const loadReferences = useCallback(async () => {
+    if (!selectedProject || !user) {return}
+    
     try {
       const { data, error } = await supabase
         .from('references')
@@ -85,7 +75,20 @@ export default function Citations() {
       console.error('Failed to load references:', error)
       setError('参照の読み込みに失敗しました')
     }
-  }
+  }, [selectedProject, user])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    if (selectedProject) {
+      loadReferences()
+    } else {
+      setReferences([])
+      setSelectedReferences([])
+    }
+  }, [selectedProject, loadReferences])
 
   const toggleReferenceSelection = (referenceId) => {
     setSelectedReferences(prev => 
@@ -258,7 +261,7 @@ export default function Citations() {
     const allCitations = generatedCitations.map(item => item.citation).join('\n\n')
     try {
       await navigator.clipboard.writeText(allCitations)
-      alert('すべての引用をクリップボードにコピーしました')
+      toast.success('すべての引用をクリップボードにコピーしました')
     } catch (error) {
       console.error('Failed to copy:', error)
     }
@@ -267,7 +270,7 @@ export default function Citations() {
   const copyCitation = async (citation) => {
     try {
       await navigator.clipboard.writeText(citation)
-      alert('引用をクリップボードにコピーしました')
+      toast.success('引用をクリップボードにコピーしました')
     } catch (error) {
       console.error('Failed to copy:', error)
     }

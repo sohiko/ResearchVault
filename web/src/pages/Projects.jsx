@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { toast } from 'react-hot-toast'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function Projects() {
   const { user } = useAuth()
@@ -11,14 +13,12 @@ export default function Projects() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createLoading, setCreateLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [projectToDelete, setProjectToDelete] = useState(null)
 
-  useEffect(() => {
-    if (user) {
-      loadProjects()
-    }
-  }, [user])
-
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
+    if (!user) {return}
+    
     try {
       setLoading(true)
       setError(null)
@@ -51,7 +51,11 @@ export default function Projects() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    loadProjects()
+  }, [loadProjects])
 
   const handleCreateProject = async (projectData) => {
     try {
@@ -98,25 +102,30 @@ export default function Projects() {
     }
   }
 
-  const handleDeleteProject = async (projectId) => {
-    if (!confirm('このプロジェクトを削除しますか？関連する参照も削除されます。')) {
-      return
-    }
+  const handleDeleteProject = (projectId) => {
+    setProjectToDelete(projectId)
+    setShowConfirmDelete(true)
+  }
 
+  const confirmDeleteProject = async () => {
     try {
       const { error } = await supabase
         .from('projects')
         .delete()
-        .eq('id', projectId)
+        .eq('id', projectToDelete)
 
       if (error) {
         throw error
       }
 
       await loadProjects()
+      toast.success('プロジェクトを削除しました')
     } catch (error) {
       console.error('Failed to delete project:', error)
-      setError('プロジェクトの削除に失敗しました')
+      toast.error('プロジェクトの削除に失敗しました')
+    } finally {
+      setShowConfirmDelete(false)
+      setProjectToDelete(null)
     }
   }
 
@@ -207,6 +216,16 @@ export default function Projects() {
           loading={createLoading}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={showConfirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+        onConfirm={confirmDeleteProject}
+        title="プロジェクトを削除"
+        message="このプロジェクトを削除しますか？関連するすべての参照も削除されます。この操作は取り消せません。"
+        confirmText="削除"
+        cancelText="キャンセル"
+      />
     </div>
   )
 }

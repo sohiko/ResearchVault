@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { toast } from 'react-hot-toast'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function References() {
   const { user } = useAuth()
@@ -11,6 +13,8 @@ export default function References() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [referenceToDelete, setReferenceToDelete] = useState(null)
   const [filters, setFilters] = useState({
     project: '',
     search: '',
@@ -18,42 +22,9 @@ export default function References() {
     sortOrder: 'desc'
   })
 
-  useEffect(() => {
-    if (user) {
-      loadData()
-    }
-  }, [user, filters])
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      // プロジェクトと参照を並行で取得
-      const [projectsResult, referencesResult] = await Promise.all([
-        supabase
-          .from('projects')
-          .select('id, name, color, icon')
-          .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
-          .order('name'),
-        loadReferences()
-      ])
-
-      if (projectsResult.error) {
-        throw projectsResult.error
-      }
-
-      setProjects(projectsResult.data || [])
-      setReferences(referencesResult)
-    } catch (error) {
-      console.error('Failed to load data:', error)
-      setError('データの読み込みに失敗しました')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadReferences = async () => {
+  const loadReferences = useCallback(async () => {
+    if (!user) {return []}
+    
     try {
       let query = supabase
         .from('references')
@@ -97,7 +68,42 @@ export default function References() {
       console.error('Failed to load references:', error)
       return []
     }
-  }
+  }, [user, filters])
+
+  const loadData = useCallback(async () => {
+    if (!user) {return}
+    
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // プロジェクトと参照を並行で取得
+      const [projectsResult, referencesResult] = await Promise.all([
+        supabase
+          .from('projects')
+          .select('id, name, color, icon')
+          .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
+          .order('name'),
+        loadReferences()
+      ])
+
+      if (projectsResult.error) {
+        throw projectsResult.error
+      }
+
+      setProjects(projectsResult.data || [])
+      setReferences(referencesResult)
+    } catch (error) {
+      console.error('Failed to load data:', error)
+      setError('データの読み込みに失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }, [user, loadReferences])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleAddReference = async (referenceData) => {
     try {
@@ -126,25 +132,30 @@ export default function References() {
     }
   }
 
-  const handleDeleteReference = async (referenceId) => {
-    if (!confirm('この参照を削除しますか？')) {
-      return
-    }
+  const handleDeleteReference = (referenceId) => {
+    setReferenceToDelete(referenceId)
+    setShowConfirmDelete(true)
+  }
 
+  const confirmDeleteReference = async () => {
     try {
       const { error } = await supabase
         .from('references')
         .delete()
-        .eq('id', referenceId)
+        .eq('id', referenceToDelete)
 
       if (error) {
         throw error
       }
 
       await loadData()
+      toast.success('参照を削除しました')
     } catch (error) {
       console.error('Failed to delete reference:', error)
-      setError('参照の削除に失敗しました')
+      toast.error('参照の削除に失敗しました')
+    } finally {
+      setShowConfirmDelete(false)
+      setReferenceToDelete(null)
     }
   }
 
@@ -160,7 +171,7 @@ export default function References() {
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text)
-      alert('引用をクリップボードにコピーしました')
+      toast.success('引用をクリップボードにコピーしました')
     } catch (error) {
       console.error('Failed to copy:', error)
     }
@@ -328,6 +339,16 @@ export default function References() {
           onAdd={handleAddReference}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={showConfirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+        onConfirm={confirmDeleteReference}
+        title="参照を削除"
+        message="この参照を削除しますか？この操作は取り消せません。"
+        confirmText="削除"
+        cancelText="キャンセル"
+      />
     </div>
   )
 }

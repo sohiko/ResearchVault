@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -11,6 +11,7 @@ import ReferenceCard from '../components/common/ReferenceCard'
 import AddReferenceModal from '../components/common/AddReferenceModal'
 import ShareProjectModal from '../components/common/ShareProjectModal'
 import EditProjectModal from '../components/common/EditProjectModal'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -28,37 +29,17 @@ export default function ProjectDetail() {
   const [showAddReference, setShowAddReference] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [referenceToDelete, setReferenceToDelete] = useState(null)
   
   // フィルター・ソート状態
   const [sortBy, setSortBy] = useState('saved_at')
   const [sortOrder, setSortOrder] = useState('desc')
   const [searchQuery, setSearchQuery] = useState('')
 
-  useEffect(() => {
-    if (id && user) {
-      loadProjectData()
-    }
-  }, [id, user])
-
-  const loadProjectData = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      await Promise.all([
-        loadProject(),
-        loadReferences(),
-        loadMembers()
-      ])
-    } catch (error) {
-      console.error('Failed to load project data:', error)
-      setError('プロジェクトデータの読み込みに失敗しました')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadProject = async () => {
+  const loadProject = useCallback(async () => {
+    if (!id || !user) {return}
+    
     const { data, error } = await supabase
       .from('projects')
       .select(`
@@ -80,9 +61,11 @@ export default function ProjectDetail() {
     }
 
     setProject(data)
-  }
+  }, [id, user, navigate])
 
-  const loadReferences = async () => {
+  const loadReferences = useCallback(async () => {
+    if (!id) {return}
+    
     let query = supabase
       .from('references')
       .select(`
@@ -116,9 +99,11 @@ export default function ProjectDetail() {
     }))
 
     setReferences(formattedReferences)
-  }
+  }, [id, searchQuery, sortBy, sortOrder])
 
-  const loadMembers = async () => {
+  const loadMembers = useCallback(async () => {
+    if (!id) {return}
+    
     const { data, error } = await supabase
       .from('project_members')
       .select(`
@@ -130,7 +115,29 @@ export default function ProjectDetail() {
     if (error) {throw error}
 
     setMembers(data)
-  }
+  }, [id])
+
+  const loadProjectData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      await Promise.all([
+        loadProject(),
+        loadReferences(),
+        loadMembers()
+      ])
+    } catch (error) {
+      console.error('Failed to load project data:', error)
+      setError('プロジェクトデータの読み込みに失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }, [loadProject, loadReferences, loadMembers])
+
+  useEffect(() => {
+    loadProjectData()
+  }, [loadProjectData])
 
   const handleAddReference = async (referenceData) => {
     try {
@@ -155,14 +162,17 @@ export default function ProjectDetail() {
     }
   }
 
-  const handleDeleteReference = async (referenceId) => {
-    if (!confirm('この参照を削除しますか？')) {return}
+  const handleDeleteReference = (referenceId) => {
+    setReferenceToDelete(referenceId)
+    setShowConfirmDelete(true)
+  }
 
+  const confirmDeleteReference = async () => {
     try {
       const { error } = await supabase
         .from('references')
         .delete()
-        .eq('id', referenceId)
+        .eq('id', referenceToDelete)
 
       if (error) {throw error}
 
@@ -171,6 +181,9 @@ export default function ProjectDetail() {
     } catch (error) {
       console.error('Failed to delete reference:', error)
       toast.error('参照の削除に失敗しました')
+    } finally {
+      setShowConfirmDelete(false)
+      setReferenceToDelete(null)
     }
   }
 
@@ -464,6 +477,16 @@ export default function ProjectDetail() {
           onUpdate={handleUpdateProject}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={showConfirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+        onConfirm={confirmDeleteReference}
+        title="参照を削除"
+        message="この参照を削除しますか？この操作は取り消せません。"
+        confirmText="削除"
+        cancelText="キャンセル"
+      />
     </div>
   )
 }

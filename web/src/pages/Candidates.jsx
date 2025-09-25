@@ -3,6 +3,8 @@ import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { toast } from 'react-hot-toast'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function Candidates() {
   const { user } = useAuth()
@@ -11,6 +13,7 @@ export default function Candidates() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [showConfirmDismissAll, setShowConfirmDismissAll] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -104,7 +107,7 @@ export default function Candidates() {
       // 候補から削除
       setCandidates(prev => prev.filter(c => c.id !== candidate.id))
       
-      alert('参照を保存しました')
+      toast.success('参照を保存しました')
     } catch (error) {
       console.error('Failed to save candidate:', error)
       setError('保存に失敗しました')
@@ -118,9 +121,13 @@ export default function Candidates() {
   }
 
   const dismissAll = () => {
-    if (confirm('すべての候補を削除しますか？')) {
-      setCandidates([])
-    }
+    setShowConfirmDismissAll(true)
+  }
+
+  const confirmDismissAll = () => {
+    setCandidates([])
+    setShowConfirmDismissAll(false)
+    toast.success('すべての候補を削除しました')
   }
 
   if (loading) {
@@ -219,6 +226,16 @@ export default function Candidates() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showConfirmDismissAll}
+        onClose={() => setShowConfirmDismissAll(false)}
+        onConfirm={confirmDismissAll}
+        title="すべての候補を削除"
+        message="すべての候補を削除しますか？この操作は取り消せません。"
+        confirmText="削除"
+        cancelText="キャンセル"
+      />
     </div>
   )
 }

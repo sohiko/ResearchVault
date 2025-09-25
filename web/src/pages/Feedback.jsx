@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 // import { supabase } from '../lib/supabase' // 未使用のためコメントアウト
+import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
@@ -87,7 +88,7 @@ export default function Feedback() {
       setFeedbacks(prev => [newFeedback, ...prev])
       setShowSubmitForm(false)
       
-      alert('フィードバックを送信しました。ご協力ありがとうございます！')
+      toast.success('フィードバックを送信しました。ご協力ありがとうございます！')
     } catch (error) {
       console.error('Failed to submit feedback:', error)
       setError('フィードバックの送信に失敗しました')

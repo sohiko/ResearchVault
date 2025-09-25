@@ -1,12 +1,15 @@
 import React, { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'react-hot-toast'
+import ConfirmDialog from './ConfirmDialog'
 
 const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
   const [loading, setLoading] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('viewer')
   const [copyLinkLoading, setCopyLinkLoading] = useState(false)
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [memberToDelete, setMemberToDelete] = useState(null)
 
   const handleInviteMember = async (e) => {
     e.preventDefault()
@@ -69,14 +72,17 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
     }
   }
 
-  const handleRemoveMember = async (memberId) => {
-    if (!confirm('このメンバーをプロジェクトから削除しますか？')) {return}
+  const handleRemoveMember = (memberId) => {
+    setMemberToDelete(memberId)
+    setShowConfirmDelete(true)
+  }
 
+  const confirmRemoveMember = async () => {
     try {
       const { error } = await supabase
         .from('project_members')
         .delete()
-        .eq('id', memberId)
+        .eq('id', memberToDelete)
 
       if (error) {throw error}
 
@@ -85,6 +91,9 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
     } catch (error) {
       console.error('Failed to remove member:', error)
       toast.error('メンバーの削除に失敗しました')
+    } finally {
+      setShowConfirmDelete(false)
+      setMemberToDelete(null)
     }
   }
 
@@ -290,6 +299,16 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showConfirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+        onConfirm={confirmRemoveMember}
+        title="メンバーを削除"
+        message="このメンバーをプロジェクトから削除しますか？この操作は取り消せません。"
+        confirmText="削除"
+        cancelText="キャンセル"
+      />
     </div>
   )
 }

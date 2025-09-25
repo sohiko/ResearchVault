@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { dbHelpers } from '../lib/supabase'
 import { format } from 'date-fns'
@@ -11,13 +11,9 @@ export default function Dashboard() {
   const [recentReferences, setRecentReferences] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (user) {
-      loadDashboardData()
-    }
-  }, [user])
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
+    if (!user) {return}
+    
     try {
       setLoading(true)
       
@@ -34,7 +30,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
 
   if (loading) {
     return (

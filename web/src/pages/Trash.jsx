@@ -3,6 +3,8 @@ import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { toast } from 'react-hot-toast'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function Trash() {
   const { user } = useAuth()
@@ -10,6 +12,9 @@ export default function Trash() {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState(null)
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [showConfirmEmptyTrash, setShowConfirmEmptyTrash] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState(null)
 
   useEffect(() => {
     if (user) {
@@ -97,7 +102,7 @@ export default function Trash() {
 
       // ゴミ箱から削除
       setTrashedItems(prev => prev.filter(t => t.id !== item.id))
-      alert('アイテムを復元しました')
+      toast.success('アイテムを復元しました')
     } catch (error) {
       console.error('Failed to restore item:', error)
       setError('復元に失敗しました')
@@ -106,43 +111,47 @@ export default function Trash() {
     }
   }
 
-  const permanentlyDelete = async (item) => {
-    if (!confirm('このアイテムを完全に削除しますか？この操作は取り消せません。')) {
-      return
-    }
+  const permanentlyDelete = (item) => {
+    setItemToDelete(item)
+    setShowConfirmDelete(true)
+  }
 
+  const confirmPermanentlyDelete = async () => {
     try {
       setProcessing(true)
       setError(null)
 
       // ゴミ箱から削除（実際のアプリケーションでは削除履歴テーブルから削除）
-      setTrashedItems(prev => prev.filter(t => t.id !== item.id))
-      alert('アイテムを完全に削除しました')
+      setTrashedItems(prev => prev.filter(t => t.id !== itemToDelete.id))
+      toast.success('アイテムを完全に削除しました')
     } catch (error) {
       console.error('Failed to permanently delete item:', error)
       setError('完全削除に失敗しました')
     } finally {
       setProcessing(false)
+      setShowConfirmDelete(false)
+      setItemToDelete(null)
     }
   }
 
-  const emptyTrash = async () => {
-    if (!confirm('ゴミ箱を空にしますか？この操作は取り消せません。')) {
-      return
-    }
+  const emptyTrash = () => {
+    setShowConfirmEmptyTrash(true)
+  }
 
+  const confirmEmptyTrash = async () => {
     try {
       setProcessing(true)
       setError(null)
 
       // すべてのアイテムを完全削除
       setTrashedItems([])
-      alert('ゴミ箱を空にしました')
+      toast.success('ゴミ箱を空にしました')
     } catch (error) {
       console.error('Failed to empty trash:', error)
       setError('ゴミ箱を空にできませんでした')
     } finally {
       setProcessing(false)
+      setShowConfirmEmptyTrash(false)
     }
   }
 
@@ -242,6 +251,26 @@ export default function Trash() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showConfirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+        onConfirm={confirmPermanentlyDelete}
+        title="アイテムを完全削除"
+        message="このアイテムを完全に削除しますか？この操作は取り消せません。"
+        confirmText="削除"
+        cancelText="キャンセル"
+      />
+
+      <ConfirmDialog
+        isOpen={showConfirmEmptyTrash}
+        onClose={() => setShowConfirmEmptyTrash(false)}
+        onConfirm={confirmEmptyTrash}
+        title="ゴミ箱を空にする"
+        message="ゴミ箱を空にしますか？すべてのアイテムが完全に削除されます。この操作は取り消せません。"
+        confirmText="空にする"
+        cancelText="キャンセル"
+      />
     </div>
   )
 }
