@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 // import { supabase } from '../lib/supabase' // 未使用のためコメントアウト
 import { toast } from 'react-hot-toast'
@@ -17,9 +17,9 @@ export default function Feedback() {
     if (user) {
       loadFeedbacks()
     }
-  }, [user])
+  }, [user, loadFeedbacks])
 
-  const loadFeedbacks = async () => {
+  const loadFeedbacks = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -67,7 +67,7 @@ export default function Feedback() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   const submitFeedback = async (feedbackData) => {
     try {

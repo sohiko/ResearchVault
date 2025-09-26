@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { supabase } from '../lib/supabase'
@@ -23,9 +23,9 @@ export default function Settings() {
     if (user) {
       loadSettings()
     }
-  }, [user])
+  }, [user, loadSettings])
 
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -53,7 +53,7 @@ export default function Settings() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, settings])
 
   const saveSettings = async () => {
     try {
@@ -128,7 +128,7 @@ export default function Settings() {
           アプリケーションの設定を管理します
         </p>
       </div>
-
+      
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800 text-sm">{error}</p>

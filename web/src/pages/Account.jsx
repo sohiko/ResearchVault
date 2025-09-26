@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
@@ -34,9 +34,9 @@ export default function Account() {
     if (user) {
       loadAccountData()
     }
-  }, [user])
+  }, [user, loadAccountData])
 
-  const loadAccountData = async () => {
+  const loadAccountData = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -78,7 +78,7 @@ export default function Account() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault()

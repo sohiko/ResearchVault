@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 
@@ -7,14 +7,14 @@ export default function Test() {
   const [testResults, setTestResults] = useState({})
   const [loading, setLoading] = useState(false)
 
-  const runTests = async () => {
+  const runTests = useCallback(async () => {
     setLoading(true)
     const results = {}
 
     try {
       // テスト1: Supabase接続
       try {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('profiles')
           .select('*')
           .limit(1)
@@ -75,11 +75,11 @@ export default function Test() {
 
     setTestResults(results)
     setLoading(false)
-  }
+  }, [user])
 
   useEffect(() => {
     runTests()
-  }, [user])
+  }, [runTests])
 
   return (
     <div className="space-y-6">

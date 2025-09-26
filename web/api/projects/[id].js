@@ -134,10 +134,18 @@ async function handleUpdateProject(req, res, projectId, userId) {
       updated_at: new Date().toISOString()
     }
 
-    if (name !== undefined) updateData.name = name.trim()
-    if (description !== undefined) updateData.description = description.trim()
-    if (color !== undefined) updateData.color = color
-    if (isPublic !== undefined) updateData.is_public = isPublic
+    if (name !== undefined) {
+      updateData.name = name.trim()
+    }
+    if (description !== undefined) {
+      updateData.description = description.trim()
+    }
+    if (color !== undefined) {
+      updateData.color = color
+    }
+    if (isPublic !== undefined) {
+      updateData.is_public = isPublic
+    }
 
     const { data: updatedProject, error } = await supabase
       .from('projects')

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
@@ -20,9 +20,9 @@ export default function Trash() {
     if (user) {
       loadTrashedItems()
     }
-  }, [user])
+  }, [user, loadTrashedItems])
 
-  const loadTrashedItems = async () => {
+  const loadTrashedItems = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -69,7 +69,7 @@ export default function Trash() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   const restoreItem = async (item) => {
     try {

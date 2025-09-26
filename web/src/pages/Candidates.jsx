@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
@@ -19,9 +19,9 @@ export default function Candidates() {
     if (user) {
       loadData()
     }
-  }, [user])
+  }, [user, loadData])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -84,7 +84,7 @@ export default function Candidates() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   const saveCandidate = async (candidate, projectId) => {
     try {

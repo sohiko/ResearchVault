@@ -155,7 +155,7 @@ export function ProjectProvider({ children }) {
         supabase.removeChannel(subscription)
       }
     }
-  }, [user, fetchProjects])
+  }, [user, fetchProjects, subscription])
 
   // プロジェクトの作成
   const createProject = async (projectData) => {

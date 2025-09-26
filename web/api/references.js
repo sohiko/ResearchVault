@@ -200,11 +200,13 @@ async function handleCreateReference(req, res, userId) {
 
 async function addTagsToReference(referenceId, tags, userId) {
   for (const tagName of tags) {
-    if (!tagName || tagName.trim().length === 0) continue
+    if (!tagName || tagName.trim().length === 0) {
+      continue
+    }
 
     try {
       // タグを取得または作成
-      let { data: tag, error: tagError } = await supabase
+      const { data: tag, error: tagError } = await supabase
         .from('tags')
         .select('id')
         .eq('name', tagName.trim())
@@ -213,7 +215,7 @@ async function addTagsToReference(referenceId, tags, userId) {
 
       if (tagError && tagError.code === 'PGRST116') {
         // タグが存在しない場合は作成
-        const { data: newTag, error: createError } = await supabase
+        const { data: _newTag, error: createError } = await supabase
           .from('tags')
           .insert({
             name: tagName.trim(),
@@ -229,7 +231,7 @@ async function addTagsToReference(referenceId, tags, userId) {
           continue
         }
 
-        tag = newTag
+        // const tag = newTag // タグIDは後で使用される
       } else if (tagError) {
         console.warn('Tag query error:', tagError)
         continue

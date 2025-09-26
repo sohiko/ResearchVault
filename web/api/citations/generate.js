@@ -74,7 +74,7 @@ function generateCitation({ url, title, metadata, format, accessDate }) {
   const siteName = metadata.siteName || parsedUrl.hostname
   const author = metadata.author || ''
   const publishedDate = metadata.publishedDate || ''
-  const description = metadata.description || ''
+  // const _description = metadata.description || '' // 将来使用予定
   const accessDateFormatted = formatDate(new Date(accessDate))
   const publishedDateFormatted = publishedDate ? formatDate(new Date(publishedDate)) : ''
 

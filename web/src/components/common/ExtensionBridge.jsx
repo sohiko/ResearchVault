@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { toast } from 'react-hot-toast'
 
@@ -9,15 +9,15 @@ const ExtensionBridge = () => {
 
   useEffect(() => {
     checkExtensionInstallation()
-  }, [])
+  }, [checkExtensionInstallation])
 
   useEffect(() => {
     if (session && extensionInstalled) {
       syncAuthToken()
     }
-  }, [session, extensionInstalled])
+  }, [session, extensionInstalled, syncAuthToken])
 
-  const checkExtensionInstallation = () => {
+  const checkExtensionInstallation = useCallback(() => {
     try {
       // ResearchVault拡張機能が存在するかチェック
       if (window.chrome && window.chrome.runtime) {
@@ -74,9 +74,9 @@ const ExtensionBridge = () => {
       setExtensionInstalled(false)
       setConnectionStatus('error')
     }
-  }
+  }, [connectionStatus])
 
-  const syncAuthToken = () => {
+  const syncAuthToken = useCallback(() => {
     if (!session || !extensionInstalled) {return}
 
     try {
@@ -117,7 +117,7 @@ const ExtensionBridge = () => {
       console.error('Auth sync failed:', error)
       toast.error('拡張機能との同期に失敗しました')
     }
-  }
+  }, [session, user, extensionInstalled])
 
   const syncViaDOM = (authData) => {
     const script = document.createElement('script')
