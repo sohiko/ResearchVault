@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ThemeProvider } from './hooks/useTheme'
 import { ProjectProvider } from './hooks/useProjects'
@@ -128,6 +129,7 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <div className="App">
+          <SpeedInsights />
           <Routes>
             {/* 認証関連のルート */}
             <Route
