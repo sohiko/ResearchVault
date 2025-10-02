@@ -286,6 +286,8 @@ function initializeApp() {
       getFCP(console.log)
       getLCP(console.log)
       getTTFB(console.log)
+    }).catch((error) => {
+      console.warn('Web Vitals could not be loaded:', error)
     })
   }
 }

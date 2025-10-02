@@ -25,27 +25,45 @@ export default function Trash() {
       
       // ゴミ箱のプロジェクトを取得
       const { data: projects, error: projectsError } = await supabase
-        .from('trash_projects')
+        .from('projects')
         .select('*')
         .eq('deleted_by', user.id)
+        .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false })
 
       if (projectsError) throw projectsError
 
       // ゴミ箱の参照を取得（プロジェクトに属さない個別削除のもののみ）
       const { data: references, error: referencesError } = await supabase
-        .from('trash_references')
+        .from('references')
         .select('*')
         .eq('deleted_by', user.id)
+        .not('deleted_at', 'is', null)
         .is('project_id', null)
         .order('deleted_at', { ascending: false })
 
       if (referencesError) throw referencesError
 
-      // データを統合
+      // データを統合して30日計算を追加
       const allItems = [
-        ...(projects || []).map(p => ({ ...p, type: 'project' })),
-        ...(references || []).map(r => ({ ...r, type: 'reference' }))
+        ...(projects || []).map(p => {
+          const deletedDate = new Date(p.deleted_at)
+          const daysSinceDeleted = Math.floor((new Date() - deletedDate) / (1000 * 60 * 60 * 24))
+          return { 
+            ...p, 
+            type: 'project',
+            days_until_permanent_deletion: Math.max(0, 30 - daysSinceDeleted)
+          }
+        }),
+        ...(references || []).map(r => {
+          const deletedDate = new Date(r.deleted_at)
+          const daysSinceDeleted = Math.floor((new Date() - deletedDate) / (1000 * 60 * 60 * 24))
+          return { 
+            ...r, 
+            type: 'reference',
+            days_until_permanent_deletion: Math.max(0, 30 - daysSinceDeleted)
+          }
+        })
       ].sort((a, b) => new Date(b.deleted_at) - new Date(a.deleted_at))
 
       setTrashedItems(allItems)
