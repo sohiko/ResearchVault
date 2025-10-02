@@ -7,13 +7,28 @@ const ExtensionBridge = () => {
   const [extensionInstalled, setExtensionInstalled] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('checking')
 
-  // 拡張機能チェック関数（本番環境対応）
+  // 拡張機能チェック関数（実際のIDを使用）
   const checkExtensionInstallation = useCallback(() => {
     try {
-      // 本番環境では拡張機能の検出を簡略化
-      // Chrome拡張機能APIが利用可能な場合は拡張機能がインストールされていると仮定
       if (window.chrome && window.chrome.runtime) {
-        // DOM要素を使った検出を試行
+        // 実際の拡張機能IDを使用してメッセージを送信
+        window.chrome.runtime.sendMessage(
+          'gojloohiffafenaojgofkebobcdedago',
+          { action: 'ping' },
+          (_response) => {
+            if (window.chrome.runtime.lastError) {
+              console.warn('Extension not found:', window.chrome.runtime.lastError)
+              setExtensionInstalled(false)
+              setConnectionStatus('not_installed')
+            } else {
+              setExtensionInstalled(true)
+              setConnectionStatus('connected')
+              console.log('Extension found and connected')
+            }
+          }
+        )
+
+        // DOM要素を使った検出も並行して実行
         const script = document.createElement('script')
         script.textContent = `
           window.postMessage({ 
@@ -39,13 +54,42 @@ const ExtensionBridge = () => {
 
         window.addEventListener('message', messageHandler)
 
-        // 2秒後にタイムアウト
+        // 1秒後に追加の検出を試行
+        setTimeout(() => {
+          try {
+            // 拡張機能の存在を示すグローバル変数をチェック
+            if (window.ResearchVault || window.researchVaultExtension) {
+              setExtensionInstalled(true)
+              setConnectionStatus('connected')
+              return
+            }
+
+            // DOM要素に拡張機能の痕跡があるかチェック
+            const hasExtensionElements = document.querySelector('[data-researchvault]') ||
+              document.querySelector('script[src*="researchvault"]') ||
+              document.querySelector('meta[name*="researchvault"]')
+            
+            if (hasExtensionElements) {
+              setExtensionInstalled(true)
+              setConnectionStatus('connected')
+              return
+            }
+          } catch (additionalError) {
+            console.log('Additional detection failed:', additionalError)
+          }
+        }, 1000)
+
+        // 3秒後にタイムアウト
         setTimeout(() => {
           window.removeEventListener('message', messageHandler)
-          // 本番環境では拡張機能がインストールされていないと判定
-          setExtensionInstalled(false)
-          setConnectionStatus('not_installed')
-        }, 2000)
+          setConnectionStatus(prevStatus => {
+            if (prevStatus === 'checking') {
+              setExtensionInstalled(false)
+              return 'not_installed'
+            }
+            return prevStatus
+          })
+        }, 3000)
       } else {
         // Chrome拡張機能APIが利用できない場合
         setExtensionInstalled(false)
