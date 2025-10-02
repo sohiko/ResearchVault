@@ -83,17 +83,26 @@ class PopupManager {
                         isExpired: timeUntilExpiry <= 0
                     });
                     
-                    // 期限切れまたは5分以内に期限切れの場合
-                    if (timeUntilExpiry <= 300000) { // 5分 = 300000ms
-                        console.log('Token expired or expiring soon, clearing auth data');
-                        await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
-                        this.showAuthSection();
-                        this.showError('セッションが期限切れです。再度ログインしてください');
-                        return;
+                    // 期限切れの場合はリフレッシュを試行
+                    if (timeUntilExpiry <= 0) {
+                        console.log('Token expired, attempting refresh');
+                        const refreshResult = await this.refreshToken();
+                        if (!refreshResult.success) {
+                            console.log('Token refresh failed, clearing auth data');
+                            await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
+                            this.showAuthSection();
+                            this.showError('セッションが期限切れです。再度ログインしてください');
+                            return;
+                        }
+                        // リフレッシュ成功時は新しいトークンを使用
+                        await this.api.setAuthToken(refreshResult.token);
+                    } else {
+                        await this.api.setAuthToken(authToken);
                     }
+                } else {
+                    await this.api.setAuthToken(authToken);
                 }
                 
-                await this.api.setAuthToken(authToken);
                 console.log('Auth token set in API client:', this.api.authToken);
                 
                 const user = await this.api.getCurrentUser();
@@ -463,9 +472,50 @@ class PopupManager {
         chrome.tabs.create({ url: 'https://research-vault-eight.vercel.app' });
     }
 
+    async refreshToken() {
+        try {
+            const { sessionInfo } = await chrome.storage.sync.get(['sessionInfo']);
+            if (!sessionInfo || !sessionInfo.refresh_token) {
+                return { success: false, error: 'リフレッシュトークンがありません' };
+            }
+
+            const refreshUrl = 'https://research-vault-eight.vercel.app/api/extension/refresh';
+            const response = await fetch(refreshUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Extension-Version': '1.0.0',
+                    'X-Client-Info': 'chrome-extension'
+                },
+                body: JSON.stringify({ 
+                    refresh_token: sessionInfo.refresh_token 
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.token) {
+                    // 新しいトークンとセッション情報を保存
+                    await chrome.storage.sync.set({
+                        authToken: data.token,
+                        sessionInfo: data.session,
+                        lastLoginTime: new Date().toISOString()
+                    });
+                    
+                    return { success: true, token: data.token };
+                }
+            }
+            
+            return { success: false, error: 'トークンのリフレッシュに失敗しました' };
+        } catch (error) {
+            console.error('Token refresh error:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     async handleLogout() {
         try {
-            await chrome.storage.sync.remove(['authToken', 'userInfo', 'lastSelectedProject']);
+            await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastSelectedProject', 'lastLoginTime']);
             this.currentUser = null;
             this.projects = [];
             this.clearForm();

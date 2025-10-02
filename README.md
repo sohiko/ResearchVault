@@ -67,54 +67,6 @@ research-vault/
 - Git
 - Chromeブラウザ
 
-### 1. リポジトリのクローン
-
-```bash
-git clone https://github.com/yourusername/research-vault.git
-cd research-vault
-```
-
-### 2. Supabase設定
-
-1. [Supabase](https://app.supabase.com)でアカウント作成
-2. 新規プロジェクト作成
-   - プロジェクト名: research-vault
-   - リージョン: Northeast Asia (Tokyo)
-3. 環境変数をコピー
-
-### 3. Webダッシュボードの設定
-
-```bash
-cd web
-npm install
-cp .env.example .env.local
-```
-
-`.env.local`に以下を記入:
-```env
-VITE_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
-VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-```
-
-### 4. データベースの初期化
-
-Supabaseダッシュボードで以下のSQLを実行:
-
-```sql
--- supabase/migrations/001_initial_schema.sql の内容を実行
-```
-
-### 5. 開発サーバーの起動
-
-```bash
-# Webダッシュボード
-cd web
-npm run dev
-
-# 別ターミナルでChrome拡張機能をロード
-# Chrome → 拡張機能管理 → デベロッパーモード ON
-# 「パッケージ化されていない拡張機能を読み込む」で extension フォルダを選択
-```
 
 ## 📖 使用方法
 
@@ -130,41 +82,6 @@ npm run dev
 2. **参照管理**: 参照一覧 → フィルター・検索・編集
 3. **引用生成**: 引用生成ページ → フォーマット選択 → コピー
 
-## 🔧 環境変数
-
-### 必須
-
-- `VITE_SUPABASE_URL`: SupabaseプロジェクトURL
-- `VITE_SUPABASE_ANON_KEY`: Supabase匿名キー
-
-### オプション
-
-- `VITE_APP_NAME`: アプリケーション名 (デフォルト: ResearchVault)
-- `VITE_APP_VERSION`: バージョン
-- `VITE_ENABLE_ANALYTICS`: アナリティクス有効化
-
-## 🚀 デプロイ
-
-### 自動デプロイ (推奨)
-
-1. Vercelアカウント作成
-2. GitHubリポジトリをVercelにインポート
-3. 環境変数を設定
-4. mainブランチにプッシュで自動デプロイ
-
-### 手動デプロイ
-
-```bash
-# Webダッシュボード
-cd web
-npm run build
-vercel --prod
-
-# Chrome拡張機能
-cd extension
-zip -r research-vault-extension.zip . -x "*.git*" "node_modules/*"
-# Chrome Web Storeにアップロード
-```
 
 ## 📊 対応引用フォーマット
 
@@ -189,7 +106,7 @@ zip -r research-vault-extension.zip . -x "*.git*" "node_modules/*"
 
 ## 👥 作成者
 
-- **ResearchVault Team** - [GitHub](https://github.com/yourusername)
+- **Sohiko Misaki** - [GitHub](https://github.com/sohiko)
 
 ## 🙏 謝辞
 
@@ -199,8 +116,7 @@ zip -r research-vault-extension.zip . -x "*.git*" "node_modules/*"
 
 ## 📞 サポート
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/research-vault/issues)
-- **ドキュメント**: [docs/](docs/)
+- **Issues**: [GitHub Issues](https://github.com/sohiko/research-vault/issues)
 - **フィードバック**: アプリ内の機能リクエスト機能
 
 ---

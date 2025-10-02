@@ -2,8 +2,12 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
 
+// 認証用クライアント（匿名キー使用）
+const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey)
+// 管理用クライアント（サービスロールキー使用、RLSバイパス）
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export default async function handler(req, res) {
@@ -29,30 +33,27 @@ export default async function handler(req, res) {
     const token = authHeader.split(' ')[1]
     console.log('Projects API - Token:', token ? `${token.substring(0, 20)}...` : 'null')
     
-    // JWTトークンを直接検証してユーザーIDを取得
+    // Supabaseの正しい認証方法を使用
     let userId
     try {
-      // JWTトークンをデコードしてユーザーIDを取得
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
-      console.log('Projects API - JWT payload:', { sub: payload.sub, exp: payload.exp, iat: payload.iat })
+      // Supabaseクライアントでトークンを検証
+      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
       
-      // トークンの有効期限をチェック
-      const now = Math.floor(Date.now() / 1000)
-      if (payload.exp && payload.exp < now) {
-        console.log('Projects API - Token expired:', { exp: payload.exp, now })
-        return res.status(401).json({ error: 'トークンが期限切れです' })
+      console.log('Projects API - Auth verification:', { 
+        user: user ? { id: user.id, email: user.email } : null, 
+        error: authError?.message 
+      })
+      
+      if (authError || !user) {
+        console.log('Projects API - Auth failed:', authError?.message || 'No user')
+        return res.status(401).json({ error: '無効な認証トークンです' })
       }
       
-      userId = payload.sub
-      if (!userId) {
-        console.log('Projects API - No user ID in token')
-        return res.status(401).json({ error: '無効なトークンです' })
-      }
-      
+      userId = user.id
       console.log('Projects API - Auth successful, user ID:', userId)
     } catch (error) {
-      console.log('Projects API - Token decode error:', error)
-      return res.status(401).json({ error: '無効な認証トークンです' })
+      console.log('Projects API - Auth verification error:', error)
+      return res.status(401).json({ error: '認証の検証に失敗しました' })
     }
 
     switch (req.method) {
