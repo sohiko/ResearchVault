@@ -1,316 +1,296 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { format } from 'date-fns'
-import { ja } from 'date-fns/locale'
+import { toast } from 'react-hot-toast'
 
 export default function DatabaseTest() {
   const { user } = useAuth()
   const [testResults, setTestResults] = useState([])
   const [loading, setLoading] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState('未テスト')
-  const [projects, setProjects] = useState([])
-  const [error, setError] = useState(null)
 
-  const runDatabaseTest = async () => {
+  const runTests = async () => {
+    if (!user) return
+    
     setLoading(true)
-    setError(null)
-    setTestResults([])
-    setConnectionStatus('テスト中...')
-
     const results = []
 
+    // Test 1: Check if deleted_at column exists in projects table
     try {
-      // テスト1: 基本的な接続テスト
-      results.push({
-        name: 'Supabase接続テスト',
-        status: 'running',
-        message: 'Supabaseへの接続を確認中...'
-      })
-
-      const { data: connectionTest, error: connectionError } = await supabase
+      const { data, error } = await supabase
         .from('projects')
-        .select('count')
+        .select('id, name, deleted_at, deleted_by')
+        .limit(1)
+      
+      if (error) {
+        results.push({
+          test: 'projects.deleted_at カラム存在確認',
+          status: 'FAIL',
+          message: error.message,
+          code: error.code
+        })
+      } else {
+        results.push({
+          test: 'projects.deleted_at カラム存在確認',
+          status: 'PASS',
+          message: 'カラムが存在します'
+        })
+      }
+    } catch (error) {
+      results.push({
+        test: 'projects.deleted_at カラム存在確認',
+        status: 'ERROR',
+        message: error.message
+      })
+    }
+
+    // Test 2: Check if deleted_at column exists in references table
+    try {
+      const { data, error } = await supabase
+        .from('references')
+        .select('id, title, deleted_at, deleted_by')
+        .limit(1)
+      
+      if (error) {
+        results.push({
+          test: 'references.deleted_at カラム存在確認',
+          status: 'FAIL',
+          message: error.message,
+          code: error.code
+        })
+      } else {
+        results.push({
+          test: 'references.deleted_at カラム存在確認',
+          status: 'PASS',
+          message: 'カラムが存在します'
+        })
+      }
+    } catch (error) {
+      results.push({
+        test: 'references.deleted_at カラム存在確認',
+        status: 'ERROR',
+        message: error.message
+      })
+    }
+
+    // Test 3: Try to update a project with deleted_at
+    try {
+      // First get a project
+      const { data: projects, error: fetchError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('owner_id', user.id)
         .limit(1)
 
-      if (connectionError) {
-        results[0] = {
-          name: 'Supabase接続テスト',
-          status: 'failed',
-          message: `接続エラー: ${connectionError.message}`,
-          details: connectionError
-        }
-        setConnectionStatus('接続失敗')
-        throw connectionError
-      }
+      if (fetchError) throw fetchError
 
-      results[0] = {
-        name: 'Supabase接続テスト',
-        status: 'success',
-        message: 'Supabaseへの接続が正常に確立されました',
-        details: connectionTest
-      }
+      if (projects && projects.length > 0) {
+        const testProjectId = projects[0].id
+        
+        // Try to update with deleted_at
+        const { error: updateError } = await supabase
+          .from('projects')
+          .update({
+            deleted_at: new Date().toISOString(),
+            deleted_by: user.id
+          })
+          .eq('id', testProjectId)
 
-      // テスト2: プロジェクトデータの取得テスト
-      results.push({
-        name: 'プロジェクトデータ取得テスト',
-        status: 'running',
-        message: 'プロジェクトテーブルからデータを取得中...'
-      })
+        if (updateError) {
+          results.push({
+            test: 'プロジェクト削除テスト',
+            status: 'FAIL',
+            message: updateError.message,
+            code: updateError.code
+          })
+        } else {
+          // Revert the change
+          await supabase
+            .from('projects')
+            .update({
+              deleted_at: null,
+              deleted_by: null
+            })
+            .eq('id', testProjectId)
 
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('owner_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (projectsError) {
-        results[1] = {
-          name: 'プロジェクトデータ取得テスト',
-          status: 'failed',
-          message: `データ取得エラー: ${projectsError.message}`,
-          details: projectsError
-        }
-        throw projectsError
-      }
-
-      results[1] = {
-        name: 'プロジェクトデータ取得テスト',
-        status: 'success',
-        message: `${projectsData.length}件のプロジェクトデータを正常に取得しました`,
-        details: projectsData
-      }
-
-      setProjects(projectsData || [])
-
-      // テスト3: データの整合性チェック
-      results.push({
-        name: 'データ整合性チェック',
-        status: 'running',
-        message: 'データの整合性を確認中...'
-      })
-
-      const hasValidData = projectsData.every(project => 
-        project.id && 
-        project.name && 
-        project.owner_id && 
-        project.created_at
-      )
-
-      if (hasValidData) {
-        results[2] = {
-          name: 'データ整合性チェック',
-          status: 'success',
-          message: 'すべてのプロジェクトデータが正常な形式です',
-          details: { validProjects: projectsData.length }
+          results.push({
+            test: 'プロジェクト削除テスト',
+            status: 'PASS',
+            message: '削除・復元が正常に動作しました'
+          })
         }
       } else {
-        results[2] = {
-          name: 'データ整合性チェック',
-          status: 'warning',
-          message: '一部のプロジェクトデータに不整合があります',
-          details: projectsData
-        }
+        results.push({
+          test: 'プロジェクト削除テスト',
+          status: 'SKIP',
+          message: 'テスト用プロジェクトが見つかりません'
+        })
       }
-
-      // テスト4: パフォーマンステスト
-      results.push({
-        name: 'パフォーマンステスト',
-        status: 'running',
-        message: 'クエリ実行時間を測定中...'
-      })
-
-      const startTime = performance.now()
-      const { data: perfTest, error: perfError } = await supabase
-        .from('projects')
-        .select('id, name, created_at')
-        .eq('owner_id', user.id)
-        .limit(10)
-
-      const endTime = performance.now()
-      const executionTime = endTime - startTime
-
-      if (perfError) {
-        results[3] = {
-          name: 'パフォーマンステスト',
-          status: 'failed',
-          message: `パフォーマンステストエラー: ${perfError.message}`,
-          details: perfError
-        }
-      } else {
-        results[3] = {
-          name: 'パフォーマンステスト',
-          status: 'success',
-          message: `クエリ実行時間: ${executionTime.toFixed(2)}ms`,
-          details: { 
-            executionTime: `${executionTime.toFixed(2)}ms`,
-            recordCount: perfTest.length,
-            performance: executionTime < 100 ? '優秀' : executionTime < 500 ? '良好' : '要改善'
-          }
-        }
-      }
-
-      setConnectionStatus('接続成功')
-      setTestResults(results)
-
     } catch (error) {
-      console.error('Database test failed:', error)
-      setError(`テスト実行エラー: ${error.message}`)
-      setConnectionStatus('テスト失敗')
-      setTestResults(results)
-    } finally {
-      setLoading(false)
+      results.push({
+        test: 'プロジェクト削除テスト',
+        status: 'ERROR',
+        message: error.message
+      })
     }
+
+    setTestResults(results)
+    setLoading(false)
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'success': return 'text-green-600 bg-green-50 border-green-200'
-      case 'failed': return 'text-red-600 bg-red-50 border-red-200'
-      case 'warning': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-      case 'running': return 'text-blue-600 bg-blue-50 border-blue-200'
-      default: return 'text-gray-600 bg-gray-50 border-gray-200'
-    }
-  }
+  const runMigration = async () => {
+    const migrationSQL = `
+-- ゴミ箱システムの実装
+ALTER TABLE projects 
+ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES auth.users(id);
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'success': return '✅'
-      case 'failed': return '❌'
-      case 'warning': return '⚠️'
-      case 'running': return '🔄'
-      default: return 'ℹ️'
+ALTER TABLE references 
+ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES auth.users(id);
+
+-- インデックス作成
+CREATE INDEX IF NOT EXISTS idx_projects_deleted_at ON projects(deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_references_deleted_at ON references(deleted_at) WHERE deleted_at IS NOT NULL;
+
+-- RLSポリシー追加
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own deleted projects') THEN
+    CREATE POLICY "Users can view their own deleted projects" ON projects
+      FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own deleted references') THEN
+    CREATE POLICY "Users can view their own deleted references" ON references
+      FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+  END IF;
+END $$;
+    `
+
+    try {
+      const { error } = await supabase.rpc('exec_sql', { sql: migrationSQL })
+      
+      if (error) {
+        toast.error(`マイグレーション実行エラー: ${error.message}`)
+      } else {
+        toast.success('マイグレーションが正常に実行されました')
+        // Re-run tests
+        await runTests()
+      }
+    } catch (error) {
+      toast.error('マイグレーション実行に失敗しました。手動でSQL Editorから実行してください。')
+      console.error('Migration error:', error)
     }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">
-            データベース接続テスト
-          </h1>
-          <p className="text-secondary-600 dark:text-secondary-400">
-            Supabaseデータベースとの接続状況とプロジェクトデータの取得をテストします
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">
+          データベーステスト
+        </h1>
+        <p className="text-secondary-600 dark:text-secondary-400">
+          ゴミ箱機能のデータベース状態を確認します
+        </p>
+      </div>
+
+      <div className="flex space-x-4">
         <button
-          onClick={runDatabaseTest}
+          onClick={runTests}
           disabled={loading || !user}
           className="btn-primary"
         >
-          {loading ? 'テスト実行中...' : 'テスト実行'}
+          {loading ? 'テスト実行中...' : 'データベーステスト実行'}
+        </button>
+        
+        <button
+          onClick={runMigration}
+          disabled={loading || !user}
+          className="btn-secondary"
+        >
+          マイグレーション実行（試験的）
         </button>
       </div>
 
-      {/* 接続ステータス */}
-      <div className="card p-6">
-        <div className="flex items-center space-x-3">
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-            connectionStatus === '接続成功' ? 'bg-green-100 text-green-800' :
-            connectionStatus === '接続失敗' ? 'bg-red-100 text-red-800' :
-            connectionStatus === 'テスト中...' ? 'bg-blue-100 text-blue-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {connectionStatus}
-          </div>
-          <span className="text-sm text-secondary-600">
-            ユーザーID: {user?.id || '未認証'}
-          </span>
-        </div>
-      </div>
-
-      {/* エラー表示 */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800 text-sm">{error}</p>
-        </div>
-      )}
-
-      {/* テスト結果 */}
       {testResults.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-secondary-900 dark:text-secondary-100">
+        <div className="card p-6">
+          <h3 className="text-lg font-medium text-secondary-900 dark:text-secondary-100 mb-4">
             テスト結果
-          </h2>
-          {testResults.map((result, index) => (
-            <div key={index} className={`card p-4 border ${getStatusColor(result.status)}`}>
-              <div className="flex items-start space-x-3">
-                <span className="text-lg">{getStatusIcon(result.status)}</span>
-                <div className="flex-1">
-                  <h3 className="font-medium">{result.name}</h3>
-                  <p className="text-sm mt-1">{result.message}</p>
-                  {result.details && (
-                    <details className="mt-2">
-                      <summary className="text-xs cursor-pointer text-secondary-500 hover:text-secondary-700">
-                        詳細情報を表示
-                      </summary>
-                      <pre className="mt-2 text-xs bg-white dark:bg-gray-800 p-2 rounded border overflow-auto max-h-32">
-                        {JSON.stringify(result.details, null, 2)}
-                      </pre>
-                    </details>
-                  )}
+          </h3>
+          <div className="space-y-3">
+            {testResults.map((result, index) => (
+              <div
+                key={index}
+                className={`p-3 rounded-lg border ${
+                  result.status === 'PASS'
+                    ? 'bg-green-50 border-green-200 text-green-800'
+                    : result.status === 'FAIL'
+                    ? 'bg-red-50 border-red-200 text-red-800'
+                    : result.status === 'SKIP'
+                    ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                    : 'bg-gray-50 border-gray-200 text-gray-800'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{result.test}</span>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    result.status === 'PASS'
+                      ? 'bg-green-100 text-green-800'
+                      : result.status === 'FAIL'
+                      ? 'bg-red-100 text-red-800'
+                      : result.status === 'SKIP'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {result.status}
+                  </span>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* プロジェクトデータ表示 */}
-      {projects.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-secondary-900 dark:text-secondary-100">
-            取得したプロジェクトデータ ({projects.length}件)
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map((project) => (
-              <div key={project.id} className="card p-4 hover:shadow-lg transition-shadow">
-                <div className="flex items-start space-x-3">
-                  <span className="text-2xl">{project.icon || '📂'}</span>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-secondary-900 dark:text-secondary-100 truncate">
-                      {project.name}
-                    </h3>
-                    <p className="text-sm text-secondary-600 dark:text-secondary-400 mt-1 line-clamp-2">
-                      {project.description || '説明なし'}
-                    </p>
-                    <div className="flex items-center space-x-2 mt-2">
-                      <div 
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: project.color || '#3b82f6' }}
-                      ></div>
-                      <span className="text-xs text-secondary-500">
-                        {format(new Date(project.created_at), 'yyyy/MM/dd HH:mm', { locale: ja })}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-xs text-secondary-400">
-                      ID: {project.id.substring(0, 8)}...
-                    </div>
-                  </div>
-                </div>
+                <p className="text-sm mt-1">{result.message}</p>
+                {result.code && (
+                  <p className="text-xs mt-1 font-mono">エラーコード: {result.code}</p>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* テスト説明 */}
       <div className="card p-6 bg-blue-50 dark:bg-blue-900/20">
-        <div className="flex items-start space-x-3">
-          <svg className="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
-              データベース接続テストについて
-            </h4>
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              このテストでは、Supabaseデータベースへの接続、プロジェクトデータの取得、データの整合性、クエリのパフォーマンスを確認します。
-              テストを実行する前に、上記のSQLでプロジェクトテーブルに仮想データを挿入してください。
-            </p>
-          </div>
-        </div>
+        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+          手動マイグレーション手順
+        </h4>
+        <p className="text-sm text-blue-800 dark:text-blue-300 mb-3">
+          自動マイグレーションが失敗した場合は、Supabaseダッシュボードで以下のSQLを実行してください：
+        </p>
+        <details className="text-xs">
+          <summary className="cursor-pointer text-blue-700 hover:text-blue-900 font-medium mb-2">
+            📋 マイグレーションSQL（クリックして表示）
+          </summary>
+          <pre className="bg-gray-100 p-3 rounded text-xs overflow-auto max-h-40 text-gray-800">
+{`-- ゴミ箱システムの実装
+ALTER TABLE projects 
+ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES auth.users(id);
+
+ALTER TABLE references 
+ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES auth.users(id);
+
+-- インデックス作成
+CREATE INDEX IF NOT EXISTS idx_projects_deleted_at ON projects(deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_references_deleted_at ON references(deleted_at) WHERE deleted_at IS NOT NULL;
+
+-- RLSポリシー追加
+CREATE POLICY "Users can view their own deleted projects" ON projects
+  FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+
+CREATE POLICY "Users can view their own deleted references" ON references
+  FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);`}
+          </pre>
+        </details>
       </div>
     </div>
   )
