@@ -3,11 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
 // 管理者（サービスロール）クライアント: RLSをバイパスして確実に操作する
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || '');
-// 認証トークンの検証用（任意）にanonキーがあれば利用
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || ''
-const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey || supabaseServiceKey || '')
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+// 認証トークンの検証用
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
+const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey)
 
 export default async function handler(req, res) {
   // CORS設定
@@ -45,7 +45,9 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('References API error:', error)
     return res.status(500).json({
-      error: '内部サーバーエラーが発生しました'
+      error: '内部サーバーエラーが発生しました',
+      details: error.message,
+      stack: error.stack
     })
   }
 }
