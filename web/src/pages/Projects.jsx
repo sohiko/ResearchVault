@@ -141,9 +141,13 @@ export default function Projects() {
 
   const confirmDeleteProject = async () => {
     try {
+      // ソフト削除（ゴミ箱に移動）
       const { error } = await supabase
         .from('projects')
-        .delete()
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: user.id
+        })
         .eq('id', projectToDelete)
 
       if (error) {
@@ -151,7 +155,7 @@ export default function Projects() {
       }
 
       await loadProjects()
-      toast.success('プロジェクトを削除しました')
+      toast.success('プロジェクトをゴミ箱に移動しました')
     } catch (error) {
       console.error('Failed to delete project:', error)
       toast.error('プロジェクトの削除に失敗しました')
@@ -254,7 +258,7 @@ export default function Projects() {
         onClose={() => setShowConfirmDelete(false)}
         onConfirm={confirmDeleteProject}
         title="プロジェクトを削除"
-        message="このプロジェクトを削除しますか？関連するすべての参照も削除されます。この操作は取り消せません。"
+        message="このプロジェクトをゴミ箱に移動しますか？関連するすべての参照も一緒に移動されます。30日以内であれば復元できます。"
         confirmText="削除"
         cancelText="キャンセル"
       />

@@ -220,15 +220,19 @@ export default function ProjectDetail() {
 
   const confirmDeleteReference = async () => {
     try {
+      // ソフト削除（ゴミ箱に移動）
       const { error } = await supabase
         .from('references')
-        .delete()
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: user.id
+        })
         .eq('id', referenceToDelete)
 
       if (error) {throw error}
 
       await loadReferences()
-      toast.success('参照を削除しました')
+      toast.success('参照をゴミ箱に移動しました')
     } catch (error) {
       console.error('Failed to delete reference:', error)
       toast.error('参照の削除に失敗しました')

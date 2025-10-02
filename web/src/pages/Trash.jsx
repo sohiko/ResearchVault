@@ -23,42 +23,32 @@ export default function Trash() {
       setLoading(true)
       setError(null)
       
-      // 実際の削除アイテムデータを取得
-      const { data: trashedData, error: trashedError } = await supabase
-        .from('trashed_items')
-        .select(`
-          *,
-          projects!trashed_items_project_id_fkey(name, color)
-        `)
+      // ゴミ箱のプロジェクトを取得
+      const { data: projects, error: projectsError } = await supabase
+        .from('trash_projects')
+        .select('*')
         .eq('deleted_by', user.id)
         .order('deleted_at', { ascending: false })
 
-      if (trashedError) {
-        console.error('Failed to load trashed items:', trashedError)
-        // フォールバック: 空の配列を表示
-        setTrashedItems([])
-        return
-      }
+      if (projectsError) throw projectsError
 
-      // データ形式を統一
-      const formattedItems = (trashedData || []).map(item => ({
-        id: item.id,
-        type: item.original_table.replace('s', ''), // 'references' -> 'reference'
-        title: item.original_data?.title || item.original_data?.name || 'タイトルなし',
-        url: item.original_data?.url,
-        project: item.projects ? {
-          name: item.projects.name,
-          color: item.projects.color
-        } : null,
-        deletedAt: item.deleted_at,
-        deletedBy: item.deleted_by,
-        originalData: item.original_data,
-        originalId: item.original_id,
-        originalTable: item.original_table,
-        expiresAt: item.restore_expires_at
-      }))
+      // ゴミ箱の参照を取得（プロジェクトに属さない個別削除のもののみ）
+      const { data: references, error: referencesError } = await supabase
+        .from('trash_references')
+        .select('*')
+        .eq('deleted_by', user.id)
+        .is('project_id', null)
+        .order('deleted_at', { ascending: false })
 
-      setTrashedItems(formattedItems)
+      if (referencesError) throw referencesError
+
+      // データを統合
+      const allItems = [
+        ...(projects || []).map(p => ({ ...p, type: 'project' })),
+        ...(references || []).map(r => ({ ...r, type: 'reference' }))
+      ].sort((a, b) => new Date(b.deleted_at) - new Date(a.deleted_at))
+
+      setTrashedItems(allItems)
     } catch (error) {
       console.error('Failed to load trashed items:', error)
       setError('ゴミ箱の読み込みに失敗しました')
@@ -77,36 +67,25 @@ export default function Trash() {
       setProcessing(true)
       setError(null)
 
-      // 元のテーブルにデータを復元
-      const restoreData = {
-        ...item.originalData,
-        id: item.originalId, // 元のIDを使用
-        updated_at: new Date().toISOString()
-      }
-
-      const { error: restoreError } = await supabase
-        .from(item.originalTable)
-        .insert(restoreData)
-
-      if (restoreError) {
-        throw restoreError
-      }
-
-      // ゴミ箱から削除
-      const { error: deleteError } = await supabase
-        .from('trashed_items')
-        .delete()
-        .eq('id', item.id)
-        .eq('deleted_by', user.id)
-
-      if (deleteError) {
-        console.error('Failed to remove from trash:', deleteError)
-        // 復元は成功したので、UIからは削除する
+      if (item.type === 'project') {
+        const { error } = await supabase
+          .from('projects')
+          .update({ deleted_at: null, deleted_by: null })
+          .eq('id', item.id)
+        
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('references')
+          .update({ deleted_at: null, deleted_by: null })
+          .eq('id', item.id)
+        
+        if (error) throw error
       }
 
       // UIから削除
       setTrashedItems(prev => prev.filter(t => t.id !== item.id))
-      toast.success('アイテムを復元しました')
+      toast.success(`${item.type === 'project' ? 'プロジェクト' : '参照'}を復元しました`)
     } catch (error) {
       console.error('Failed to restore item:', error)
       setError('復元に失敗しました')
@@ -126,20 +105,25 @@ export default function Trash() {
       setProcessing(true)
       setError(null)
 
-      // ゴミ箱から完全削除
-      const { error } = await supabase
-        .from('trashed_items')
-        .delete()
-        .eq('id', itemToDelete.id)
-        .eq('deleted_by', user.id)
-
-      if (error) {
-        throw error
+      if (itemToDelete.type === 'project') {
+        const { error } = await supabase
+          .from('projects')
+          .delete()
+          .eq('id', itemToDelete.id)
+        
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('references')
+          .delete()
+          .eq('id', itemToDelete.id)
+        
+        if (error) throw error
       }
 
       // UIから削除
       setTrashedItems(prev => prev.filter(t => t.id !== itemToDelete.id))
-      toast.success('アイテムを完全に削除しました')
+      toast.success(`${itemToDelete.type === 'project' ? 'プロジェクト' : '参照'}を完全に削除しました`)
     } catch (error) {
       console.error('Failed to permanently delete item:', error)
       setError('完全削除に失敗しました')
@@ -160,14 +144,26 @@ export default function Trash() {
       setProcessing(true)
       setError(null)
 
-      // すべてのアイテムを完全削除
-      const { error } = await supabase
-        .from('trashed_items')
-        .delete()
-        .eq('deleted_by', user.id)
+      // プロジェクトを完全削除
+      const projectIds = trashedItems.filter(item => item.type === 'project').map(item => item.id)
+      if (projectIds.length > 0) {
+        const { error: projectError } = await supabase
+          .from('projects')
+          .delete()
+          .in('id', projectIds)
+        
+        if (projectError) throw projectError
+      }
 
-      if (error) {
-        throw error
+      // 参照を完全削除
+      const referenceIds = trashedItems.filter(item => item.type === 'reference').map(item => item.id)
+      if (referenceIds.length > 0) {
+        const { error: referenceError } = await supabase
+          .from('references')
+          .delete()
+          .in('id', referenceIds)
+        
+        if (referenceError) throw referenceError
       }
 
       setTrashedItems([])
@@ -350,9 +346,13 @@ function TrashItemCard({ item, onRestore, onPermanentDelete, processing }) {
               <div className="flex-1">
                 <div className="flex items-center space-x-2 mb-1">
                   <h3 className="text-lg font-medium text-secondary-900 dark:text-secondary-100">
-                    {item.title || item.originalData?.name || item.originalData?.title}
+                    {item.name || item.title}
                   </h3>
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    item.type === 'project' 
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
+                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  }`}>
                     {getTypeLabel(item.type)}
                   </span>
                 </div>
@@ -375,9 +375,15 @@ function TrashItemCard({ item, onRestore, onPermanentDelete, processing }) {
                   </div>
                 )}
                 
-                <div className="flex items-center space-x-4 text-sm text-secondary-500">
+                <div className="flex items-center space-x-4 text-sm text-secondary-500 dark:text-secondary-400">
                   <span>
-                    {format(new Date(item.deletedAt), 'MM/dd HH:mm', { locale: ja })} に削除
+                    {format(new Date(item.deleted_at), 'MM/dd HH:mm', { locale: ja })} に削除
+                  </span>
+                  <span className="font-medium text-orange-600 dark:text-orange-400">
+                    {item.days_until_permanent_deletion > 0 
+                      ? `${Math.ceil(item.days_until_permanent_deletion)}日後に完全削除`
+                      : '間もなく完全削除'
+                    }
                   </span>
                 </div>
               </div>

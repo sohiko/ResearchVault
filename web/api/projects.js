@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       })
 
       // トークンを設定
-      const sessionResult = await userSupabase.auth.setSession({
+      await userSupabase.auth.setSession({
         access_token: token,
         refresh_token: '' // リフレッシュトークンは不要
       })
@@ -64,6 +64,8 @@ export default async function handler(req, res) {
         return handleGetProjects(req, res, userId, userSupabase)
       case 'POST':
         return handleCreateProject(req, res, userId, userSupabase)
+      case 'DELETE':
+        return handleDeleteProject(req, res, userId, userSupabase)
       default:
         return res.status(405).json({ error: 'Method not allowed' })
     }
@@ -78,7 +80,7 @@ export default async function handler(req, res) {
 
 async function handleGetProjects(req, res, userId, userSupabase) {
   try {
-    // 所有プロジェクトを取得
+    // 所有プロジェクトを取得（削除されていないもののみ）
     const { data: ownedProjects, error: ownedError } = await userSupabase
       .from('projects')
       .select(`
@@ -86,6 +88,7 @@ async function handleGetProjects(req, res, userId, userSupabase) {
         references(id)
       `)
       .eq('owner_id', userId)
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
 
     if (ownedError) {
@@ -93,17 +96,18 @@ async function handleGetProjects(req, res, userId, userSupabase) {
       return res.status(500).json({ error: 'プロジェクトの取得に失敗しました' })
     }
 
-    // メンバープロジェクトを取得
+    // メンバープロジェクトを取得（削除されていないもののみ）
     const { data: memberProjects, error: memberError } = await userSupabase
       .from('project_members')
       .select(`
         role,
-        projects(
+        projects!inner(
           *,
           references(id)
         )
       `)
       .eq('user_id', userId)
+      .is('projects.deleted_at', null)
 
     if (memberError) {
       console.error('Get member projects error:', memberError)
@@ -212,5 +216,65 @@ async function handleCreateProject(req, res, userId, userSupabase) {
   } catch (error) {
     console.error('Create project unexpected error:', error)
     return res.status(500).json({ error: 'プロジェクトの作成に失敗しました' })
+  }
+}
+
+async function handleDeleteProject(req, res, userId, userSupabase) {
+  try {
+    const { projectId } = req.query
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'プロジェクトIDが必要です' })
+    }
+
+    // プロジェクトの存在確認と権限チェック
+    const { data: project, error: fetchError } = await userSupabase
+      .from('projects')
+      .select('id, owner_id, name')
+      .eq('id', projectId)
+      .is('deleted_at', null)
+      .single()
+
+    if (fetchError || !project) {
+      return res.status(404).json({ error: 'プロジェクトが見つかりません' })
+    }
+
+    // オーナーまたは管理者権限チェック
+    if (project.owner_id !== userId) {
+      const { data: member, error: memberError } = await userSupabase
+        .from('project_members')
+        .select('role')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .single()
+
+      if (memberError || !member || member.role !== 'admin') {
+        return res.status(403).json({ error: 'プロジェクトを削除する権限がありません' })
+      }
+    }
+
+    // ソフト削除を実行
+    const { error: deleteError } = await userSupabase
+      .from('projects')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: userId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', projectId)
+
+    if (deleteError) {
+      console.error('Delete project error:', deleteError)
+      return res.status(500).json({ error: 'プロジェクトの削除に失敗しました' })
+    }
+
+    return res.status(200).json({
+      message: 'プロジェクトをゴミ箱に移動しました',
+      projectId: projectId
+    })
+
+  } catch (error) {
+    console.error('Delete project unexpected error:', error)
+    return res.status(500).json({ error: 'プロジェクトの削除に失敗しました' })
   }
 }
