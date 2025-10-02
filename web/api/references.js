@@ -99,15 +99,33 @@ async function handleGetReferences(req, res, userId) {
 
 async function handleCreateReference(req, res, userId) {
   try {
+    console.log('Creating reference for user:', userId)
+    console.log('Request body:', req.body)
+    
     const {
       title,
       url,
       description,
+      memo, // 拡張機能からのフィールド
       favicon,
       metadata,
       projectId,
-      tags
+      tags,
+      savedAt // 拡張機能からのフィールド
     } = req.body
+
+    // 拡張機能からのデータ形式に対応
+    const finalDescription = description || memo || ''
+    const finalSavedAt = savedAt || new Date().toISOString()
+    
+    console.log('Processed data:', {
+      title,
+      url,
+      finalDescription,
+      finalSavedAt,
+      projectId,
+      tags
+    })
 
     // バリデーション
     if (!title || title.trim().length === 0) {
@@ -145,19 +163,23 @@ async function handleCreateReference(req, res, userId) {
     }
 
     // 参照を作成
+    const insertData = {
+      title: title.trim(),
+      url: url.trim(),
+      description: finalDescription.trim(),
+      favicon: favicon || null,
+      metadata: metadata || {},
+      project_id: projectId || null,
+      saved_by: userId,
+      saved_at: finalSavedAt,
+      updated_at: new Date().toISOString()
+    }
+    
+    console.log('Inserting reference data:', insertData)
+    
     const { data: reference, error } = await supabase
       .from('references')
-      .insert({
-        title: title.trim(),
-        url: url.trim(),
-        description: description?.trim() || '',
-        favicon: favicon || null,
-        metadata: metadata || {},
-        project_id: projectId || null,
-        saved_by: userId,
-        saved_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .insert(insertData)
       .select()
       .single()
 
@@ -165,6 +187,8 @@ async function handleCreateReference(req, res, userId) {
       console.error('Create reference error:', error)
       return res.status(500).json({ error: '参照の保存に失敗しました' })
     }
+    
+    console.log('Reference created successfully:', reference)
 
     // タグがある場合は追加
     if (tags && Array.isArray(tags) && tags.length > 0) {
