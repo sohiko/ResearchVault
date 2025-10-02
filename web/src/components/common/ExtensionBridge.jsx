@@ -127,7 +127,7 @@ const ExtensionBridge = () => {
       setExtensionInstalled(false)
       setConnectionStatus('not_installed')
     }
-  }, [checkAlternativeMethods]) // checkAlternativeMethodsを依存配列に追加
+  }, []) // 空の依存配列で循環依存を完全に回避
 
   // 認証トークン同期関数
   const syncAuthToken = useCallback(() => {
@@ -172,7 +172,7 @@ const ExtensionBridge = () => {
       console.error('Auth sync failed:', error)
       toast.error('拡張機能との同期に失敗しました')
     }
-  }, [session, extensionInstalled, user.id, user.email, user.user_metadata?.name, syncViaDOM])
+  }, [session, extensionInstalled, user.id, user.email, user.user_metadata?.name]) // syncViaDOMを依存配列から削除
 
   // DOM経由での同期関数
   const syncViaDOM = useCallback((authData) => {
@@ -193,14 +193,14 @@ const ExtensionBridge = () => {
   // 初期化効果
   useEffect(() => {
     checkExtensionInstallation()
-  }, [checkExtensionInstallation])
+  }, []) // 空の依存配列で循環依存を回避
 
   // 認証同期効果
   useEffect(() => {
     if (session && extensionInstalled) {
       syncAuthToken()
     }
-  }, [session, extensionInstalled, syncAuthToken])
+  }, [session, extensionInstalled]) // syncAuthTokenを依存配列から削除
 
   const installExtension = () => {
     window.open('https://chrome.google.com/webstore/detail/researchvault/extension-id', '_blank')

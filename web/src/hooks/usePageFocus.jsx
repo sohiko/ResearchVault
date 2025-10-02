@@ -70,7 +70,7 @@ export function usePageFocus(callback, deps = [], options = {}) {
   // 依存配列が変更された場合のみコールバックを実行
   useEffect(() => {
     callbackRef.current()
-  }, [...deps])
+  }, deps)
 }
 
 export default usePageFocus
