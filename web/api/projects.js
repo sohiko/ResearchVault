@@ -33,11 +33,26 @@ export default async function handler(req, res) {
     const token = authHeader.split(' ')[1]
     console.log('Projects API - Token:', token ? `${token.substring(0, 20)}...` : 'null')
     
-    // Supabaseの正しい認証方法を使用
-    let userId
+    // 認証されたユーザーのSupabaseクライアントを作成
+    let userId, userSupabase
     try {
-      // Supabaseクライアントでトークンを検証
-      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
+      // ユーザーのトークンでSupabaseクライアントを作成
+      userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      })
+      
+      // トークンを設定
+      await userSupabase.auth.setSession({
+        access_token: token,
+        refresh_token: '' // リフレッシュトークンは不要
+      })
+      
+      // ユーザー情報を取得して認証を確認
+      const { data: { user }, error: authError } = await userSupabase.auth.getUser()
       
       console.log('Projects API - Auth verification:', { 
         user: user ? { id: user.id, email: user.email } : null, 
@@ -58,9 +73,9 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
-        return handleGetProjects(req, res, userId)
+        return handleGetProjects(req, res, userId, userSupabase)
       case 'POST':
-        return handleCreateProject(req, res, userId)
+        return handleCreateProject(req, res, userId, userSupabase)
       default:
         return res.status(405).json({ error: 'Method not allowed' })
     }
@@ -73,10 +88,10 @@ export default async function handler(req, res) {
   }
 }
 
-async function handleGetProjects(req, res, userId) {
+async function handleGetProjects(req, res, userId, userSupabase) {
   try {
     // 所有プロジェクトを取得
-    const { data: ownedProjects, error: ownedError } = await supabase
+    const { data: ownedProjects, error: ownedError } = await userSupabase
       .from('projects')
       .select(`
         *,
@@ -91,7 +106,7 @@ async function handleGetProjects(req, res, userId) {
     }
 
     // メンバープロジェクトを取得
-    const { data: memberProjects, error: memberError } = await supabase
+    const { data: memberProjects, error: memberError } = await userSupabase
       .from('project_members')
       .select(`
         role,
@@ -146,7 +161,7 @@ async function handleGetProjects(req, res, userId) {
   }
 }
 
-async function handleCreateProject(req, res, userId) {
+async function handleCreateProject(req, res, userId, userSupabase) {
   try {
     const { name, description, color, isPublic } = req.body
 
@@ -158,7 +173,7 @@ async function handleCreateProject(req, res, userId) {
       return res.status(400).json({ error: 'プロジェクト名は100文字以内で入力してください' })
     }
 
-    const { data: project, error } = await supabase
+    const { data: project, error } = await userSupabase
       .from('projects')
       .insert({
         name: name.trim(),
@@ -178,7 +193,7 @@ async function handleCreateProject(req, res, userId) {
     }
 
     // プロジェクトメンバーとしてオーナーを追加
-    const { error: memberError } = await supabase
+    const { error: memberError } = await userSupabase
       .from('project_members')
       .insert({
         project_id: project.id,

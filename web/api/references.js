@@ -34,11 +34,26 @@ export default async function handler(req, res) {
     const token = authHeader.split(' ')[1]
     console.log('Token:', token ? `${token.substring(0, 20)}...` : 'null')
     
-    // Supabaseの正しい認証方法を使用
-    let userId
+    // 認証されたユーザーのSupabaseクライアントを作成
+    let userId, userSupabase
     try {
-      // Supabaseクライアントでトークンを検証
-      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
+      // ユーザーのトークンでSupabaseクライアントを作成
+      userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      })
+      
+      // トークンを設定
+      await userSupabase.auth.setSession({
+        access_token: token,
+        refresh_token: '' // リフレッシュトークンは不要
+      })
+      
+      // ユーザー情報を取得して認証を確認
+      const { data: { user }, error: authError } = await userSupabase.auth.getUser()
       
       console.log('Auth verification:', { 
         user: user ? { id: user.id, email: user.email } : null, 
@@ -59,9 +74,9 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
-        return handleGetReferences(req, res, userId)
+        return handleGetReferences(req, res, userId, userSupabase)
       case 'POST':
-        return handleCreateReference(req, res, userId)
+        return handleCreateReference(req, res, userId, userSupabase)
       default:
         return res.status(405).json({ error: 'Method not allowed' })
     }
@@ -76,11 +91,11 @@ export default async function handler(req, res) {
   }
 }
 
-async function handleGetReferences(req, res, userId) {
+async function handleGetReferences(req, res, userId, userSupabase) {
   try {
     const { project_id, limit = 50, offset = 0 } = req.query
 
-    let query = supabaseAdmin
+    let query = userSupabase
       .from('references')
       .select(`
         *,
@@ -125,7 +140,7 @@ async function handleGetReferences(req, res, userId) {
   }
 }
 
-async function handleCreateReference(req, res, userId) {
+async function handleCreateReference(req, res, userId, userSupabase) {
   try {
     console.log('Creating reference for user:', userId)
     console.log('Request body:', req.body)
@@ -167,11 +182,10 @@ async function handleCreateReference(req, res, userId) {
 
     // プロジェクトの存在と権限チェック
     if (projectId) {
-      const { data: project, error: projectError } = await supabaseAdmin
+      const { data: project, error: projectError } = await userSupabase
         .from('projects')
-        .select('id, owner_id, project_members!inner(user_id)')
+        .select('id, owner_id')
         .eq('id', projectId)
-        .or(`owner_id.eq.${userId},project_members.user_id.eq.${userId}`)
         .single()
 
       if (projectError || !project) {
@@ -180,7 +194,7 @@ async function handleCreateReference(req, res, userId) {
     }
 
     // 重複チェック
-    const { data: existing, error: duplicateError } = await supabaseAdmin
+    const { data: existing, error: duplicateError } = await userSupabase
       .from('references')
       .select('id')
       .eq('url', url)
@@ -205,7 +219,7 @@ async function handleCreateReference(req, res, userId) {
     
     console.log('Inserting reference data:', insertData)
     
-    const { data: reference, error } = await supabaseAdmin
+    const { data: reference, error } = await userSupabase
       .from('references')
       .insert(insertData)
       .select()
@@ -234,7 +248,7 @@ async function handleCreateReference(req, res, userId) {
     // タグがある場合は追加
     if (tags && Array.isArray(tags) && tags.length > 0) {
       try {
-        await addTagsToReference(reference.id, tags, userId)
+        await addTagsToReference(reference.id, tags, userId, userSupabase)
       } catch (tagError) {
         console.warn('Failed to add tags:', tagError)
         // タグの追加に失敗してもエラーにはしない
@@ -262,7 +276,7 @@ async function handleCreateReference(req, res, userId) {
   }
 }
 
-async function addTagsToReference(referenceId, tags, userId) {
+async function addTagsToReference(referenceId, tags, userId, userSupabase) {
   for (const tagName of tags) {
     if (!tagName || tagName.trim().length === 0) {
       continue
@@ -270,7 +284,7 @@ async function addTagsToReference(referenceId, tags, userId) {
 
     try {
       // タグを取得または作成
-      const { data: tag, error: tagError } = await supabaseAdmin
+      const { data: tag, error: tagError } = await userSupabase
         .from('tags')
         .select('id')
         .eq('name', tagName.trim())
@@ -279,7 +293,7 @@ async function addTagsToReference(referenceId, tags, userId) {
 
       if (tagError && tagError.code === 'PGRST116') {
         // タグが存在しない場合は作成
-        const { data: newTag, error: createError } = await supabaseAdmin
+        const { data: newTag, error: createError } = await userSupabase
           .from('tags')
           .insert({
             name: tagName.trim(),
@@ -297,7 +311,7 @@ async function addTagsToReference(referenceId, tags, userId) {
 
         // 新しく作成されたタグを使用
         if (newTag) {
-          await supabaseAdmin
+          await userSupabase
             .from('reference_tags')
             .insert({
               reference_id: referenceId,
@@ -311,7 +325,7 @@ async function addTagsToReference(referenceId, tags, userId) {
 
       // 既存のタグと参照を関連付け
       if (tag) {
-        await supabaseAdmin
+        await userSupabase
           .from('reference_tags')
           .insert({
             reference_id: referenceId,
