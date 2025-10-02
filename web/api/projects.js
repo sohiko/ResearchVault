@@ -3,12 +3,16 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
 
-// 認証用クライアント（匿名キー使用）
-const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey)
-// 管理用クライアント（サービスロールキー使用、RLSバイパス）
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+// 環境変数の設定状況をデバッグ出力
+console.log('Projects API - Environment variables check:', {
+  VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT_SET',
+  SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'NOT_SET',
+  VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? `SET (${process.env.VITE_SUPABASE_ANON_KEY.substring(0, 20)}...)` : 'NOT_SET',
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? `SET (${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...)` : 'NOT_SET',
+  finalUrl: supabaseUrl,
+  finalAnonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null'
+})
 
 export default async function handler(req, res) {
   // CORS設定
@@ -36,6 +40,12 @@ export default async function handler(req, res) {
     // 認証されたユーザーのSupabaseクライアントを作成
     let userId, userSupabase
     try {
+      console.log('Projects API - Creating user Supabase client with:', {
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null',
+        tokenLength: token ? token.length : 0
+      })
+      
       // ユーザーのトークンでSupabaseクライアントを作成
       userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
         global: {
@@ -45,29 +55,42 @@ export default async function handler(req, res) {
         }
       })
       
+      console.log('Projects API - Setting session with token')
+      
       // トークンを設定
-      await userSupabase.auth.setSession({
+      const sessionResult = await userSupabase.auth.setSession({
         access_token: token,
         refresh_token: '' // リフレッシュトークンは不要
+      })
+      
+      console.log('Projects API - Session set result:', {
+        success: !sessionResult.error,
+        error: sessionResult.error?.message,
+        hasUser: !!sessionResult.data?.user,
+        hasSession: !!sessionResult.data?.session
       })
       
       // ユーザー情報を取得して認証を確認
       const { data: { user }, error: authError } = await userSupabase.auth.getUser()
       
       console.log('Projects API - Auth verification:', { 
-        user: user ? { id: user.id, email: user.email } : null, 
-        error: authError?.message 
+        user: user ? { id: user.id, email: user.email, role: user.role } : null, 
+        error: authError?.message,
+        errorCode: authError?.status
       })
       
       if (authError || !user) {
         console.log('Projects API - Auth failed:', authError?.message || 'No user')
-        return res.status(401).json({ error: '無効な認証トークンです' })
+        return res.status(401).json({ 
+          error: '無効な認証トークンです',
+          details: authError?.message || 'ユーザーが見つかりません'
+        })
       }
       
       userId = user.id
       console.log('Projects API - Auth successful, user ID:', userId)
     } catch (error) {
-      console.log('Projects API - Auth verification error:', error)
+      console.log('Projects API - Auth verification error:', error.message, error.stack)
       return res.status(401).json({ error: '認証の検証に失敗しました' })
     }
 
