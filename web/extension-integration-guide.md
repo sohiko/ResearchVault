@@ -144,6 +144,59 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 ```
 
+## 拡張機能用APIエンドポイント
+
+### 1. 認証エンドポイント
+
+拡張機能専用の認証エンドポイントが利用可能です：
+
+```
+POST /api/extension/auth
+```
+
+**リクエスト例:**
+```javascript
+const response = await fetch('https://research-vault-eight.vercel.app/api/extension/auth', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Extension-Version': '1.0.0',
+    'X-Client-Info': 'chrome-extension'
+  },
+  body: JSON.stringify({
+    email: 'user@example.com',
+    password: 'password123'
+  })
+});
+
+const data = await response.json();
+if (data.success) {
+  console.log('ログイン成功:', data.user);
+  // トークンを保存
+  localStorage.setItem('auth_token', data.token);
+}
+```
+
+### 2. ヘルスチェックエンドポイント
+
+```
+GET /api/extension/health
+```
+
+**リクエスト例:**
+```javascript
+const response = await fetch('https://research-vault-eight.vercel.app/api/extension/health', {
+  method: 'GET',
+  headers: {
+    'X-Extension-Version': '1.0.0',
+    'X-Client-Info': 'chrome-extension'
+  }
+});
+
+const data = await response.json();
+console.log('API状態:', data.status);
+```
+
 ## ウェブサイト側での検出方法
 
 ### 1. グローバルオブジェクトのチェック

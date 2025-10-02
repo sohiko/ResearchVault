@@ -6,6 +6,12 @@
     "api/auth/signup.js": {
       "maxDuration": 30
     },
+    "api/extension/auth.js": {
+      "maxDuration": 30
+    },
+    "api/extension/health.js": {
+      "maxDuration": 10
+    },
     "api/projects.js": {
       "maxDuration": 30
     },

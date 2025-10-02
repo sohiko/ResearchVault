@@ -1,4 +1,4 @@
-// Chrome拡張機能用認証APIエンドポイント
+// Chrome拡張機能専用認証APIエンドポイント
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
@@ -12,36 +12,53 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export default async function handler(req, res) {
   // デバッグログ
-  console.log('Login API called:', {
+  console.log('Extension Auth API called:', {
     method: req.method,
     url: req.url,
     headers: req.headers,
-    body: req.body ? 'Body present' : 'No body'
+    body: req.body ? 'Body present' : 'No body',
+    userAgent: req.headers['user-agent']
   })
 
-  // CORS設定
+  // CORS設定（拡張機能用）
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Info')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Info, X-Extension-Version')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
 
   if (req.method === 'OPTIONS') {
-    console.log('OPTIONS request handled')
+    console.log('OPTIONS request handled for extension')
     return res.status(200).end()
   }
 
   if (req.method !== 'POST') {
-    console.log('Method not allowed:', req.method)
+    console.log('Method not allowed for extension:', req.method)
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    const { email, password } = req.body
+    const { email, password, action } = req.body
 
     if (!email || !password) {
       return res.status(400).json({
         error: 'メールアドレスとパスワードが必要です'
       })
     }
+
+    // 拡張機能からのリクエストかどうかを確認
+    const userAgent = req.headers['user-agent'] || ''
+    const isExtension = userAgent.includes('chrome-extension') || 
+                       req.headers['x-extension-version'] ||
+                       req.headers['x-client-info']?.includes('extension')
+
+    console.log('Extension detection:', {
+      userAgent,
+      isExtension,
+      extensionHeaders: {
+        'x-extension-version': req.headers['x-extension-version'],
+        'x-client-info': req.headers['x-client-info']
+      }
+    })
 
     // Supabaseで認証
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -50,7 +67,7 @@ export default async function handler(req, res) {
     })
 
     if (error) {
-      console.error('Login error:', error)
+      console.error('Extension login error:', error)
       return res.status(401).json({
         error: getErrorMessage(error.message)
       })
@@ -66,7 +83,8 @@ export default async function handler(req, res) {
     }
 
     // Chrome拡張機能用にトークンとユーザー情報を返す
-    return res.status(200).json({
+    const response = {
+      success: true,
       token: session.access_token,
       user: {
         id: user.id,
@@ -77,11 +95,23 @@ export default async function handler(req, res) {
       session: {
         expires_at: session.expires_at,
         refresh_token: session.refresh_token
+      },
+      extension: {
+        detected: isExtension,
+        version: req.headers['x-extension-version'] || 'unknown'
       }
+    }
+
+    console.log('Extension login success:', {
+      userId: user.id,
+      email: user.email,
+      isExtension
     })
 
+    return res.status(200).json(response)
+
   } catch (error) {
-    console.error('Unexpected error:', error)
+    console.error('Extension auth unexpected error:', error)
     return res.status(500).json({
       error: '内部サーバーエラーが発生しました'
     })
