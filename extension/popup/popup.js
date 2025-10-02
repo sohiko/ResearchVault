@@ -71,22 +71,41 @@ class PopupManager {
             // 環境変数デバッグ情報を取得（認証前に実行）
             await this.debugEnvironmentVariables();
             
-            const { authToken, sessionInfo, lastLoginTime } = await chrome.storage.sync.get(['authToken', 'sessionInfo', 'lastLoginTime']);
+            const { authToken, sessionInfo, lastLoginTime, userInfo } = await chrome.storage.sync.get(['authToken', 'sessionInfo', 'lastLoginTime', 'userInfo']);
             console.log('Checking auth state:', {
                 hasToken: !!authToken,
                 tokenLength: authToken ? authToken.length : 0,
                 hasSessionInfo: !!sessionInfo,
+                sessionInfo: sessionInfo,
+                hasUserInfo: !!userInfo,
                 lastLoginTime: lastLoginTime
             });
             
+            // ストレージの全内容をデバッグ出力
+            const allStorage = await chrome.storage.sync.get(null);
+            console.log('Complete storage contents:', allStorage);
+            
             if (authToken) {
+                // JWTトークンから有効期限を直接取得
+                const tokenExpiry = this.getTokenExpiry(authToken);
+                console.log('JWT token expiry info:', tokenExpiry);
+                
+                // JWTトークンが期限切れの場合は即座にクリア
+                if (tokenExpiry && tokenExpiry.isExpired) {
+                    console.log('JWT token is expired, clearing auth data');
+                    await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
+                    this.showAuthSection();
+                    this.showError('セッションが期限切れです。再度ログインしてください');
+                    return;
+                }
+                
                 // トークンの有効期限をチェック
                 if (sessionInfo && sessionInfo.expires_at) {
                     const expiresAt = new Date(sessionInfo.expires_at * 1000); // Unix timestamp to Date
                     const now = new Date();
                     const timeUntilExpiry = expiresAt.getTime() - now.getTime();
                     
-                    console.log('Token expiry check:', {
+                    console.log('Session expiry check:', {
                         expiresAt: expiresAt.toISOString(),
                         now: now.toISOString(),
                         timeUntilExpiry: timeUntilExpiry,
@@ -280,6 +299,10 @@ class PopupManager {
                 
                 // トークンが正しく設定されたか確認
                 console.log('Auth token set:', this.api.authToken);
+                
+                // ストレージの内容を確認
+                const storageAfterLogin = await chrome.storage.sync.get(null);
+                console.log('Storage after login:', storageAfterLogin);
                 
                 await this.loadProjects();
                 this.showMainSection();
@@ -618,6 +641,31 @@ class PopupManager {
             });
         }
         console.log('=== End Environment Variables Debug ===');
+    }
+
+    getTokenExpiry(token) {
+        try {
+            if (!token) return null;
+            
+            // JWTトークンをデコード（Base64）
+            const parts = token.split('.');
+            if (parts.length !== 3) return null;
+            
+            const payload = JSON.parse(atob(parts[1]));
+            const now = Math.floor(Date.now() / 1000);
+            
+            return {
+                exp: payload.exp,
+                iat: payload.iat,
+                currentTime: now,
+                isExpired: payload.exp < now,
+                timeUntilExpiry: payload.exp - now,
+                expiryDate: new Date(payload.exp * 1000).toISOString()
+            };
+        } catch (error) {
+            console.log('Failed to decode JWT token:', error);
+            return null;
+        }
     }
 
     showMessage(message, type = 'info', options = {}) {
