@@ -97,7 +97,7 @@ class ErrorBoundary extends React.Component {
           <div className="text-center max-w-md mx-auto p-6">
             <div className="mb-6">
               <img 
-                src="../favicon/android-chrome-192x192.png" 
+                src="/favicon/android-chrome-192x192.png" 
                 alt="ResearchVault" 
                 className="w-16 h-16 mx-auto"
               />

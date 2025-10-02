@@ -107,7 +107,7 @@ export default function Sidebar() {
       <div className="flex h-16 items-center justify-between px-6 border-b border-secondary-200 dark:border-secondary-700">
         <Link to="/dashboard" className="flex items-center space-x-3">
           <img 
-            src="../favicon/android-chrome-192x192.png" 
+            src="/favicon/android-chrome-192x192.png" 
             alt="ResearchVault" 
             className="w-8 h-8"
           />
