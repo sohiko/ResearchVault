@@ -24,7 +24,7 @@ export function ProjectProvider({ children }) {
   const [projects, setProjects] = useState([])
   const [currentProject, setCurrentProject] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [subscription, setSubscription] = useState(null)
+  const [, setSubscription] = useState(null)
 
   // プロジェクト一覧の取得
   const fetchProjects = useCallback(async () => {
@@ -121,8 +121,10 @@ export function ProjectProvider({ children }) {
 
   // 初期データの読み込み
   useEffect(() => {
-    fetchProjects()
-  }, [fetchProjects])
+    if (user?.id) {
+      fetchProjects()
+    }
+  }, [user?.id]) // fetchProjectsを依存配列から削除して循環依存を回避
 
   // リアルタイム購読の設定
   useEffect(() => {
@@ -156,7 +158,7 @@ export function ProjectProvider({ children }) {
         supabase.removeChannel(projectSubscription)
       }
     }
-  }, [user?.id, fetchProjects])
+  }, [user?.id]) // fetchProjectsを依存配列から削除して循環依存を回避
 
   // プロジェクトの作成
   const createProject = async (projectData) => {

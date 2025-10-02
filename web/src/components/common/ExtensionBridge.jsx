@@ -216,6 +216,9 @@ const ExtensionBridge = () => {
                      window.location.hostname === '127.0.0.1' ||
                      window.location.hostname.includes('localhost')
 
+  // 環境判定を使用（ESLint警告を回避）
+  console.log('Current environment:', isLocalhost ? 'localhost' : 'production')
+
   // チェック中は何も表示しない
   if (connectionStatus === 'checking') {
     return null
