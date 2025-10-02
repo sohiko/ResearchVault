@@ -24,7 +24,7 @@ export default function Projects() {
       setLoading(true)
       setError(null)
       
-      // 所有プロジェクトを取得
+      // 所有プロジェクトを取得（削除されていないもののみ）
       const { data: ownedProjects, error: ownedError } = await supabase
         .from('projects')
         .select(`
@@ -32,23 +32,25 @@ export default function Projects() {
           references(id)
         `)
         .eq('owner_id', user.id)
+        .is('deleted_at', null)
         .order('updated_at', { ascending: false })
 
       if (ownedError) {
         throw ownedError
       }
 
-      // メンバープロジェクトを取得
+      // メンバープロジェクトを取得（削除されていないもののみ）
       const { data: memberProjects, error: memberError } = await supabase
         .from('project_members')
         .select(`
           role,
-          projects(
+          projects!inner(
             *,
             references(id)
           )
         `)
         .eq('user_id', user.id)
+        .is('projects.deleted_at', null)
 
       if (memberError) {
         throw memberError
@@ -78,7 +80,64 @@ export default function Projects() {
       setProjects(uniqueProjects)
     } catch (error) {
       console.error('Failed to load projects:', error)
-      setError('プロジェクトの読み込みに失敗しました')
+      
+      // deleted_atカラムが存在しない場合は、フィルタリングなしで再試行
+      if (error.code === '42703' && error.message.includes('deleted_at does not exist')) {
+        try {
+          // マイグレーション前の状態で取得
+          const { data: ownedProjects, error: ownedError } = await supabase
+            .from('projects')
+            .select(`
+              *,
+              references(id)
+            `)
+            .eq('owner_id', user.id)
+            .order('updated_at', { ascending: false })
+
+          if (ownedError) throw ownedError
+
+          const { data: memberProjects, error: memberError } = await supabase
+            .from('project_members')
+            .select(`
+              role,
+              projects(
+                *,
+                references(id)
+              )
+            `)
+            .eq('user_id', user.id)
+
+          if (memberError) throw memberError
+
+          // データを統合
+          const allProjects = [
+            ...(ownedProjects || []).map(project => ({
+              ...project,
+              role: 'owner',
+              referenceCount: project.references?.length || 0
+            })),
+            ...(memberProjects || []).map(member => ({
+              ...member.projects,
+              role: member.role,
+              referenceCount: member.projects?.references?.length || 0
+            }))
+          ]
+
+          const uniqueProjects = allProjects
+            .filter((project, index, self) => 
+              index === self.findIndex(p => p.id === project.id)
+            )
+            .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+
+          setProjects(uniqueProjects)
+          setError('ゴミ箱機能を使用するにはデータベースの更新が必要です')
+        } catch (fallbackError) {
+          console.error('Fallback load also failed:', fallbackError)
+          setError('プロジェクトの読み込みに失敗しました')
+        }
+      } else {
+        setError('プロジェクトの読み込みに失敗しました')
+      }
     } finally {
       setLoading(false)
     }
@@ -151,6 +210,11 @@ export default function Projects() {
         .eq('id', projectToDelete)
 
       if (error) {
+        // deleted_atカラムが存在しない場合の特別なエラーハンドリング
+        if (error.code === '42703' && error.message.includes('deleted_at does not exist')) {
+          toast.error('ゴミ箱機能を使用するにはデータベースの更新が必要です。ゴミ箱ページで詳細を確認してください。')
+          return
+        }
         throw error
       }
 
