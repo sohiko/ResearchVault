@@ -13,6 +13,9 @@ import ShareProjectModal from '../components/common/ShareProjectModal'
 import EditProjectModal from '../components/common/EditProjectModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 
+// ユーティリティ
+import { generateProjectCitations } from '../utils/citationGenerator'
+
 export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -31,6 +34,12 @@ export default function ProjectDetail() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [referenceToDelete, setReferenceToDelete] = useState(null)
+  const [showCitationModal, setShowCitationModal] = useState(false)
+  
+  // 引用生成状態
+  const [citationFormat, setCitationFormat] = useState('APA')
+  const [generatedCitations, setGeneratedCitations] = useState('')
+  const [generating, setGenerating] = useState(false)
   
   // フィルター・ソート状態
   const [sortBy, setSortBy] = useState('saved_at')
@@ -138,6 +147,24 @@ export default function ProjectDetail() {
     setMembers(data)
   }, [id])
 
+  const loadCitationSettings = useCallback(async () => {
+    if (!user) return
+    
+    try {
+      const { data } = await supabase
+        .from('citation_settings')
+        .select('default_style')
+        .eq('user_id', user.id)
+        .single()
+
+      if (data?.default_style) {
+        setCitationFormat(data.default_style)
+      }
+    } catch (error) {
+      // 設定がない場合はデフォルトのAPAを使用
+    }
+  }, [user])
+
   const loadProjectData = useCallback(async () => {
     try {
       setLoading(true)
@@ -146,7 +173,8 @@ export default function ProjectDetail() {
       await Promise.all([
         loadProject(),
         loadReferences(),
-        loadMembers()
+        loadMembers(),
+        loadCitationSettings()
       ])
     } catch (error) {
       console.error('Failed to load project data:', error)
@@ -154,7 +182,7 @@ export default function ProjectDetail() {
     } finally {
       setLoading(false)
     }
-  }, [loadProject, loadReferences, loadMembers])
+  }, [loadProject, loadReferences, loadMembers, loadCitationSettings])
 
   useEffect(() => {
     if (user && id) {
@@ -231,6 +259,45 @@ export default function ProjectDetail() {
       console.error('Failed to update project:', error)
       toast.error('プロジェクトの更新に失敗しました')
     }
+  }
+
+  const handleGenerateCitations = async () => {
+    if (references.length === 0) {
+      toast.error('引用を生成する参照がありません')
+      return
+    }
+
+    try {
+      setGenerating(true)
+      const citations = generateProjectCitations(references, citationFormat)
+      setGeneratedCitations(citations)
+      setShowCitationModal(true)
+    } catch (error) {
+      console.error('Failed to generate citations:', error)
+      toast.error('引用の生成に失敗しました')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const copyCitations = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedCitations)
+      toast.success('引用をクリップボードにコピーしました')
+    } catch (error) {
+      console.error('Failed to copy:', error)
+      toast.error('コピーに失敗しました')
+    }
+  }
+
+  const exportCitations = () => {
+    const blob = new Blob([generatedCitations], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project.name}_citations_${citationFormat}_${format(new Date(), 'yyyyMMdd')}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const isOwner = project?.owner_id === user?.id
@@ -311,6 +378,14 @@ export default function ProjectDetail() {
         </div>
         
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleGenerateCitations}
+            disabled={generating || references.length === 0}
+            className="btn btn-secondary"
+          >
+            <span className="text-lg">📝</span>
+            {generating ? '生成中...' : '引用生成'}
+          </button>
           {canShare && (
             <button
               onClick={() => setShowShareModal(true)}
@@ -510,6 +585,85 @@ export default function ProjectDetail() {
         confirmText="削除"
         cancelText="キャンセル"
       />
+
+      {/* 引用生成モーダル */}
+      {showCitationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                    引用文 ({citationFormat})
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {project.name} - {references.length}件の参照
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={citationFormat}
+                    onChange={(e) => setCitationFormat(e.target.value)}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="APA">APA</option>
+                    <option value="MLA">MLA</option>
+                    <option value="Chicago">Chicago</option>
+                    <option value="Harvard">Harvard</option>
+                  </select>
+                  <button
+                    onClick={() => {
+                      const citations = generateProjectCitations(references, citationFormat)
+                      setGeneratedCitations(citations)
+                    }}
+                    className="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+                  >
+                    再生成
+                  </button>
+                  <button
+                    onClick={() => setShowCitationModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 max-h-96 overflow-y-auto">
+              <textarea
+                value={generatedCitations}
+                readOnly
+                className="w-full h-64 p-4 border border-gray-300 rounded-lg font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="引用文がここに表示されます..."
+              />
+            </div>
+            
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+              <button
+                onClick={copyCitations}
+                className="btn btn-outline"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                コピー
+              </button>
+              <button
+                onClick={exportCitations}
+                className="btn btn-primary"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                エクスポート
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
