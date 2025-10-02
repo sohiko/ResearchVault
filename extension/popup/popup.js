@@ -16,7 +16,6 @@ class PopupManager {
 
     async init() {
         try {
-            console.log('Popup initializing...');
             this.showLoading(true);
             
             await this.loadModules();
@@ -24,8 +23,6 @@ class PopupManager {
             await this.checkAuthState();
             this.bindEvents();
             this.updatePageInfo();
-            
-            console.log('Popup initialized successfully');
         } catch (error) {
             if (this.handleExtensionError) {
                 await this.handleExtensionError(error, {
@@ -47,8 +44,6 @@ class PopupManager {
             this.api = new API();
             this.errorHandler = extensionErrorHandler;
             this.handleExtensionError = handleExtensionError;
-            
-            console.log('Classes initialized successfully');
         } catch (error) {
             console.error('Failed to initialize classes:', error);
             throw new Error('クラスの初期化に失敗しました');
@@ -66,33 +61,14 @@ class PopupManager {
 
     async checkAuthState() {
         try {
-            console.log('=== Starting auth state check ===');
-            
-            // 環境変数デバッグ情報を取得（認証前に実行）
-            await this.debugEnvironmentVariables();
-            
-            const { authToken, sessionInfo, lastLoginTime, userInfo } = await chrome.storage.sync.get(['authToken', 'sessionInfo', 'lastLoginTime', 'userInfo']);
-            console.log('Checking auth state:', {
-                hasToken: !!authToken,
-                tokenLength: authToken ? authToken.length : 0,
-                hasSessionInfo: !!sessionInfo,
-                sessionInfo: sessionInfo,
-                hasUserInfo: !!userInfo,
-                lastLoginTime: lastLoginTime
-            });
-            
-            // ストレージの全内容をデバッグ出力
-            const allStorage = await chrome.storage.sync.get(null);
-            console.log('Complete storage contents:', allStorage);
+            const { authToken, sessionInfo, lastLoginTime } = await chrome.storage.sync.get(['authToken', 'sessionInfo', 'lastLoginTime']);
             
             if (authToken) {
                 // JWTトークンから有効期限を直接取得
                 const tokenExpiry = this.getTokenExpiry(authToken);
-                console.log('JWT token expiry info:', tokenExpiry);
                 
                 // JWTトークンが期限切れの場合は即座にクリア
                 if (tokenExpiry && tokenExpiry.isExpired) {
-                    console.log('JWT token is expired, clearing auth data');
                     await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
                     this.showAuthSection();
                     this.showError('セッションが期限切れです。再度ログインしてください');
@@ -101,44 +77,28 @@ class PopupManager {
                 
                 // トークンの有効期限をチェック
                 if (sessionInfo && sessionInfo.expires_at) {
-                    const expiresAt = new Date(sessionInfo.expires_at * 1000); // Unix timestamp to Date
+                    const expiresAt = new Date(sessionInfo.expires_at * 1000);
                     const now = new Date();
                     const timeUntilExpiry = expiresAt.getTime() - now.getTime();
                     
-                    console.log('Session expiry check:', {
-                        expiresAt: expiresAt.toISOString(),
-                        now: now.toISOString(),
-                        timeUntilExpiry: timeUntilExpiry,
-                        isExpired: timeUntilExpiry <= 0
-                    });
-                    
                     // 期限切れの場合はリフレッシュを試行
                     if (timeUntilExpiry <= 0) {
-                        console.log('Token expired, attempting refresh');
                         const refreshResult = await this.refreshToken();
                         if (!refreshResult.success) {
-                            console.log('Token refresh failed, clearing auth data and showing login');
                             await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
                             this.showAuthSection();
                             this.showError('セッションが期限切れです。再度ログインしてください');
                             return;
                         }
-                        // リフレッシュ成功時は新しいトークンを使用
-                        console.log('Token refresh successful, using new token');
                         await this.api.setAuthToken(refreshResult.token);
                     } else {
-                        console.log('Token still valid, using existing token');
                         await this.api.setAuthToken(authToken);
                     }
                 } else {
-                    console.log('No session info available, using token as-is');
                     await this.api.setAuthToken(authToken);
                 }
                 
-                console.log('Auth token set in API client:', this.api.authToken);
-                
                 const user = await this.api.getCurrentUser();
-                console.log('Current user:', user);
                 
                 if (user) {
                     this.currentUser = user;
@@ -157,9 +117,7 @@ class PopupManager {
 
     async loadProjects() {
         try {
-            console.log('Loading projects...');
             this.projects = await this.api.getProjects();
-            console.log('Projects loaded:', this.projects);
             this.updateProjectSelect();
         } catch (error) {
             console.error('Failed to load projects:', error);
@@ -175,17 +133,13 @@ class PopupManager {
         }
         
         select.innerHTML = '<option value="">プロジェクトを選択</option>';
-        console.log('Updating project select with', this.projects.length, 'projects');
         
         this.projects.forEach(project => {
             const option = document.createElement('option');
             option.value = project.id;
             option.textContent = project.name;
             select.appendChild(option);
-            console.log('Added project option:', project.name, project.id);
         });
-        
-        console.log('Project select updated. Total options:', select.options.length);
 
         // 最後に選択したプロジェクトを復元
         chrome.storage.sync.get(['lastSelectedProject']).then(({ lastSelectedProject }) => {
@@ -274,8 +228,6 @@ class PopupManager {
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
 
-        console.log('Popup login attempt:', { email, hasPassword: !!password });
-
         if (!email || !password) {
             this.showError('メールアドレスとパスワードを入力してください');
             return;
@@ -284,25 +236,12 @@ class PopupManager {
         try {
             this.showLoading(true);
             
-            // ログイン前に環境変数デバッグを実行
-            await this.debugEnvironmentVariables();
-            
-            console.log('Calling api.login...');
             const result = await this.api.login(email, password);
-            console.log('Login result:', result);
             
             if (result.success) {
-                console.log('Login successful, saving token:', result.token);
                 await chrome.storage.sync.set({ authToken: result.token });
                 await this.api.setAuthToken(result.token);
                 this.currentUser = result.user;
-                
-                // トークンが正しく設定されたか確認
-                console.log('Auth token set:', this.api.authToken);
-                
-                // ストレージの内容を確認
-                const storageAfterLogin = await chrome.storage.sync.get(null);
-                console.log('Storage after login:', storageAfterLogin);
                 
                 await this.loadProjects();
                 this.showMainSection();
@@ -514,15 +453,9 @@ class PopupManager {
 
     async refreshToken() {
         try {
-            console.log('Attempting token refresh...');
             const { sessionInfo } = await chrome.storage.sync.get(['sessionInfo']);
-            console.log('Session info for refresh:', {
-                hasSessionInfo: !!sessionInfo,
-                hasRefreshToken: !!(sessionInfo && sessionInfo.refresh_token)
-            });
             
             if (!sessionInfo || !sessionInfo.refresh_token) {
-                console.log('No refresh token available');
                 return { success: false, error: 'リフレッシュトークンがありません' };
             }
 
@@ -594,54 +527,7 @@ class PopupManager {
         this.showMessage(message, 'info', options);
     }
 
-    async debugEnvironmentVariables() {
-        console.log('=== Environment Variables Debug ===');
-        try {
-            const debugUrl = 'https://research-vault-eight.vercel.app/api/debug/env';
-            console.log('Extension - Fetching environment debug info from:', debugUrl);
-            console.log('Extension - Request timestamp:', new Date().toISOString());
-            
-            const response = await fetch(debugUrl, {
-                method: 'GET',
-                headers: {
-                    'X-Extension-Version': '1.0.0',
-                    'X-Client-Info': 'chrome-extension',
-                    'User-Agent': 'ResearchVault-Extension/1.0.0'
-                }
-            });
-            
-            console.log('Extension - Debug endpoint response:', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok,
-                headers: {
-                    'content-type': response.headers.get('content-type'),
-                    'server': response.headers.get('server')
-                }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                console.log('=== SERVER ENVIRONMENT DEBUG INFO ===');
-                console.log('Extension - Environment debug data:', data);
-                console.log('=== END SERVER ENVIRONMENT DEBUG ===');
-            } else {
-                const errorText = await response.text();
-                console.log('Extension - Failed to get environment debug info:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    errorText: errorText
-                });
-            }
-        } catch (error) {
-            console.log('Extension - Environment debug error:', {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
-            });
-        }
-        console.log('=== End Environment Variables Debug ===');
-    }
+
 
     getTokenExpiry(token) {
         try {

@@ -8,23 +8,6 @@ const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1N
 
 
 export default async function handler(req, res) {
-  // 環境変数デバッグ出力（最初に実行）
-  console.log('=== REFERENCES API ENVIRONMENT DEBUG ===');
-  console.log('References API - Environment variables check:', {
-    NODE_ENV: process.env.NODE_ENV,
-    VERCEL: process.env.VERCEL,
-    VERCEL_ENV: process.env.VERCEL_ENV,
-    VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? `SET (${process.env.VITE_SUPABASE_URL})` : 'NOT_SET',
-    SUPABASE_URL: process.env.SUPABASE_URL ? `SET (${process.env.SUPABASE_URL})` : 'NOT_SET',
-    VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? `SET (${process.env.VITE_SUPABASE_ANON_KEY.substring(0, 20)}...)` : 'NOT_SET',
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? `SET (${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...)` : 'NOT_SET',
-    finalUrl: supabaseUrl,
-    finalAnonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null',
-    allEnvKeys: Object.keys(process.env).filter(key => key.includes('SUPABASE')),
-    timestamp: new Date().toISOString()
-  });
-  console.log('=== END REFERENCES API ENVIRONMENT DEBUG ===');
-
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
@@ -37,37 +20,16 @@ export default async function handler(req, res) {
   try {
     // 認証チェック
     const authHeader = req.headers.authorization
-    console.log('References API - Auth header:', authHeader ? `Bearer ${authHeader.substring(7, 27)}...` : 'null')
-    console.log('References API - All headers:', {
-      authorization: req.headers.authorization ? 'present' : 'missing',
-      'x-client-info': req.headers['x-client-info'],
-      'user-agent': req.headers['user-agent'],
-      'content-type': req.headers['content-type']
-    })
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('References API - No auth header or invalid format')
       return res.status(401).json({ error: '認証が必要です' })
     }
 
     const token = authHeader.split(' ')[1]
-    console.log('References API - Token info:', {
-      hasToken: !!token,
-      tokenLength: token ? token.length : 0,
-      tokenStart: token ? token.substring(0, 20) : 'null',
-      tokenEnd: token ? `...${token.substring(token.length - 10)}` : 'null'
-    })
     
     // 認証されたユーザーのSupabaseクライアントを作成
     let userId, userSupabase
     try {
-      console.log('References API - Creating user Supabase client with:', {
-        url: supabaseUrl,
-        anonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null',
-        tokenLength: token ? token.length : 0,
-        timestamp: new Date().toISOString()
-      })
-      
       // ユーザーのトークンでSupabaseクライアントを作成
       userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
         global: {
@@ -77,39 +39,16 @@ export default async function handler(req, res) {
         }
       })
       
-      console.log('References API - Supabase client created successfully')
-      console.log('References API - Setting session with token')
-      
       // トークンを設定
       const sessionResult = await userSupabase.auth.setSession({
         access_token: token,
         refresh_token: '' // リフレッシュトークンは不要
       })
       
-      console.log('References API - Session set result:', {
-        success: !sessionResult.error,
-        error: sessionResult.error?.message,
-        errorCode: sessionResult.error?.status,
-        hasUser: !!sessionResult.data?.user,
-        hasSession: !!sessionResult.data?.session,
-        sessionData: sessionResult.data?.session ? {
-          access_token: sessionResult.data.session.access_token ? 'present' : 'missing',
-          expires_at: sessionResult.data.session.expires_at,
-          user_id: sessionResult.data.session.user?.id
-        } : null
-      })
-      
       // ユーザー情報を取得して認証を確認
       const { data: { user }, error: authError } = await userSupabase.auth.getUser()
       
-      console.log('References API - Auth verification:', { 
-        user: user ? { id: user.id, email: user.email, role: user.role } : null, 
-        error: authError?.message,
-        errorCode: authError?.status
-      })
-      
       if (authError || !user) {
-        console.log('References API - Auth failed:', authError?.message || 'No user')
         return res.status(401).json({ 
           error: '無効な認証トークンです',
           details: authError?.message || 'ユーザーが見つかりません'
@@ -117,9 +56,7 @@ export default async function handler(req, res) {
       }
       
       userId = user.id
-      console.log('References API - Auth successful, user ID:', userId)
     } catch (error) {
-      console.log('References API - Auth verification error:', error.message, error.stack)
       return res.status(401).json({ error: '認証の検証に失敗しました' })
     }
 
@@ -193,8 +130,6 @@ async function handleGetReferences(req, res, userId, userSupabase) {
 
 async function handleCreateReference(req, res, userId, userSupabase) {
   try {
-    console.log('Creating reference for user:', userId)
-    console.log('Request body:', req.body)
     
     const {
       title,
@@ -211,15 +146,6 @@ async function handleCreateReference(req, res, userId, userSupabase) {
     // 拡張機能からのデータ形式に対応
     const finalDescription = description || memo || ''
     const finalSavedAt = savedAt || new Date().toISOString()
-    
-    console.log('Processed data:', {
-      title,
-      url,
-      finalDescription,
-      finalSavedAt,
-      projectId,
-      tags
-    })
 
     // バリデーション
     if (!title || title.trim().length === 0) {
@@ -227,7 +153,6 @@ async function handleCreateReference(req, res, userId, userSupabase) {
     }
     // URL検証を緩和（空でないことのみ）
     if (!url || url.trim().length === 0) {
-      console.log('Invalid URL (empty):', url)
       return res.status(400).json({ error: '有効なURLが必要です' })
     }
 
@@ -244,16 +169,21 @@ async function handleCreateReference(req, res, userId, userSupabase) {
       }
     }
 
-    // 重複チェック
+    // プロジェクトごとの重複チェック
     const { data: existing, error: duplicateError } = await userSupabase
       .from('references')
-      .select('id')
+      .select('id, project_id')
       .eq('url', url)
       .eq('saved_by', userId)
+      .eq('project_id', projectId || null)
       .single()
 
     if (!duplicateError && existing) {
-      return res.status(409).json({ error: 'この参照は既に保存されています' })
+      if (projectId) {
+        return res.status(409).json({ error: 'この参照は既にこのプロジェクトに保存されています' })
+      } else {
+        return res.status(409).json({ error: 'この参照は既にプロジェクトなしで保存されています' })
+      }
     }
 
     // 参照を作成
@@ -268,42 +198,20 @@ async function handleCreateReference(req, res, userId, userSupabase) {
       updated_at: new Date().toISOString()
     }
     
-    console.log('References API - Inserting reference data:', {
-      ...insertData,
-      metadata: insertData.metadata ? 'present' : 'null'
-    })
-    
     const { data: reference, error } = await userSupabase
       .from('references')
       .insert(insertData)
       .select()
       .single()
 
-    console.log('References API - Insert result:', {
-      success: !error,
-      error: error ? {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      } : null,
-      hasData: !!reference
-    })
-
     if (error) {
-      console.error('References API - Create reference error:', {
-        error,
-        insertData: {
-          ...insertData,
-          metadata: insertData.metadata ? 'present' : 'null'
-        },
-        userId,
-        timestamp: new Date().toISOString()
-      })
-      
       // データベース制約エラーの詳細を返す
       if (error.code === '23505') {
-        return res.status(409).json({ error: 'この参照は既に保存されています' })
+        if (projectId) {
+          return res.status(409).json({ error: 'この参照は既にこのプロジェクトに保存されています' })
+        } else {
+          return res.status(409).json({ error: 'この参照は既にプロジェクトなしで保存されています' })
+        }
       } else if (error.code === '23503') {
         return res.status(400).json({ error: '指定されたプロジェクトが存在しません' })
       } else if (error.code === '23514') {
@@ -316,8 +224,6 @@ async function handleCreateReference(req, res, userId, userSupabase) {
         code: error.code
       })
     }
-    
-    console.log('Reference created successfully:', reference)
 
     // タグがある場合は追加
     if (tags && Array.isArray(tags) && tags.length > 0) {

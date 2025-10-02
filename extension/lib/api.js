@@ -9,7 +9,7 @@ class API {
             ? 'http://localhost:3000/api'
             : 'https://research-vault-eight.vercel.app/api';
             
-        console.log('API Client initialized with baseURL:', this.baseURL);
+
             
         this.supabaseUrl = 'https://pzplwtvnxikhykqsvcfs.supabase.co'; // ここにSupabaseのURLを設定
         this.supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'; // ここにSupabaseの匿名キーを設定
@@ -41,7 +41,7 @@ class API {
         try {
             // Supabaseクライアントの初期化
             // 本来はSupabaseのJSクライアントを使用するが、拡張機能では簡単なfetch APIを使用
-            console.log('Supabase client initialized');
+
         } catch (error) {
             console.error('Failed to initialize Supabase:', error);
         }
@@ -70,37 +70,7 @@ class API {
                 config.headers['Authorization'] = `Bearer ${this.authToken}`;
             }
 
-            console.log('Extension API - Request details:', {
-                url,
-                method: config.method || 'GET',
-                headers: {
-                    ...config.headers,
-                    'Authorization': config.headers['Authorization'] ? `Bearer ${config.headers['Authorization'].substring(7, 27)}...` : 'not set'
-                },
-                body: config.body ? {
-                    present: true,
-                    length: config.body.length,
-                    preview: config.body.substring(0, 100)
-                } : 'No body',
-                baseURL: this.baseURL,
-                endpoint: endpoint,
-                timestamp: new Date().toISOString()
-            });
-
             const response = await fetch(url, config);
-            
-            console.log('Extension API - Response details:', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok,
-                url: response.url,
-                headers: {
-                    'content-type': response.headers.get('content-type'),
-                    'content-length': response.headers.get('content-length'),
-                    'server': response.headers.get('server')
-                },
-                timestamp: new Date().toISOString()
-            });
             
             if (!response.ok) {
                 let errorMessage = '';
@@ -131,20 +101,11 @@ class API {
             }
             
             const data = await response.json();
-            console.log('API Data:', data);
             this.updateConnectionStatus('online');
             
             return { success: true, data };
         } catch (error) {
-            console.error('API request failed:', {
-                url,
-                baseURL: this.baseURL,
-                endpoint: endpoint,
-                error: error.message,
-                stack: error.stack,
-                name: error.name,
-                fullError: error
-            });
+            console.error('API request failed:', error.message);
             this.updateConnectionStatus('offline');
             return { 
                 success: false, 
@@ -211,29 +172,11 @@ class API {
                 body: JSON.stringify({ email, password })
             });
 
-            console.log('Login response:', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok,
-                url: response.url
-            });
-
             if (response.ok) {
                 const data = await response.json();
-                console.log('Login data:', data);
                 
                 if (data.success && data.token) {
                     this.authToken = data.token;
-                    
-                    console.log('Login successful, saving session data:', {
-                        hasToken: !!data.token,
-                        hasUser: !!data.user,
-                        hasSession: !!data.session,
-                        sessionData: data.session ? {
-                            hasRefreshToken: !!data.session.refresh_token,
-                            expiresAt: data.session.expires_at
-                        } : null
-                    });
                     
                     // トークンとセッション情報をストレージに保存
                     await chrome.storage.sync.set({ 
@@ -242,8 +185,6 @@ class API {
                         sessionInfo: data.session,
                         lastLoginTime: new Date().toISOString()
                     });
-                    
-                    console.log('Session data saved to storage');
                     
                     return {
                         success: true,
@@ -258,7 +199,6 @@ class API {
                 }
             } else {
                 const errorText = await response.text();
-                console.log('Login error response:', errorText);
                 
                 let errorMessage = '';
                 try {
@@ -315,7 +255,6 @@ class API {
             const { userInfo } = await chrome.storage.sync.get(['userInfo']);
             return userInfo || null;
         } catch (error) {
-            console.log('getCurrentUser failed:', error);
             return null;
         }
     }
@@ -338,18 +277,15 @@ class API {
             // まずストレージからプロジェクト情報を取得
             const { projects } = await chrome.storage.local.get(['projects']);
             if (projects && projects.length > 0) {
-                console.log('Using cached projects from storage:', projects);
                 return projects;
             }
             
             // ストレージにない場合はAPIから取得を試行
             if (!this.authToken) {
-                console.log('No auth token, returning empty array');
                 return [];
             }
             
             const projectsUrl = 'https://research-vault-eight.vercel.app/api/projects';
-            console.log('Fetching projects from API:', projectsUrl);
             
             const response = await fetch(projectsUrl, {
                 method: 'GET',
@@ -362,32 +298,21 @@ class API {
                 }
             });
             
-            console.log('Projects API response:', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok
-            });
-            
             if (response.ok) {
                 const data = await response.json();
-                console.log('Projects data received:', data);
                 
                 if (Array.isArray(data)) {
                     // APIから取得したプロジェクトをストレージに保存
                     await chrome.storage.local.set({ projects: data });
                     return data;
                 } else {
-                    console.log('Projects data is not an array:', data);
                     return [];
                 }
             } else {
-                const errorText = await response.text();
-                console.log('Projects API error:', errorText);
                 return [];
             }
             
         } catch (error) {
-            console.log('getProjects failed:', error);
             return [];
         }
     }
@@ -432,7 +357,6 @@ class API {
     async saveReference(data) {
         try {
             if (!this.authToken) {
-                console.log('Extension API - No auth token available');
                 return {
                     success: false,
                     error: '認証が必要です。ログインしてください'
@@ -444,18 +368,6 @@ class API {
                 ...data,
                 savedAt: new Date().toISOString()
             };
-            
-            console.log('Extension API - Saving reference:', {
-                url: referencesUrl,
-                hasAuthToken: !!this.authToken,
-                tokenLength: this.authToken ? this.authToken.length : 0,
-                tokenStart: this.authToken ? this.authToken.substring(0, 20) : 'null',
-                requestData: {
-                    ...requestData,
-                    metadata: requestData.metadata ? 'present' : 'null'
-                },
-                timestamp: new Date().toISOString()
-            });
             
             const response = await fetch(referencesUrl, {
                 method: 'POST',
@@ -469,34 +381,14 @@ class API {
                 body: JSON.stringify(requestData)
             });
             
-            console.log('Extension API - Save reference response:', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok,
-                headers: {
-                    'content-type': response.headers.get('content-type'),
-                    'content-length': response.headers.get('content-length')
-                }
-            });
-            
             if (response.ok) {
                 const result = await response.json();
-                console.log('Extension API - Reference saved successfully:', {
-                    hasResult: !!result,
-                    resultId: result?.id,
-                    resultTitle: result?.title
-                });
                 return {
                     success: true,
                     data: result
                 };
             } else {
                 const errorText = await response.text();
-                console.log('Extension API - Save reference error response:', {
-                    status: response.status,
-                    errorText: errorText,
-                    errorLength: errorText ? errorText.length : 0
-                });
                 
                 let errorMessage = '';
                 let errorDetails = null;
@@ -505,7 +397,6 @@ class API {
                     errorMessage = errorData.error || '参照の保存に失敗しました';
                     errorDetails = errorData.details;
                 } catch (parseError) {
-                    console.log('Extension API - Failed to parse error response:', parseError);
                     switch (response.status) {
                         case 401:
                             errorMessage = '認証が必要です。ログインしてください';
@@ -532,12 +423,6 @@ class API {
             }
             
         } catch (error) {
-            console.log('Extension API - saveReference failed:', {
-                error: error.message,
-                stack: error.stack,
-                name: error.name,
-                timestamp: new Date().toISOString()
-            });
             return {
                 success: false,
                 error: error.message || '参照の保存に失敗しました'
