@@ -82,13 +82,16 @@ class ExtensionErrorHandler {
                   errorDetails.type === 'AUTH' ? '🔒' : 
                   errorDetails.type === 'EXTENSION' ? '🧩' : '❌'
     
-    console.error(`${prefix} [ResearchVault Extension Error]`, {
+    const errorMessage = errorDetails.message || 'Unknown error';
+    const errorInfo = {
       id: errorDetails.id,
-      message: errorDetails.message,
+      message: errorMessage,
       type: errorDetails.type,
       context: errorDetails.context,
       timestamp: errorDetails.timestamp
-    })
+    };
+    
+    console.error(`${prefix} [ResearchVault Extension Error] ${errorMessage}`, errorInfo);
   }
 
   /**

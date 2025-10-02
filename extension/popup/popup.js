@@ -66,10 +66,24 @@ class PopupManager {
 
     async checkAuthState() {
         try {
-            const { authToken } = await chrome.storage.sync.get(['authToken']);
+            const { authToken, sessionInfo, lastLoginTime } = await chrome.storage.sync.get(['authToken', 'sessionInfo', 'lastLoginTime']);
             console.log('Checking auth state, token found:', !!authToken);
             
             if (authToken) {
+                // トークンの有効期限をチェック
+                if (sessionInfo && sessionInfo.expires_at) {
+                    const expiresAt = new Date(sessionInfo.expires_at * 1000); // Unix timestamp to Date
+                    const now = new Date();
+                    
+                    if (now >= expiresAt) {
+                        console.log('Token expired, clearing auth data');
+                        await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
+                        this.showAuthSection();
+                        this.showError('セッションが期限切れです。再度ログインしてください');
+                        return;
+                    }
+                }
+                
                 await this.api.setAuthToken(authToken);
                 console.log('Auth token set in API client:', this.api.authToken);
                 
@@ -85,6 +99,8 @@ class PopupManager {
             }
         } catch (error) {
             console.error('Auth check failed:', error);
+            // 認証エラーの場合はストレージをクリア
+            await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
         }
         this.showAuthSection();
     }

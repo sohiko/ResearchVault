@@ -99,7 +99,7 @@ class BackgroundManager {
             autoSave: true,
             notifications: true,
             language: 'ja',
-            dashboardUrl: 'https://research-vault.vercel.app'
+            dashboardUrl: 'https://research-vault-eight.vercel.app'
         };
         
         await this.storage.setSettings(defaultSettings);
@@ -348,12 +348,12 @@ class BackgroundManager {
     async openDashboard() {
         try {
             const dashboardUrl = this.storage 
-                ? (await this.storage.getSettings()).dashboardUrl || 'https://research-vault.vercel.app'
-                : 'https://research-vault.vercel.app';
+                ? (await this.storage.getSettings()).dashboardUrl || 'https://research-vault-eight.vercel.app'
+                : 'https://research-vault-eight.vercel.app';
             chrome.tabs.create({ url: dashboardUrl });
         } catch (error) {
             console.error('Failed to open dashboard:', error);
-            chrome.tabs.create({ url: 'https://research-vault.vercel.app' });
+            chrome.tabs.create({ url: 'https://research-vault-eight.vercel.app' });
         }
     }
 

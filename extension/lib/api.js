@@ -6,8 +6,10 @@ class API {
         // Chrome拡張機能環境では本番URLを使用
         // 開発時にローカルを使用したい場合はここを変更
         this.baseURL = this.isLocalDevelopment() 
-            ? 'http://localhost:3002/api'
-            : 'https://research-vault.vercel.app/api';
+            ? 'http://localhost:3000/api'
+            : 'https://research-vault-eight.vercel.app/api';
+            
+        console.log('API Client initialized with baseURL:', this.baseURL);
             
         this.supabaseUrl = 'https://pzplwtvnxikhykqsvcfs.supabase.co'; // ここにSupabaseのURLを設定
         this.supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'; // ここにSupabaseの匿名キーを設定
@@ -31,18 +33,8 @@ class API {
      * 開発環境かどうかを判定（サービスワーカー対応）
      */
     isLocalDevelopment() {
-        // 開発時はここをtrueに変更してください
-        const DEV_MODE = false;
-        
-        // または拡張機能IDで判定（より高度な方法）
-        try {
-            const extensionId = chrome.runtime.id;
-            // 開発時の拡張機能IDは通常長い文字列
-            const isDevelopmentExtension = extensionId && extensionId.length > 20;
-            return DEV_MODE || isDevelopmentExtension;
-        } catch (error) {
-            return DEV_MODE;
-        }
+        // 本番環境では常にfalseを返す
+        return false;
     }
 
     async initSupabase() {
@@ -60,12 +52,15 @@ class API {
     }
 
     async request(endpoint, options = {}) {
+        const url = `${this.baseURL}${endpoint}`;
+        
         try {
-            const url = `${this.baseURL}${endpoint}`;
             const config = {
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Client-Info': 'researchvault-extension@1.0.0',
+                    'X-Client-Info': 'chrome-extension',
+                    'X-Extension-Version': '1.0.0',
+                    'User-Agent': 'ResearchVault-Extension/1.0.0',
                     ...options.headers
                 },
                 ...options
@@ -75,19 +70,67 @@ class API {
                 config.headers['Authorization'] = `Bearer ${this.authToken}`;
             }
 
+            console.log('API Request:', {
+                url,
+                method: config.method || 'GET',
+                headers: config.headers,
+                body: config.body ? 'Body present' : 'No body',
+                baseURL: this.baseURL,
+                endpoint: endpoint
+            });
+
             const response = await fetch(url, config);
             
+            console.log('API Response:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok,
+                url: response.url
+            });
+            
             if (!response.ok) {
-                const errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                let errorMessage = '';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+                } catch (parseError) {
+                    // JSONパースに失敗した場合は、ステータスコードに基づいてメッセージを生成
+                    switch (response.status) {
+                        case 401:
+                            errorMessage = '認証が必要です。ログインしてください';
+                            break;
+                        case 403:
+                            errorMessage = 'アクセスが拒否されました';
+                            break;
+                        case 404:
+                            errorMessage = 'リクエストされたリソースが見つかりません';
+                            break;
+                        case 500:
+                            errorMessage = 'サーバーエラーが発生しました';
+                            break;
+                        default:
+                            errorMessage = `リクエストに失敗しました (エラーコード: ${response.status})`;
+                    }
+                }
+                console.error('API Error:', errorMessage);
                 throw new Error(errorMessage);
             }
             
             const data = await response.json();
+            console.log('API Data:', data);
             this.updateConnectionStatus('online');
             
             return { success: true, data };
         } catch (error) {
-            console.log('API request failed, falling back to offline mode');
+            console.error('API request failed:', {
+                url,
+                baseURL: this.baseURL,
+                endpoint: endpoint,
+                error: error.message,
+                stack: error.stack,
+                name: error.name,
+                fullError: error
+            });
             this.updateConnectionStatus('offline');
             return { 
                 success: false, 
@@ -141,99 +184,95 @@ class API {
                 throw new Error('メールアドレスとパスワードが必要です')
             }
 
-            // 本番APIが利用できない場合のモック認証
-            if (!this.isAPIAvailable()) {
-                return await this.mockLogin(email, password);
-            }
-
-            const response = await this.request('/auth/login', {
+            const authUrl = 'https://research-vault-eight.vercel.app/api/extension/auth';
+            
+            const response = await fetch(authUrl, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Extension-Version': '1.0.0',
+                    'X-Client-Info': 'chrome-extension',
+                    'User-Agent': 'ResearchVault-Extension/1.0.0'
+                },
                 body: JSON.stringify({ email, password })
             });
 
-            if (response.success && response.data?.token) {
-                this.authToken = response.data.token;
+            console.log('Login response:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok,
+                url: response.url
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Login data:', data);
                 
-                // 成功時にはトークンをストレージに保存
-                await chrome.storage.sync.set({ 
-                    authToken: response.data.token,
-                    lastLoginTime: new Date().toISOString()
-                })
+                if (data.success && data.token) {
+                    this.authToken = data.token;
+                    
+                    // トークンとセッション情報をストレージに保存
+                    await chrome.storage.sync.set({ 
+                        authToken: data.token,
+                        userInfo: data.user,
+                        sessionInfo: data.session,
+                        lastLoginTime: new Date().toISOString()
+                    });
+                    
+                    return {
+                        success: true,
+                        token: data.token,
+                        user: data.user
+                    };
+                } else {
+                    return {
+                        success: false,
+                        error: data.error || 'ログインに失敗しました'
+                    };
+                }
+            } else {
+                const errorText = await response.text();
+                console.log('Login error response:', errorText);
+                
+                let errorMessage = '';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.error || 'ログインに失敗しました';
+                } catch (parseError) {
+                    switch (response.status) {
+                        case 401:
+                            errorMessage = 'メールアドレスまたはパスワードが正しくありません';
+                            break;
+                        case 403:
+                            errorMessage = 'アクセスが拒否されました';
+                            break;
+                        case 404:
+                            errorMessage = 'ログインサービスが見つかりません';
+                            break;
+                        case 500:
+                            errorMessage = 'サーバーエラーが発生しました';
+                            break;
+                        default:
+                            errorMessage = `ログインに失敗しました (エラーコード: ${response.status})`;
+                    }
+                }
                 
                 return {
-                    success: true,
-                    token: response.data.token,
-                    user: response.data.user
+                    success: false,
+                    error: errorMessage
                 };
             }
             
-            return response;
         } catch (error) {
             console.error('Login error:', error);
-            // APIエラーの場合もモック認証を試行
-            if (error.message.includes('Failed to fetch') || error.message.includes('404')) {
-                console.log('API unavailable, falling back to mock login');
-                return await this.mockLogin(email, password);
-            }
             return { 
                 success: false, 
-                error: error.message || 'Login failed'
+                error: error.message || 'ネットワークエラーが発生しました'
             };
         }
     }
 
-    // モック認証機能
-    async mockLogin(email, password) {
-        console.log('Using mock authentication');
-        
-        // 簡単なバリデーション
-        if (!email.includes('@') || password.length < 3) {
-            return {
-                success: false,
-                error: '有効なメールアドレスとパスワードを入力してください'
-            };
-        }
 
-        // モックトークンの生成
-        const mockToken = `mock_token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const mockUser = {
-            id: `mock_user_${Date.now()}`,
-            email: email,
-            name: email.split('@')[0]
-        };
-
-        this.authToken = mockToken;
-
-        // ストレージに保存
-        await chrome.storage.sync.set({
-            authToken: mockToken,
-            lastLoginTime: new Date().toISOString(),
-            userInfo: mockUser,
-            isMockAuth: true
-        });
-
-        return {
-            success: true,
-            token: mockToken,
-            user: mockUser,
-            isMock: true
-        };
-    }
-
-    // API利用可能性チェック
-    async isAPIAvailable() {
-        try {
-            // ヘルスチェックエンドポイントを試行
-            const response = await fetch(`${this.baseURL}/health`, {
-                method: 'GET',
-                timeout: 3000
-            });
-            return response.ok;
-        } catch (error) {
-            console.log('API not available, using mock mode');
-            return false;
-        }
-    }
 
     async signup(email, password, name) {
         return this.request('/auth/signup', {
@@ -245,8 +284,14 @@ class API {
     async getCurrentUser() {
         if (!this.authToken) return null;
         
-        const response = await this.request('/auth/me');
-        return response.success ? response.data : null;
+        // ストレージからユーザー情報を取得
+        try {
+            const { userInfo } = await chrome.storage.sync.get(['userInfo']);
+            return userInfo || null;
+        } catch (error) {
+            console.log('getCurrentUser failed:', error);
+            return null;
+        }
     }
 
     async logout() {
@@ -263,8 +308,62 @@ class API {
 
     // プロジェクト関連
     async getProjects() {
-        const response = await this.request('/projects');
-        return response.success ? response.data : [];
+        try {
+            // まずストレージからプロジェクト情報を取得
+            const { projects } = await chrome.storage.local.get(['projects']);
+            if (projects && projects.length > 0) {
+                console.log('Using cached projects from storage:', projects);
+                return projects;
+            }
+            
+            // ストレージにない場合はAPIから取得を試行
+            if (!this.authToken) {
+                console.log('No auth token, returning empty array');
+                return [];
+            }
+            
+            const projectsUrl = 'https://research-vault-eight.vercel.app/api/projects';
+            console.log('Fetching projects from API:', projectsUrl);
+            
+            const response = await fetch(projectsUrl, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'X-Extension-Version': '1.0.0',
+                    'X-Client-Info': 'chrome-extension',
+                    'User-Agent': 'ResearchVault-Extension/1.0.0'
+                }
+            });
+            
+            console.log('Projects API response:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Projects data received:', data);
+                
+                if (Array.isArray(data)) {
+                    // APIから取得したプロジェクトをストレージに保存
+                    await chrome.storage.local.set({ projects: data });
+                    return data;
+                } else {
+                    console.log('Projects data is not an array:', data);
+                    return [];
+                }
+            } else {
+                const errorText = await response.text();
+                console.log('Projects API error:', errorText);
+                return [];
+            }
+            
+        } catch (error) {
+            console.log('getProjects failed:', error);
+            return [];
+        }
     }
 
     async getProject(id) {
@@ -305,13 +404,85 @@ class API {
     }
 
     async saveReference(data) {
-        return this.request('/references', {
-            method: 'POST',
-            body: JSON.stringify({
-                ...data,
-                savedAt: new Date().toISOString()
-            })
-        });
+        try {
+            if (!this.authToken) {
+                return {
+                    success: false,
+                    error: '認証が必要です。ログインしてください'
+                };
+            }
+            
+            const referencesUrl = 'https://research-vault-eight.vercel.app/api/references';
+            console.log('Saving reference to:', referencesUrl);
+            
+            const response = await fetch(referencesUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'X-Extension-Version': '1.0.0',
+                    'X-Client-Info': 'chrome-extension',
+                    'User-Agent': 'ResearchVault-Extension/1.0.0'
+                },
+                body: JSON.stringify({
+                    ...data,
+                    savedAt: new Date().toISOString()
+                })
+            });
+            
+            console.log('Save reference response:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Reference saved successfully:', result);
+                return {
+                    success: true,
+                    data: result
+                };
+            } else {
+                const errorText = await response.text();
+                console.log('Save reference error:', errorText);
+                
+                let errorMessage = '';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.error || '参照の保存に失敗しました';
+                } catch (parseError) {
+                    switch (response.status) {
+                        case 401:
+                            errorMessage = '認証が必要です。ログインしてください';
+                            break;
+                        case 403:
+                            errorMessage = 'アクセスが拒否されました';
+                            break;
+                        case 404:
+                            errorMessage = '参照保存サービスが見つかりません';
+                            break;
+                        case 500:
+                            errorMessage = 'サーバーエラーが発生しました';
+                            break;
+                        default:
+                            errorMessage = `参照の保存に失敗しました (エラーコード: ${response.status})`;
+                    }
+                }
+                
+                return {
+                    success: false,
+                    error: errorMessage
+                };
+            }
+            
+        } catch (error) {
+            console.log('saveReference failed:', error);
+            return {
+                success: false,
+                error: error.message || '参照の保存に失敗しました'
+            };
+        }
     }
 
     async updateReference(id, data) {
@@ -448,8 +619,13 @@ class API {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
             
-            const response = await fetch(`${this.baseURL}/health`, {
+            const response = await fetch('https://research-vault-eight.vercel.app/api/extension/health', {
                 method: 'GET',
+                headers: {
+                    'X-Extension-Version': '1.0.0',
+                    'X-Client-Info': 'chrome-extension',
+                    'User-Agent': 'ResearchVault-Extension/1.0.0'
+                },
                 signal: controller.signal
             });
             
@@ -459,15 +635,27 @@ class API {
             return isOnline;
         } catch (error) {
             // ネットワークエラーは正常な動作として扱う（オフライン状態）
-            console.log('Network offline or API unavailable');
             this.updateConnectionStatus('offline');
             return false;
         }
     }
 
-    // 簡単なエラーメッセージ取得
+    // 分かりやすいエラーメッセージ取得
     handleError(error) {
-        return error.message || 'Unknown error occurred';
+        if (!error) return '不明なエラーが発生しました';
+        
+        // ネットワークエラーの場合
+        if (error.message && error.message.includes('fetch')) {
+            return 'ネットワーク接続を確認してください';
+        }
+        
+        // タイムアウトエラーの場合
+        if (error.name === 'AbortError') {
+            return 'リクエストがタイムアウトしました';
+        }
+        
+        // その他のエラー
+        return error.message || '不明なエラーが発生しました';
     }
 
     /**
@@ -475,11 +663,47 @@ class API {
      */
     async getHealthStatus() {
         try {
-            const response = await this.request('/health')
-            return {
-                api: response.success,
-                database: response.data?.database ?? false,
-                timestamp: new Date().toISOString()
+            const response = await fetch('https://research-vault-eight.vercel.app/api/extension/health', {
+                method: 'GET',
+                headers: {
+                    'X-Extension-Version': '1.0.0',
+                    'X-Client-Info': 'chrome-extension',
+                    'User-Agent': 'ResearchVault-Extension/1.0.0'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    api: true,
+                    database: data.database ?? false,
+                    timestamp: new Date().toISOString()
+                };
+            } else {
+                let errorMessage = '';
+                switch (response.status) {
+                    case 401:
+                        errorMessage = '認証が必要です';
+                        break;
+                    case 403:
+                        errorMessage = 'アクセスが拒否されました';
+                        break;
+                    case 404:
+                        errorMessage = 'ヘルスチェックサービスが見つかりません';
+                        break;
+                    case 500:
+                        errorMessage = 'サーバーエラーが発生しました';
+                        break;
+                    default:
+                        errorMessage = `ヘルスチェックに失敗しました (エラーコード: ${response.status})`;
+                }
+                
+                return {
+                    api: false,
+                    database: false,
+                    timestamp: new Date().toISOString(),
+                    error: errorMessage
+                };
             }
         } catch (error) {
             return {
@@ -487,7 +711,7 @@ class API {
                 database: false,
                 timestamp: new Date().toISOString(),
                 error: error.message || 'Health check failed'
-            }
+            };
         }
     }
 

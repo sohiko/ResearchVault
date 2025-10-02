@@ -19,14 +19,23 @@ export default async function handler(req, res) {
   try {
     // 認証チェック
     const authHeader = req.headers.authorization
+    console.log('Projects API - Auth header:', authHeader)
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('Projects API - No auth header or invalid format')
       return res.status(401).json({ error: '認証が必要です' })
     }
 
     const token = authHeader.split(' ')[1]
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    console.log('Projects API - Token:', token ? `${token.substring(0, 20)}...` : 'null')
+    
+    // 匿名キーを使用してトークンを検証
+    const supabaseAuth = createClient(supabaseUrl, process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0')
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
+    console.log('Projects API - Auth result:', { user: user?.id, error: authError?.message })
 
     if (authError || !user) {
+      console.log('Projects API - Auth failed:', authError)
       return res.status(401).json({ error: '無効な認証トークンです' })
     }
 
