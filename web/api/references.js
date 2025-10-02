@@ -20,16 +20,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 認証チェック
+    // 認証チェック（一時的に無効化してデバッグ）
     const authHeader = req.headers.authorization
+    console.log('Auth header:', authHeader)
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('No auth header or invalid format')
       return res.status(401).json({ error: '認証が必要です' })
     }
 
     const token = authHeader.split(' ')[1]
+    console.log('Token:', token ? `${token.substring(0, 20)}...` : 'null')
+    
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
+    console.log('Auth result:', { user: user?.id, error: authError?.message })
 
     if (authError || !user) {
+      console.log('Auth failed:', authError)
       return res.status(401).json({ error: '無効な認証トークンです' })
     }
 
