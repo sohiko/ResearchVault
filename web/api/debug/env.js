@@ -1,15 +1,29 @@
 // 環境変数デバッグエンドポイント
 export default async function handler(req, res) {
+  console.log('=== DEBUG ENDPOINT CALLED ===');
+  console.log('Debug endpoint - Request info:', {
+    method: req.method,
+    url: req.url,
+    headers: {
+      'user-agent': req.headers['user-agent'],
+      'x-client-info': req.headers['x-client-info'],
+      'x-extension-version': req.headers['x-extension-version']
+    },
+    timestamp: new Date().toISOString()
+  });
+
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Info')
 
   if (req.method === 'OPTIONS') {
+    console.log('Debug endpoint - OPTIONS request handled');
     return res.status(200).end()
   }
 
   if (req.method !== 'GET') {
+    console.log('Debug endpoint - Invalid method:', req.method);
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
@@ -49,7 +63,9 @@ export default async function handler(req, res) {
       processEnvKeys: Object.keys(process.env).length
     }
 
-    console.log('Environment debug info:', envInfo)
+    console.log('=== COMPLETE ENVIRONMENT DEBUG INFO ===');
+    console.log('Environment debug info:', envInfo);
+    console.log('=== END COMPLETE ENVIRONMENT DEBUG INFO ===');
 
     return res.status(200).json({
       success: true,

@@ -66,11 +66,18 @@ class PopupManager {
 
     async checkAuthState() {
         try {
-            // 環境変数デバッグ情報を取得
+            console.log('=== Starting auth state check ===');
+            
+            // 環境変数デバッグ情報を取得（認証前に実行）
             await this.debugEnvironmentVariables();
             
             const { authToken, sessionInfo, lastLoginTime } = await chrome.storage.sync.get(['authToken', 'sessionInfo', 'lastLoginTime']);
-            console.log('Checking auth state, token found:', !!authToken);
+            console.log('Checking auth state:', {
+                hasToken: !!authToken,
+                tokenLength: authToken ? authToken.length : 0,
+                hasSessionInfo: !!sessionInfo,
+                lastLoginTime: lastLoginTime
+            });
             
             if (authToken) {
                 // トークンの有効期限をチェック
@@ -254,6 +261,10 @@ class PopupManager {
 
         try {
             this.showLoading(true);
+            
+            // ログイン前に環境変数デバッグを実行
+            await this.debugEnvironmentVariables();
+            
             console.log('Calling api.login...');
             const result = await this.api.login(email, password);
             console.log('Login result:', result);
@@ -551,9 +562,11 @@ class PopupManager {
     }
 
     async debugEnvironmentVariables() {
+        console.log('=== Environment Variables Debug ===');
         try {
             const debugUrl = 'https://research-vault-eight.vercel.app/api/debug/env';
             console.log('Extension - Fetching environment debug info from:', debugUrl);
+            console.log('Extension - Request timestamp:', new Date().toISOString());
             
             const response = await fetch(debugUrl, {
                 method: 'GET',
@@ -564,18 +577,37 @@ class PopupManager {
                 }
             });
             
+            console.log('Extension - Debug endpoint response:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok,
+                headers: {
+                    'content-type': response.headers.get('content-type'),
+                    'server': response.headers.get('server')
+                }
+            });
+            
             if (response.ok) {
                 const data = await response.json();
-                console.log('Extension - Environment debug info:', data);
+                console.log('=== SERVER ENVIRONMENT DEBUG INFO ===');
+                console.log('Extension - Environment debug data:', data);
+                console.log('=== END SERVER ENVIRONMENT DEBUG ===');
             } else {
+                const errorText = await response.text();
                 console.log('Extension - Failed to get environment debug info:', {
                     status: response.status,
-                    statusText: response.statusText
+                    statusText: response.statusText,
+                    errorText: errorText
                 });
             }
         } catch (error) {
-            console.log('Extension - Environment debug error:', error);
+            console.log('Extension - Environment debug error:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
         }
+        console.log('=== End Environment Variables Debug ===');
     }
 
     showMessage(message, type = 'info', options = {}) {

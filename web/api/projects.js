@@ -4,22 +4,26 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
 
-// 環境変数の設定状況をデバッグ出力
-console.log('Projects API - Environment variables check:', {
-  NODE_ENV: process.env.NODE_ENV,
-  VERCEL: process.env.VERCEL,
-  VERCEL_ENV: process.env.VERCEL_ENV,
-  VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? `SET (${process.env.VITE_SUPABASE_URL})` : 'NOT_SET',
-  SUPABASE_URL: process.env.SUPABASE_URL ? `SET (${process.env.SUPABASE_URL})` : 'NOT_SET',
-  VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? `SET (${process.env.VITE_SUPABASE_ANON_KEY.substring(0, 20)}...)` : 'NOT_SET',
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? `SET (${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...)` : 'NOT_SET',
-  finalUrl: supabaseUrl,
-  finalAnonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null',
-  allEnvKeys: Object.keys(process.env).filter(key => key.includes('SUPABASE')),
-  timestamp: new Date().toISOString()
-})
+
 
 export default async function handler(req, res) {
+  // 環境変数デバッグ出力（最初に実行）
+  console.log('=== PROJECTS API ENVIRONMENT DEBUG ===');
+  console.log('Projects API - Environment variables check:', {
+    NODE_ENV: process.env.NODE_ENV,
+    VERCEL: process.env.VERCEL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? `SET (${process.env.VITE_SUPABASE_URL})` : 'NOT_SET',
+    SUPABASE_URL: process.env.SUPABASE_URL ? `SET (${process.env.SUPABASE_URL})` : 'NOT_SET',
+    VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? `SET (${process.env.VITE_SUPABASE_ANON_KEY.substring(0, 20)}...)` : 'NOT_SET',
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? `SET (${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...)` : 'NOT_SET',
+    finalUrl: supabaseUrl,
+    finalAnonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null',
+    allEnvKeys: Object.keys(process.env).filter(key => key.includes('SUPABASE')),
+    timestamp: new Date().toISOString()
+  });
+  console.log('=== END PROJECTS API ENVIRONMENT DEBUG ===');
+
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
