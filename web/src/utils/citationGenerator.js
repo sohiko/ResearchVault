@@ -8,7 +8,11 @@ export const generateCitation = (reference, citationFormat) => {
   const author = metadata.author || ''
   const siteName = metadata.siteName || new URL(url).hostname
   const publishedDate = metadata.publishedDate || ''
-  const accessDate = format(new Date(), 'yyyy年MM月dd日', { locale: ja })
+  
+  // アクセス日は参照の保存日時を使用
+  const accessDate = reference.saved_at 
+    ? format(new Date(reference.saved_at), 'yyyy年MM月dd日', { locale: ja })
+    : format(new Date(), 'yyyy年MM月dd日', { locale: ja })
 
   switch (citationFormat.toUpperCase()) {
     case 'APA':

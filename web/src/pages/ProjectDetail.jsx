@@ -261,6 +261,35 @@ export default function ProjectDetail() {
     }
   }
 
+  const handleUpdateReference = async (updatedReference) => {
+    try {
+      const { error } = await supabase
+        .from('references')
+        .update({
+          title: updatedReference.title,
+          url: updatedReference.url,
+          description: updatedReference.description,
+          metadata: updatedReference.metadata,
+          updated_at: updatedReference.updated_at
+        })
+        .eq('id', updatedReference.id)
+
+      if (error) throw error
+
+      // ローカル状態を更新
+      setReferences(prev => 
+        prev.map(ref => 
+          ref.id === updatedReference.id 
+            ? { ...ref, ...updatedReference }
+            : ref
+        )
+      )
+    } catch (error) {
+      console.error('Failed to update reference:', error)
+      throw error
+    }
+  }
+
   const handleGenerateCitations = async () => {
     if (references.length === 0) {
       toast.error('引用を生成する参照がありません')
@@ -475,6 +504,8 @@ export default function ProjectDetail() {
                   key={reference.id}
                   reference={reference}
                   onDelete={canEdit ? handleDeleteReference : null}
+                  onUpdate={canEdit ? handleUpdateReference : null}
+                  citationFormat={citationFormat}
                 />
               ))}
             </div>

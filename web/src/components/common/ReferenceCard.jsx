@@ -2,10 +2,14 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { toast } from 'react-hot-toast'
+import { generateCitation } from '../../utils/citationGenerator'
+import EditReferenceModal from './EditReferenceModal'
 
-const ReferenceCard = ({ reference, onDelete }) => {
+const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showActions, setShowActions] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const truncateText = (text, maxLength = 150) => {
     if (!text || text.length <= maxLength) {return text}
@@ -31,14 +35,37 @@ const ReferenceCard = ({ reference, onDelete }) => {
   const handleCopyUrl = async () => {
     try {
       await navigator.clipboard.writeText(reference.url)
-      // トーストは親コンポーネントで処理することを想定
+      toast.success('URLをコピーしました')
     } catch (error) {
       console.error('Failed to copy URL:', error)
+      toast.error('URLのコピーに失敗しました')
+    }
+  }
+
+  const handleCopyCitation = async () => {
+    try {
+      const citation = generateCitation(reference, citationFormat)
+      await navigator.clipboard.writeText(citation)
+      toast.success('引用をコピーしました')
+    } catch (error) {
+      console.error('Failed to copy citation:', error)
+      toast.error('引用のコピーに失敗しました')
     }
   }
 
   const handleOpenUrl = () => {
     window.open(reference.url, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleEdit = () => {
+    setShowEditModal(true)
+    setShowActions(false)
+  }
+
+  const handleUpdateReference = async (updatedReference) => {
+    if (onUpdate) {
+      await onUpdate(updatedReference)
+    }
   }
 
   return (
@@ -103,6 +130,26 @@ const ReferenceCard = ({ reference, onDelete }) => {
                     </svg>
                     URLをコピー
                   </button>
+                  <button
+                    onClick={handleCopyCitation}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    引用をコピー ({citationFormat})
+                  </button>
+                  {onUpdate && (
+                    <button
+                      onClick={handleEdit}
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      編集
+                    </button>
+                  )}
                   {onDelete && (
                     <button
                       onClick={() => onDelete(reference.id)}
@@ -219,6 +266,15 @@ const ReferenceCard = ({ reference, onDelete }) => {
         <div
           className="fixed inset-0 z-0"
           onClick={() => setShowActions(false)}
+        />
+      )}
+
+      {/* 編集モーダル */}
+      {showEditModal && (
+        <EditReferenceModal
+          reference={reference}
+          onClose={() => setShowEditModal(false)}
+          onUpdate={handleUpdateReference}
         />
       )}
     </div>

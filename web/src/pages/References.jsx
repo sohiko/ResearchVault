@@ -5,6 +5,8 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import ReferenceCard from '../components/common/ReferenceCard'
+import AddReferenceModal from '../components/common/AddReferenceModal'
 import { usePageFocus } from '../hooks/usePageFocus'
 
 export default function References() {
@@ -16,6 +18,7 @@ export default function References() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [referenceToDelete, setReferenceToDelete] = useState(null)
+  const [citationFormat, setCitationFormat] = useState('APA')
   const [filters, setFilters] = useState({
     project: '',
     search: '',
@@ -71,6 +74,24 @@ export default function References() {
     }
   }, [user, filters])
 
+  const loadCitationSettings = useCallback(async () => {
+    if (!user) return
+    
+    try {
+      const { data } = await supabase
+        .from('citation_settings')
+        .select('default_style')
+        .eq('user_id', user.id)
+        .single()
+
+      if (data?.default_style) {
+        setCitationFormat(data.default_style)
+      }
+    } catch (error) {
+      // 設定がない場合はデフォルトのAPAを使用
+    }
+  }, [user])
+
   const loadData = useCallback(async () => {
     if (!user) {return}
     
@@ -78,14 +99,15 @@ export default function References() {
       setLoading(true)
       setError(null)
       
-      // プロジェクトと参照を並行で取得
+      // プロジェクト、参照、引用設定を並行で取得
       const [projectsResult, referencesResult] = await Promise.all([
         supabase
           .from('projects')
           .select('id, name, color, icon')
           .eq('owner_id', user.id)
           .order('name'),
-        loadReferences()
+        loadReferences(),
+        loadCitationSettings()
       ])
 
       if (projectsResult.error) {
@@ -100,7 +122,7 @@ export default function References() {
     } finally {
       setLoading(false)
     }
-  }, [user, loadReferences])
+  }, [user, loadReferences, loadCitationSettings])
 
   // ページフォーカス時の不要なリロードを防ぐ
   usePageFocus(loadData, [user?.id], {
@@ -161,23 +183,36 @@ export default function References() {
     }
   }
 
-  const generateCitation = (reference) => {
-    // 簡易APA引用生成
-    const title = reference.title || 'タイトルなし'
-    const url = reference.url
-    const accessDate = format(new Date(), 'yyyy年MM月dd日', { locale: ja })
-    
-    return `${title}. Retrieved ${accessDate}, from ${url}`
-  }
-
-  const copyToClipboard = async (text) => {
+  const handleUpdateReference = async (updatedReference) => {
     try {
-      await navigator.clipboard.writeText(text)
-      toast.success('引用をクリップボードにコピーしました')
+      const { error } = await supabase
+        .from('references')
+        .update({
+          title: updatedReference.title,
+          url: updatedReference.url,
+          description: updatedReference.description,
+          metadata: updatedReference.metadata,
+          updated_at: updatedReference.updated_at
+        })
+        .eq('id', updatedReference.id)
+
+      if (error) throw error
+
+      // ローカル状態を更新
+      setReferences(prev => 
+        prev.map(ref => 
+          ref.id === updatedReference.id 
+            ? { ...ref, ...updatedReference }
+            : ref
+        )
+      )
     } catch (error) {
-      console.error('Failed to copy:', error)
+      console.error('Failed to update reference:', error)
+      throw error
     }
   }
+
+
 
   if (loading) {
     return (
@@ -328,7 +363,8 @@ export default function References() {
               key={reference.id}
               reference={reference}
               onDelete={handleDeleteReference}
-              onGenerateCitation={(ref) => copyToClipboard(generateCitation(ref))}
+              onUpdate={handleUpdateReference}
+              citationFormat={citationFormat}
             />
           ))}
         </div>
@@ -336,9 +372,9 @@ export default function References() {
 
       {showAddModal && (
         <AddReferenceModal
-          projects={projects}
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddReference}
+          projectId=""
         />
       )}
 
@@ -355,221 +391,4 @@ export default function References() {
   )
 }
 
-function ReferenceCard({ reference, onDelete, onGenerateCitation }) {
-  return (
-    <div className="card hover:shadow-lg transition-shadow duration-200">
-      <div className="p-6">
-        <div className="flex items-start space-x-4">
-          {reference.favicon && (
-            <img 
-              src={reference.favicon} 
-              alt="" 
-              className="w-4 h-4 mt-1 flex-shrink-0"
-              onError={(e) => { e.target.style.display = 'none' }}
-            />
-          )}
-          
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="text-lg font-medium text-secondary-900 dark:text-secondary-100 mb-1">
-                  {reference.title}
-                </h3>
-                <p className="text-sm text-secondary-500 break-all mb-2">
-                  {reference.url}
-                </p>
-                
-                {reference.memo && (
-                  <p className="text-sm text-secondary-600 dark:text-secondary-400 mb-3">
-                    {reference.memo}
-                  </p>
-                )}
-                
-                <div className="flex items-center space-x-4 text-sm text-secondary-500">
-                  {reference.project && (
-                    <div className="flex items-center space-x-2">
-                      <div 
-                        className="w-3 h-3 rounded-sm"
-                        style={{ backgroundColor: reference.project.color }}
-                      />
-                      <span>{reference.project.name}</span>
-                    </div>
-                  )}
-                  
-                  {reference.textCount > 0 && (
-                    <span>{reference.textCount} 選択テキスト</span>
-                  )}
-                  
-                  {reference.bookmarkCount > 0 && (
-                    <span>{reference.bookmarkCount} ブックマーク</span>
-                  )}
-                  
-                  <span>
-                    {format(new Date(reference.saved_at), 'MM/dd HH:mm', { locale: ja })}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-2 ml-4">
-                <button
-                  onClick={() => onGenerateCitation(reference)}
-                  className="text-secondary-400 hover:text-primary-500 transition-colors"
-                  title="引用をコピー"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </button>
-                
-                <a
-                  href={reference.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-secondary-400 hover:text-primary-500 transition-colors"
-                  title="リンクを開く"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-                
-                <button
-                  onClick={() => onDelete(reference.id)}
-                  className="text-secondary-400 hover:text-red-500 transition-colors"
-                  title="削除"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
-function AddReferenceModal({ projects, onClose, onAdd }) {
-  const [formData, setFormData] = useState({
-    title: '',
-    url: '',
-    memo: '',
-    projectId: ''
-  })
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (formData.title.trim() && formData.url.trim()) {
-      setLoading(true)
-      await onAdd(formData)
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-secondary-800 rounded-lg max-w-md w-full">
-        <form onSubmit={handleSubmit}>
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-secondary-900 dark:text-secondary-100">
-                新しい参照を追加
-              </h3>
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-secondary-400 hover:text-secondary-600"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div className="px-6 py-4 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                タイトル *
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="参照のタイトルを入力..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                URL *
-              </label>
-              <input
-                type="url"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                value={formData.url}
-                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                placeholder="https://..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                プロジェクト
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                value={formData.projectId}
-                onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-              >
-                <option value="">プロジェクトを選択</option>
-                {projects.map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                メモ
-              </label>
-              <textarea
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                rows={3}
-                value={formData.memo}
-                onChange={(e) => setFormData({ ...formData, memo: e.target.value })}
-                placeholder="メモを入力..."
-              />
-            </div>
-          </div>
-
-          <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 btn-secondary"
-              disabled={loading}
-            >
-              キャンセル
-            </button>
-            <button
-              type="submit"
-              className="flex-1 btn-primary"
-              disabled={loading || !formData.title.trim() || !formData.url.trim()}
-            >
-              {loading ? '追加中...' : '追加'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
