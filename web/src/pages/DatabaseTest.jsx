@@ -300,17 +300,29 @@ CREATE INDEX IF NOT EXISTS idx_projects_deleted_at ON projects(deleted_at) WHERE
 CREATE INDEX IF NOT EXISTS idx_references_deleted_at ON "references"(deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- 3. RLSポリシー追加
-CREATE POLICY "Users can view their own deleted projects" ON projects
-  FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
-
-CREATE POLICY "Users can update deleted projects they deleted" ON projects
-  FOR UPDATE USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
-
-CREATE POLICY "Users can view their own deleted references" ON "references"
-  FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
-
-CREATE POLICY "Users can update deleted references they deleted" ON "references"
-  FOR UPDATE USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);`}
+-- 3. RLSポリシー追加（既存の場合はスキップ）
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own deleted projects') THEN
+    CREATE POLICY "Users can view their own deleted projects" ON projects
+      FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update deleted projects they deleted') THEN
+    CREATE POLICY "Users can update deleted projects they deleted" ON projects
+      FOR UPDATE USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own deleted references') THEN
+    CREATE POLICY "Users can view their own deleted references" ON "references"
+      FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update deleted references they deleted') THEN
+    CREATE POLICY "Users can update deleted references they deleted" ON "references"
+      FOR UPDATE USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+  END IF;
+END $$;`}
           </pre>
         </details>
       </div>
