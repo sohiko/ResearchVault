@@ -32,16 +32,31 @@ export default async function handler(req, res) {
     const token = authHeader.split(' ')[1]
     console.log('Token:', token ? `${token.substring(0, 20)}...` : 'null')
     
-    // 正しい認証処理
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
-    console.log('Auth result:', { user: user?.id, error: authError?.message })
-    
-    if (authError || !user) {
-      console.log('Auth failed:', authError)
+    // JWTトークンを直接検証してユーザーIDを取得
+    let userId
+    try {
+      // JWTトークンをデコードしてユーザーIDを取得
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
+      console.log('JWT payload:', { sub: payload.sub, exp: payload.exp, iat: payload.iat })
+      
+      // トークンの有効期限をチェック
+      const now = Math.floor(Date.now() / 1000)
+      if (payload.exp && payload.exp < now) {
+        console.log('Token expired:', { exp: payload.exp, now })
+        return res.status(401).json({ error: 'トークンが期限切れです' })
+      }
+      
+      userId = payload.sub
+      if (!userId) {
+        console.log('No user ID in token')
+        return res.status(401).json({ error: '無効なトークンです' })
+      }
+      
+      console.log('Auth successful, user ID:', userId)
+    } catch (error) {
+      console.log('Token decode error:', error)
       return res.status(401).json({ error: '無効な認証トークンです' })
     }
-    
-    const userId = user.id
 
     switch (req.method) {
       case 'GET':

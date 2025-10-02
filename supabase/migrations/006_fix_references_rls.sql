@@ -16,10 +16,9 @@ USING (
   saved_by = auth.uid()
   OR (
     project_id IS NOT NULL
-    AND EXISTS (
-      SELECT 1 FROM public.projects p
-      WHERE p.id = references.project_id
-        AND p.owner_id = auth.uid()
+    AND project_id IN (
+      SELECT p.id FROM public.projects p
+      WHERE p.owner_id = auth.uid()
     )
   )
 );
@@ -31,10 +30,9 @@ WITH CHECK (
   saved_by = auth.uid()
   AND (
     project_id IS NULL  -- Allow null project_id for uncategorized references
-    OR EXISTS (
-      SELECT 1 FROM public.projects p
-      WHERE p.id = references.project_id
-        AND p.owner_id = auth.uid()
+    OR project_id IN (
+      SELECT p.id FROM public.projects p
+      WHERE p.owner_id = auth.uid()
     )
   )
 );
@@ -47,10 +45,9 @@ WITH CHECK (
   saved_by = auth.uid()
   AND (
     project_id IS NULL  -- Allow null project_id for uncategorized references
-    OR EXISTS (
-      SELECT 1 FROM public.projects p
-      WHERE p.id = references.project_id
-        AND p.owner_id = auth.uid()
+    OR project_id IN (
+      SELECT p.id FROM public.projects p
+      WHERE p.owner_id = auth.uid()
     )
   )
 );
@@ -69,10 +66,9 @@ USING (
   created_by = auth.uid()
   AND (
     project_id IS NULL
-    OR EXISTS (
-      SELECT 1 FROM public.projects p
-      WHERE p.id = selected_texts.project_id
-        AND p.owner_id = auth.uid()
+    OR project_id IN (
+      SELECT p.id FROM public.projects p
+      WHERE p.owner_id = auth.uid()
     )
   )
 )
@@ -80,10 +76,9 @@ WITH CHECK (
   created_by = auth.uid()
   AND (
     project_id IS NULL
-    OR EXISTS (
-      SELECT 1 FROM public.projects p
-      WHERE p.id = selected_texts.project_id
-        AND p.owner_id = auth.uid()
+    OR project_id IN (
+      SELECT p.id FROM public.projects p
+      WHERE p.owner_id = auth.uid()
     )
   )
 );
@@ -96,10 +91,9 @@ USING (
   created_by = auth.uid()
   AND (
     project_id IS NULL
-    OR EXISTS (
-      SELECT 1 FROM public.projects p
-      WHERE p.id = bookmarks.project_id
-        AND p.owner_id = auth.uid()
+    OR project_id IN (
+      SELECT p.id FROM public.projects p
+      WHERE p.owner_id = auth.uid()
     )
   )
 )
@@ -107,10 +101,9 @@ WITH CHECK (
   created_by = auth.uid()
   AND (
     project_id IS NULL
-    OR EXISTS (
-      SELECT 1 FROM public.projects p
-      WHERE p.id = bookmarks.project_id
-        AND p.owner_id = auth.uid()
+    OR project_id IN (
+      SELECT p.id FROM public.projects p
+      WHERE p.owner_id = auth.uid()
     )
   )
 );
