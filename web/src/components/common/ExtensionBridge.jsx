@@ -1,9 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useAuth } from '../../hooks/useAuth'
-import { toast } from 'react-hot-toast'
 
 const ExtensionBridge = () => {
-  const { session, user } = useAuth()
   const [extensionInstalled, setExtensionInstalled] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('checking')
 
@@ -124,78 +121,14 @@ const ExtensionBridge = () => {
     }
   }, []) // 空の依存配列で循環依存を完全に回避
 
-  // 認証トークン同期関数
-  const syncAuthToken = useCallback(() => {
-    if (!session || !extensionInstalled) {
-      return
-    }
-
-    try {
-      const authData = {
-        token: session.access_token,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.user_metadata?.name || user.email.split('@')[0]
-        },
-        expires_at: session.expires_at
-      }
-
-      // Method 1: Chrome extension messaging (preferred)
-      if (window.chrome && window.chrome.runtime) {
-        window.chrome.runtime.sendMessage(
-          'gojloohiffafenaojgofkebobcdedago',
-          {
-            action: 'syncAuth',
-            data: authData
-          },
-          (_response) => {
-            if (window.chrome.runtime.lastError) {
-              console.warn('Failed to sync auth via extension API:', window.chrome.runtime.lastError)
-              // フォールバック: DOM経由
-              syncViaDOM(authData)
-            } else {
-              // 認証同期成功（通知なし）
-            }
-          }
-        )
-      } else {
-        // Method 2: DOM messaging (fallback)
-        syncViaDOM(authData)
-      }
-    } catch (error) {
-      console.error('Auth sync failed:', error)
-      toast.error('拡張機能との同期に失敗しました')
-    }
-  }, [session, extensionInstalled, user.id, user.email, user.user_metadata?.name]) // syncViaDOMを依存配列から削除
-
-  // DOM経由での同期関数
-  const syncViaDOM = useCallback((authData) => {
-    const script = document.createElement('script')
-    script.textContent = `
-      window.postMessage({
-        type: 'RESEARCHVAULT_AUTH_SYNC',
-        source: 'webpage',
-        data: ${JSON.stringify(authData)}
-      }, '*')
-    `
-    document.head.appendChild(script)
-    document.head.removeChild(script)
-    
-    // DOM経由での認証同期（通知なし）
-  }, [])
+  // 認証同期機能は削除（不要なため）
 
   // 初期化効果
   useEffect(() => {
     checkExtensionInstallation()
   }, []) // 空の依存配列で循環依存を回避
 
-  // 認証同期効果（拡張機能が実際に検出された時のみ）
-  useEffect(() => {
-    if (session && extensionInstalled && connectionStatus === 'connected') {
-      syncAuthToken()
-    }
-  }, [session, extensionInstalled, connectionStatus]) // 接続状態も確認
+  // 認証同期効果は削除（不要なため）
 
   const installExtension = () => {
     window.open('https://chrome.google.com/webstore/detail/researchvault/extension-id', '_blank')
