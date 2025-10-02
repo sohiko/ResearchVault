@@ -57,9 +57,9 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
-        return handleGetProjects(req, res, user.id)
+        return handleGetProjects(req, res, userId)
       case 'POST':
-        return handleCreateProject(req, res, user.id)
+        return handleCreateProject(req, res, userId)
       default:
         return res.status(405).json({ error: 'Method not allowed' })
     }

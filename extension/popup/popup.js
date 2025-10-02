@@ -74,9 +74,18 @@ class PopupManager {
                 if (sessionInfo && sessionInfo.expires_at) {
                     const expiresAt = new Date(sessionInfo.expires_at * 1000); // Unix timestamp to Date
                     const now = new Date();
+                    const timeUntilExpiry = expiresAt.getTime() - now.getTime();
                     
-                    if (now >= expiresAt) {
-                        console.log('Token expired, clearing auth data');
+                    console.log('Token expiry check:', {
+                        expiresAt: expiresAt.toISOString(),
+                        now: now.toISOString(),
+                        timeUntilExpiry: timeUntilExpiry,
+                        isExpired: timeUntilExpiry <= 0
+                    });
+                    
+                    // 期限切れまたは5分以内に期限切れの場合
+                    if (timeUntilExpiry <= 300000) { // 5分 = 300000ms
+                        console.log('Token expired or expiring soon, clearing auth data');
                         await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
                         this.showAuthSection();
                         this.showError('セッションが期限切れです。再度ログインしてください');

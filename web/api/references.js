@@ -5,9 +5,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
 // 管理者（サービスロール）クライアント: RLSをバイパスして確実に操作する
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-// 認証トークンの検証用
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
-const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey)
+
 
 export default async function handler(req, res) {
   // CORS設定
@@ -280,7 +278,7 @@ async function addTagsToReference(referenceId, tags, userId) {
 
       if (tagError && tagError.code === 'PGRST116') {
         // タグが存在しない場合は作成
-        const { data: _newTag, error: createError } = await supabaseAdmin
+        const { data: newTag, error: createError } = await supabaseAdmin
           .from('tags')
           .insert({
             name: tagName.trim(),
@@ -296,19 +294,29 @@ async function addTagsToReference(referenceId, tags, userId) {
           continue
         }
 
-        // const tag = newTag // タグIDは後で使用される
+        // 新しく作成されたタグを使用
+        if (newTag) {
+          await supabaseAdmin
+            .from('reference_tags')
+            .insert({
+              reference_id: referenceId,
+              tag_id: newTag.id
+            })
+        }
       } else if (tagError) {
         console.warn('Tag query error:', tagError)
         continue
       }
 
-      // 参照とタグを関連付け
-      await supabaseAdmin
-        .from('reference_tags')
-        .insert({
-          reference_id: referenceId,
-          tag_id: tag.id
-        })
+      // 既存のタグと参照を関連付け
+      if (tag) {
+        await supabaseAdmin
+          .from('reference_tags')
+          .insert({
+            reference_id: referenceId,
+            tag_id: tag.id
+          })
+      }
 
     } catch (error) {
       console.warn('Failed to process tag:', tagName, error)
@@ -316,14 +324,7 @@ async function addTagsToReference(referenceId, tags, userId) {
   }
 }
 
-function isValidUrl(string) {
-  try {
-    new URL(string)
-    return true
-  } catch (_) {
-    return false
-  }
-}
+
 
 function getRandomTagColor() {
   const colors = [
