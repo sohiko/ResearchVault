@@ -133,7 +133,14 @@ async function handleCreateReference(req, res, userId) {
     }
 
     if (!url || !isValidUrl(url)) {
+      console.log('Invalid URL:', url)
       return res.status(400).json({ error: '有効なURLが必要です' })
+    }
+    
+    // chrome:// や moz-extension:// などの特殊なURLは除外
+    if (url.startsWith('chrome://') || url.startsWith('moz-extension://') || url.startsWith('chrome-extension://')) {
+      console.log('Special URL detected:', url)
+      return res.status(400).json({ error: 'このURLは保存できません' })
     }
 
     // プロジェクトの存在と権限チェック
@@ -185,7 +192,20 @@ async function handleCreateReference(req, res, userId) {
 
     if (error) {
       console.error('Create reference error:', error)
-      return res.status(500).json({ error: '参照の保存に失敗しました' })
+      
+      // データベース制約エラーの詳細を返す
+      if (error.code === '23505') {
+        return res.status(409).json({ error: 'この参照は既に保存されています' })
+      } else if (error.code === '23503') {
+        return res.status(400).json({ error: '指定されたプロジェクトが存在しません' })
+      } else if (error.code === '23514') {
+        return res.status(400).json({ error: 'データの形式が正しくありません' })
+      }
+      
+      return res.status(500).json({ 
+        error: '参照の保存に失敗しました',
+        details: error.message 
+      })
     }
     
     console.log('Reference created successfully:', reference)

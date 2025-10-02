@@ -67,9 +67,15 @@ class PopupManager {
     async checkAuthState() {
         try {
             const { authToken } = await chrome.storage.sync.get(['authToken']);
+            console.log('Checking auth state, token found:', !!authToken);
+            
             if (authToken) {
                 await this.api.setAuthToken(authToken);
+                console.log('Auth token set in API client:', this.api.authToken);
+                
                 const user = await this.api.getCurrentUser();
+                console.log('Current user:', user);
+                
                 if (user) {
                     this.currentUser = user;
                     await this.loadProjects();
@@ -85,7 +91,9 @@ class PopupManager {
 
     async loadProjects() {
         try {
+            console.log('Loading projects...');
             this.projects = await this.api.getProjects();
+            console.log('Projects loaded:', this.projects);
             this.updateProjectSelect();
         } catch (error) {
             console.error('Failed to load projects:', error);
@@ -95,14 +103,23 @@ class PopupManager {
 
     updateProjectSelect() {
         const select = document.getElementById('projectSelect');
+        if (!select) {
+            console.error('Project select element not found');
+            return;
+        }
+        
         select.innerHTML = '<option value="">プロジェクトを選択</option>';
+        console.log('Updating project select with', this.projects.length, 'projects');
         
         this.projects.forEach(project => {
             const option = document.createElement('option');
             option.value = project.id;
             option.textContent = project.name;
             select.appendChild(option);
+            console.log('Added project option:', project.name, project.id);
         });
+        
+        console.log('Project select updated. Total options:', select.options.length);
 
         // 最後に選択したプロジェクトを復元
         chrome.storage.sync.get(['lastSelectedProject']).then(({ lastSelectedProject }) => {
@@ -191,6 +208,8 @@ class PopupManager {
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
 
+        console.log('Popup login attempt:', { email, hasPassword: !!password });
+
         if (!email || !password) {
             this.showError('メールアドレスとパスワードを入力してください');
             return;
@@ -198,20 +217,22 @@ class PopupManager {
 
         try {
             this.showLoading(true);
+            console.log('Calling api.login...');
             const result = await this.api.login(email, password);
+            console.log('Login result:', result);
             
             if (result.success) {
+                console.log('Login successful, saving token:', result.token);
                 await chrome.storage.sync.set({ authToken: result.token });
+                await this.api.setAuthToken(result.token);
                 this.currentUser = result.user;
+                
+                // トークンが正しく設定されたか確認
+                console.log('Auth token set:', this.api.authToken);
+                
                 await this.loadProjects();
                 this.showMainSection();
-                
-                // モック認証の場合は通知
-                if (result.isMock) {
-                    this.showSuccess('デモモードでログインしました（APIサーバーが利用できません）');
-                } else {
-                    this.showSuccess('ログインしました');
-                }
+                this.showSuccess('ログインしました');
             } else {
                 this.showError(result.error || 'ログインに失敗しました');
             }
@@ -225,7 +246,7 @@ class PopupManager {
 
     async handleSignup() {
         // ダッシュボードのサインアップページを開く
-        chrome.tabs.create({ url: 'https://research-vault.vercel.app/signup' });
+        chrome.tabs.create({ url: 'https://research-vault-eight.vercel.app/signup' });
     }
 
     async handleSave() {
@@ -241,8 +262,27 @@ class PopupManager {
         try {
             this.showLoading(true);
             
+            // 認証トークンの確認
+            if (!this.api.authToken) {
+                this.showError('認証が必要です。ログインしてください');
+                return;
+            }
+            
+            // 特殊なURLの場合は保存を拒否
+            const currentUrl = this.currentTab.url;
+            if (currentUrl.startsWith('chrome://') || 
+                currentUrl.startsWith('moz-extension://') || 
+                currentUrl.startsWith('chrome-extension://') ||
+                currentUrl.startsWith('about:') ||
+                currentUrl.startsWith('data:')) {
+                this.showError('このページは保存できません');
+                return;
+            }
+            
+            console.log('Saving reference with token:', this.api.authToken);
+            
             const referenceData = {
-                url: this.currentTab.url,
+                url: currentUrl,
                 title: this.currentTab.title,
                 favicon: this.currentTab.favIconUrl,
                 projectId: projectId || null,
@@ -251,6 +291,7 @@ class PopupManager {
                 metadata: await this.extractPageMetadata()
             };
 
+            console.log('Reference data to save:', referenceData);
             const result = await this.api.saveReference(referenceData);
             
             if (result.success) {
@@ -277,39 +318,45 @@ class PopupManager {
         try {
             // Manifest V3対応: chrome.scripting.executeScript を使用
             if (!this.currentTab?.id) {
-                throw new Error('有効なタブが見つかりません');
+                console.log('No valid tab found, returning empty metadata');
+                return {};
+            }
+
+            // 権限チェック
+            if (!chrome.scripting || !chrome.scripting.executeScript) {
+                console.log('chrome.scripting not available, returning empty metadata');
+                return {};
             }
 
             const results = await chrome.scripting.executeScript({
                 target: { tabId: this.currentTab.id },
                 func: () => {
-                    const getMetaContent = (name) => {
-                        const meta = document.querySelector(`meta[name="${name}"], meta[property="${name}"]`);
-                        return meta ? meta.content : null;
-                    };
-                    
-                    return {
-                        author: getMetaContent('author') || getMetaContent('og:author'),
-                        publishedDate: getMetaContent('article:published_time') || getMetaContent('date'),
-                        description: getMetaContent('description') || getMetaContent('og:description'),
-                        siteName: getMetaContent('og:site_name'),
-                        type: getMetaContent('og:type'),
-                        canonical: getMetaContent('og:url') || document.querySelector('link[rel="canonical"]')?.href
-                    };
+                    try {
+                        const getMetaContent = (name) => {
+                            const meta = document.querySelector(`meta[name="${name}"], meta[property="${name}"]`);
+                            return meta ? meta.content : null;
+                        };
+                        
+                        return {
+                            author: getMetaContent('author') || getMetaContent('og:author'),
+                            publishedDate: getMetaContent('article:published_time') || getMetaContent('date'),
+                            description: getMetaContent('description') || getMetaContent('og:description'),
+                            siteName: getMetaContent('og:site_name'),
+                            type: getMetaContent('og:type'),
+                            canonical: getMetaContent('og:url') || document.querySelector('link[rel="canonical"]')?.href
+                        };
+                    } catch (scriptError) {
+                        console.log('Script execution error:', scriptError);
+                        return {};
+                    }
                 }
             });
             
-            return results[0]?.result || {};
+            const metadata = results[0]?.result || {};
+            console.log('Extracted metadata:', metadata);
+            return metadata;
         } catch (error) {
-            if (this.handleExtensionError) {
-                await this.handleExtensionError(error, {
-                    method: 'extractPageMetadata',
-                    component: 'PopupManager',
-                    tabId: this.currentTab?.id
-                });
-            } else {
-                console.error('Extract metadata error:', error);
-            }
+            console.log('Extract metadata error:', error.message || error);
             return {};
         }
     }
@@ -388,12 +435,12 @@ class PopupManager {
     }
 
     openDashboard() {
-        chrome.tabs.create({ url: 'https://research-vault.vercel.app' });
+        chrome.tabs.create({ url: 'https://research-vault-eight.vercel.app' });
     }
 
     async handleLogout() {
         try {
-            await chrome.storage.sync.remove(['authToken', 'lastSelectedProject']);
+            await chrome.storage.sync.remove(['authToken', 'userInfo', 'lastSelectedProject']);
             this.currentUser = null;
             this.projects = [];
             this.clearForm();
