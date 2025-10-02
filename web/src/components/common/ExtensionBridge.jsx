@@ -7,7 +7,7 @@ const ExtensionBridge = () => {
   const [extensionInstalled, setExtensionInstalled] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('checking')
 
-  // 拡張機能チェック関数（環境対応）
+  // 拡張機能チェック関数（本番環境では検出を無効化）
   const checkExtensionInstallation = useCallback(() => {
     try {
       // 環境を判定（localhostか本番環境か）
@@ -15,9 +15,9 @@ const ExtensionBridge = () => {
                          window.location.hostname === '127.0.0.1' ||
                          window.location.hostname.includes('localhost')
 
-      if (window.chrome && window.chrome.runtime) {
-        // localhost環境では詳細な検出を実行
-        if (isLocalhost) {
+      if (isLocalhost) {
+        // localhost環境でのみ拡張機能検出を実行
+        if (window.chrome && window.chrome.runtime) {
           // 実際の拡張機能IDを使用してメッセージを送信
           window.chrome.runtime.sendMessage(
             'gojloohiffafenaojgofkebobcdedago',
@@ -98,98 +98,13 @@ const ExtensionBridge = () => {
             })
           }, 3000)
         } else {
-          // 本番環境では複数の検出方法を試行
-          let detectionSuccess = false
-
-          // 方法1: DOM要素を使った検出
-          try {
-            const script = document.createElement('script')
-            script.textContent = `
-              window.postMessage({ 
-                type: 'RESEARCHVAULT_EXTENSION_CHECK',
-                source: 'webpage'
-              }, '*')
-            `
-            document.head.appendChild(script)
-            document.head.removeChild(script)
-          } catch (scriptError) {
-            console.log('Script injection failed:', scriptError)
-          }
-
-          // レスポンスを待つ
-          const messageHandler = (event) => {
-            const data = event.data
-            if (!data || typeof data !== 'object') return
-            
-            if (data.type === 'RESEARCHVAULT_EXTENSION_RESPONSE' ||
-                (data.type === 'RESEARCHVAULT_EXTENSION_CHECK' && data.source === 'extension')) {
-              setExtensionInstalled(true)
-              setConnectionStatus('connected')
-              detectionSuccess = true
-              window.removeEventListener('message', messageHandler)
-            }
-          }
-
-          window.addEventListener('message', messageHandler)
-
-          // 方法2: 直接的なメッセージ送信（CSP制限を回避）
-          setTimeout(() => {
-            try {
-              // 直接window.postMessageを使用
-              window.postMessage({
-                type: 'RESEARCHVAULT_EXTENSION_CHECK',
-                source: 'webpage',
-                timestamp: Date.now()
-              }, '*')
-            } catch (directError) {
-              console.log('Direct postMessage failed:', directError)
-            }
-          }, 500)
-
-          // 方法3: 拡張機能の痕跡をチェック
-          setTimeout(() => {
-            try {
-              // 拡張機能の痕跡をチェック
-              const hasExtensionElements = document.querySelector('[data-researchvault]') ||
-                document.querySelector('script[src*="researchvault"]') ||
-                document.querySelector('meta[name*="researchvault"]') ||
-                document.querySelector('link[href*="researchvault"]')
-              
-              if (hasExtensionElements) {
-                setExtensionInstalled(true)
-                setConnectionStatus('connected')
-                detectionSuccess = true
-                return
-              }
-
-              // グローバル変数をチェック
-              if (window.ResearchVault || window.researchVaultExtension) {
-                setExtensionInstalled(true)
-                setConnectionStatus('connected')
-                detectionSuccess = true
-                return
-              }
-            } catch (traceError) {
-              console.log('Trace detection failed:', traceError)
-            }
-          }, 1000)
-
-          // 本番環境では2.5秒後にタイムアウト
-          setTimeout(() => {
-            window.removeEventListener('message', messageHandler)
-            if (!detectionSuccess) {
-              setConnectionStatus(prevStatus => {
-                if (prevStatus === 'checking') {
-                  setExtensionInstalled(false)
-                  return 'not_installed'
-                }
-                return prevStatus
-              })
-            }
-          }, 2500)
+          // Chrome拡張機能APIが利用できない場合
+          setExtensionInstalled(false)
+          setConnectionStatus('not_installed')
         }
       } else {
-        // Chrome拡張機能APIが利用できない場合
+        // 本番環境では拡張機能検出を無効化
+        // ユーザーが手動で拡張機能をインストールした場合のみ表示
         setExtensionInstalled(false)
         setConnectionStatus('not_installed')
       }
@@ -280,7 +195,17 @@ const ExtensionBridge = () => {
     checkExtensionInstallation()
   }
 
-  // チェック中は何も表示しない
+  // 環境を判定
+  const isLocalhost = window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1' ||
+                     window.location.hostname.includes('localhost')
+
+  // 本番環境では何も表示しない
+  if (!isLocalhost) {
+    return null
+  }
+
+  // localhost環境でのみ拡張機能の状態を表示
   if (connectionStatus === 'checking') {
     return null
   }
