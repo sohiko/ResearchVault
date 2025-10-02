@@ -78,7 +78,6 @@ async function handleGetReferences(req, res, userId) {
       id: ref.id,
       title: ref.title,
       url: ref.url,
-      description: ref.description,
       favicon: ref.favicon,
       metadata: ref.metadata || {},
       projectId: ref.project_id,
@@ -131,16 +130,10 @@ async function handleCreateReference(req, res, userId) {
     if (!title || title.trim().length === 0) {
       return res.status(400).json({ error: 'タイトルは必須です' })
     }
-
-    if (!url || !isValidUrl(url)) {
-      console.log('Invalid URL:', url)
+    // URL検証を緩和（空でないことのみ）
+    if (!url || url.trim().length === 0) {
+      console.log('Invalid URL (empty):', url)
       return res.status(400).json({ error: '有効なURLが必要です' })
-    }
-    
-    // chrome:// や moz-extension:// などの特殊なURLは除外
-    if (url.startsWith('chrome://') || url.startsWith('moz-extension://') || url.startsWith('chrome-extension://')) {
-      console.log('Special URL detected:', url)
-      return res.status(400).json({ error: 'このURLは保存できません' })
     }
 
     // プロジェクトの存在と権限チェック
@@ -173,9 +166,8 @@ async function handleCreateReference(req, res, userId) {
     const insertData = {
       title: title.trim(),
       url: url.trim(),
-      description: finalDescription.trim(),
       favicon: favicon || null,
-      metadata: metadata || {},
+      metadata: { ...(metadata || {}), memo: (finalDescription || '').trim() },
       project_id: projectId || null,
       saved_by: userId,
       saved_at: finalSavedAt,
@@ -224,7 +216,6 @@ async function handleCreateReference(req, res, userId) {
       id: reference.id,
       title: reference.title,
       url: reference.url,
-      description: reference.description,
       favicon: reference.favicon,
       metadata: reference.metadata || {},
       projectId: reference.project_id,
