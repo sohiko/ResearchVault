@@ -66,6 +66,9 @@ class PopupManager {
 
     async checkAuthState() {
         try {
+            // 環境変数デバッグ情報を取得
+            await this.debugEnvironmentVariables();
+            
             const { authToken, sessionInfo, lastLoginTime } = await chrome.storage.sync.get(['authToken', 'sessionInfo', 'lastLoginTime']);
             console.log('Checking auth state, token found:', !!authToken);
             
@@ -545,6 +548,34 @@ class PopupManager {
 
     showInfo(message, options = {}) {
         this.showMessage(message, 'info', options);
+    }
+
+    async debugEnvironmentVariables() {
+        try {
+            const debugUrl = 'https://research-vault-eight.vercel.app/api/debug/env';
+            console.log('Extension - Fetching environment debug info from:', debugUrl);
+            
+            const response = await fetch(debugUrl, {
+                method: 'GET',
+                headers: {
+                    'X-Extension-Version': '1.0.0',
+                    'X-Client-Info': 'chrome-extension',
+                    'User-Agent': 'ResearchVault-Extension/1.0.0'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Extension - Environment debug info:', data);
+            } else {
+                console.log('Extension - Failed to get environment debug info:', {
+                    status: response.status,
+                    statusText: response.statusText
+                });
+            }
+        } catch (error) {
+            console.log('Extension - Environment debug error:', error);
+        }
     }
 
     showMessage(message, type = 'info', options = {}) {

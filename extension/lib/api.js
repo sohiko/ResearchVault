@@ -70,22 +70,36 @@ class API {
                 config.headers['Authorization'] = `Bearer ${this.authToken}`;
             }
 
-            console.log('API Request:', {
+            console.log('Extension API - Request details:', {
                 url,
                 method: config.method || 'GET',
-                headers: config.headers,
-                body: config.body ? 'Body present' : 'No body',
+                headers: {
+                    ...config.headers,
+                    'Authorization': config.headers['Authorization'] ? `Bearer ${config.headers['Authorization'].substring(7, 27)}...` : 'not set'
+                },
+                body: config.body ? {
+                    present: true,
+                    length: config.body.length,
+                    preview: config.body.substring(0, 100)
+                } : 'No body',
                 baseURL: this.baseURL,
-                endpoint: endpoint
+                endpoint: endpoint,
+                timestamp: new Date().toISOString()
             });
 
             const response = await fetch(url, config);
             
-            console.log('API Response:', {
+            console.log('Extension API - Response details:', {
                 status: response.status,
                 statusText: response.statusText,
                 ok: response.ok,
-                url: response.url
+                url: response.url,
+                headers: {
+                    'content-type': response.headers.get('content-type'),
+                    'content-length': response.headers.get('content-length'),
+                    'server': response.headers.get('server')
+                },
+                timestamp: new Date().toISOString()
             });
             
             if (!response.ok) {
@@ -406,6 +420,7 @@ class API {
     async saveReference(data) {
         try {
             if (!this.authToken) {
+                console.log('Extension API - No auth token available');
                 return {
                     success: false,
                     error: '認証が必要です。ログインしてください'
@@ -413,7 +428,22 @@ class API {
             }
             
             const referencesUrl = 'https://research-vault-eight.vercel.app/api/references';
-            console.log('Saving reference to:', referencesUrl);
+            const requestData = {
+                ...data,
+                savedAt: new Date().toISOString()
+            };
+            
+            console.log('Extension API - Saving reference:', {
+                url: referencesUrl,
+                hasAuthToken: !!this.authToken,
+                tokenLength: this.authToken ? this.authToken.length : 0,
+                tokenStart: this.authToken ? this.authToken.substring(0, 20) : 'null',
+                requestData: {
+                    ...requestData,
+                    metadata: requestData.metadata ? 'present' : 'null'
+                },
+                timestamp: new Date().toISOString()
+            });
             
             const response = await fetch(referencesUrl, {
                 method: 'POST',
@@ -424,34 +454,46 @@ class API {
                     'X-Client-Info': 'chrome-extension',
                     'User-Agent': 'ResearchVault-Extension/1.0.0'
                 },
-                body: JSON.stringify({
-                    ...data,
-                    savedAt: new Date().toISOString()
-                })
+                body: JSON.stringify(requestData)
             });
             
-            console.log('Save reference response:', {
+            console.log('Extension API - Save reference response:', {
                 status: response.status,
                 statusText: response.statusText,
-                ok: response.ok
+                ok: response.ok,
+                headers: {
+                    'content-type': response.headers.get('content-type'),
+                    'content-length': response.headers.get('content-length')
+                }
             });
             
             if (response.ok) {
                 const result = await response.json();
-                console.log('Reference saved successfully:', result);
+                console.log('Extension API - Reference saved successfully:', {
+                    hasResult: !!result,
+                    resultId: result?.id,
+                    resultTitle: result?.title
+                });
                 return {
                     success: true,
                     data: result
                 };
             } else {
                 const errorText = await response.text();
-                console.log('Save reference error:', errorText);
+                console.log('Extension API - Save reference error response:', {
+                    status: response.status,
+                    errorText: errorText,
+                    errorLength: errorText ? errorText.length : 0
+                });
                 
                 let errorMessage = '';
+                let errorDetails = null;
                 try {
                     const errorData = JSON.parse(errorText);
                     errorMessage = errorData.error || '参照の保存に失敗しました';
+                    errorDetails = errorData.details;
                 } catch (parseError) {
+                    console.log('Extension API - Failed to parse error response:', parseError);
                     switch (response.status) {
                         case 401:
                             errorMessage = '認証が必要です。ログインしてください';
@@ -472,12 +514,18 @@ class API {
                 
                 return {
                     success: false,
-                    error: errorMessage
+                    error: errorMessage,
+                    details: errorDetails
                 };
             }
             
         } catch (error) {
-            console.log('saveReference failed:', error);
+            console.log('Extension API - saveReference failed:', {
+                error: error.message,
+                stack: error.stack,
+                name: error.name,
+                timestamp: new Date().toISOString()
+            });
             return {
                 success: false,
                 error: error.message || '参照の保存に失敗しました'

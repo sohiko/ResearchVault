@@ -6,12 +6,17 @@ const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1N
 
 // 環境変数の設定状況をデバッグ出力
 console.log('References API - Environment variables check:', {
-  VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT_SET',
-  SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'NOT_SET',
+  NODE_ENV: process.env.NODE_ENV,
+  VERCEL: process.env.VERCEL,
+  VERCEL_ENV: process.env.VERCEL_ENV,
+  VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? `SET (${process.env.VITE_SUPABASE_URL})` : 'NOT_SET',
+  SUPABASE_URL: process.env.SUPABASE_URL ? `SET (${process.env.SUPABASE_URL})` : 'NOT_SET',
   VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? `SET (${process.env.VITE_SUPABASE_ANON_KEY.substring(0, 20)}...)` : 'NOT_SET',
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? `SET (${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...)` : 'NOT_SET',
   finalUrl: supabaseUrl,
-  finalAnonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null'
+  finalAnonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null',
+  allEnvKeys: Object.keys(process.env).filter(key => key.includes('SUPABASE')),
+  timestamp: new Date().toISOString()
 })
 
 
@@ -28,15 +33,26 @@ export default async function handler(req, res) {
   try {
     // 認証チェック
     const authHeader = req.headers.authorization
-    console.log('Auth header:', authHeader)
+    console.log('References API - Auth header:', authHeader ? `Bearer ${authHeader.substring(7, 27)}...` : 'null')
+    console.log('References API - All headers:', {
+      authorization: req.headers.authorization ? 'present' : 'missing',
+      'x-client-info': req.headers['x-client-info'],
+      'user-agent': req.headers['user-agent'],
+      'content-type': req.headers['content-type']
+    })
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('No auth header or invalid format')
+      console.log('References API - No auth header or invalid format')
       return res.status(401).json({ error: '認証が必要です' })
     }
 
     const token = authHeader.split(' ')[1]
-    console.log('Token:', token ? `${token.substring(0, 20)}...` : 'null')
+    console.log('References API - Token info:', {
+      hasToken: !!token,
+      tokenLength: token ? token.length : 0,
+      tokenStart: token ? token.substring(0, 20) : 'null',
+      tokenEnd: token ? `...${token.substring(token.length - 10)}` : 'null'
+    })
     
     // 認証されたユーザーのSupabaseクライアントを作成
     let userId, userSupabase
@@ -44,7 +60,8 @@ export default async function handler(req, res) {
       console.log('References API - Creating user Supabase client with:', {
         url: supabaseUrl,
         anonKey: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'null',
-        tokenLength: token ? token.length : 0
+        tokenLength: token ? token.length : 0,
+        timestamp: new Date().toISOString()
       })
       
       // ユーザーのトークンでSupabaseクライアントを作成
@@ -56,6 +73,7 @@ export default async function handler(req, res) {
         }
       })
       
+      console.log('References API - Supabase client created successfully')
       console.log('References API - Setting session with token')
       
       // トークンを設定
@@ -67,8 +85,14 @@ export default async function handler(req, res) {
       console.log('References API - Session set result:', {
         success: !sessionResult.error,
         error: sessionResult.error?.message,
+        errorCode: sessionResult.error?.status,
         hasUser: !!sessionResult.data?.user,
-        hasSession: !!sessionResult.data?.session
+        hasSession: !!sessionResult.data?.session,
+        sessionData: sessionResult.data?.session ? {
+          access_token: sessionResult.data.session.access_token ? 'present' : 'missing',
+          expires_at: sessionResult.data.session.expires_at,
+          user_id: sessionResult.data.session.user?.id
+        } : null
       })
       
       // ユーザー情報を取得して認証を確認
@@ -240,7 +264,10 @@ async function handleCreateReference(req, res, userId, userSupabase) {
       updated_at: new Date().toISOString()
     }
     
-    console.log('Inserting reference data:', insertData)
+    console.log('References API - Inserting reference data:', {
+      ...insertData,
+      metadata: insertData.metadata ? 'present' : 'null'
+    })
     
     const { data: reference, error } = await userSupabase
       .from('references')
@@ -248,8 +275,27 @@ async function handleCreateReference(req, res, userId, userSupabase) {
       .select()
       .single()
 
+    console.log('References API - Insert result:', {
+      success: !error,
+      error: error ? {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      } : null,
+      hasData: !!reference
+    })
+
     if (error) {
-      console.error('Create reference error:', error)
+      console.error('References API - Create reference error:', {
+        error,
+        insertData: {
+          ...insertData,
+          metadata: insertData.metadata ? 'present' : 'null'
+        },
+        userId,
+        timestamp: new Date().toISOString()
+      })
       
       // データベース制約エラーの詳細を返す
       if (error.code === '23505') {
@@ -262,7 +308,8 @@ async function handleCreateReference(req, res, userId, userSupabase) {
       
       return res.status(500).json({ 
         error: '参照の保存に失敗しました',
-        details: error.message 
+        details: error.message,
+        code: error.code
       })
     }
     
