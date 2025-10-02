@@ -2,9 +2,12 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+// 管理者（サービスロール）クライアント: RLSをバイパスして確実に操作する
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || '');
+// 認証トークンの検証用（任意）にanonキーがあれば利用
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || ''
+const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey || supabaseServiceKey || '')
 
 export default async function handler(req, res) {
   // CORS設定
@@ -24,7 +27,7 @@ export default async function handler(req, res) {
     }
 
     const token = authHeader.split(' ')[1]
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token)
 
     if (authError || !user) {
       return res.status(401).json({ error: '無効な認証トークンです' })
@@ -51,7 +54,7 @@ async function handleGetReferences(req, res, userId) {
   try {
     const { project_id, limit = 50, offset = 0 } = req.query
 
-    let query = supabase
+    let query = supabaseAdmin
       .from('references')
       .select(`
         *,
@@ -138,7 +141,7 @@ async function handleCreateReference(req, res, userId) {
 
     // プロジェクトの存在と権限チェック
     if (projectId) {
-      const { data: project, error: projectError } = await supabase
+      const { data: project, error: projectError } = await supabaseAdmin
         .from('projects')
         .select('id, owner_id, project_members!inner(user_id)')
         .eq('id', projectId)
@@ -151,7 +154,7 @@ async function handleCreateReference(req, res, userId) {
     }
 
     // 重複チェック
-    const { data: existing, error: duplicateError } = await supabase
+    const { data: existing, error: duplicateError } = await supabaseAdmin
       .from('references')
       .select('id')
       .eq('url', url)
@@ -176,7 +179,7 @@ async function handleCreateReference(req, res, userId) {
     
     console.log('Inserting reference data:', insertData)
     
-    const { data: reference, error } = await supabase
+    const { data: reference, error } = await supabaseAdmin
       .from('references')
       .insert(insertData)
       .select()
@@ -241,7 +244,7 @@ async function addTagsToReference(referenceId, tags, userId) {
 
     try {
       // タグを取得または作成
-      const { data: tag, error: tagError } = await supabase
+      const { data: tag, error: tagError } = await supabaseAdmin
         .from('tags')
         .select('id')
         .eq('name', tagName.trim())
@@ -250,7 +253,7 @@ async function addTagsToReference(referenceId, tags, userId) {
 
       if (tagError && tagError.code === 'PGRST116') {
         // タグが存在しない場合は作成
-        const { data: _newTag, error: createError } = await supabase
+        const { data: _newTag, error: createError } = await supabaseAdmin
           .from('tags')
           .insert({
             name: tagName.trim(),
@@ -273,7 +276,7 @@ async function addTagsToReference(referenceId, tags, userId) {
       }
 
       // 参照とタグを関連付け
-      await supabase
+      await supabaseAdmin
         .from('reference_tags')
         .insert({
           reference_id: referenceId,
