@@ -225,6 +225,16 @@ class API {
                 if (data.success && data.token) {
                     this.authToken = data.token;
                     
+                    console.log('Login successful, saving session data:', {
+                        hasToken: !!data.token,
+                        hasUser: !!data.user,
+                        hasSession: !!data.session,
+                        sessionData: data.session ? {
+                            hasRefreshToken: !!data.session.refresh_token,
+                            expiresAt: data.session.expires_at
+                        } : null
+                    });
+                    
                     // トークンとセッション情報をストレージに保存
                     await chrome.storage.sync.set({ 
                         authToken: data.token,
@@ -232,6 +242,8 @@ class API {
                         sessionInfo: data.session,
                         lastLoginTime: new Date().toISOString()
                     });
+                    
+                    console.log('Session data saved to storage');
                     
                     return {
                         success: true,

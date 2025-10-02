@@ -98,18 +98,21 @@ class PopupManager {
                         console.log('Token expired, attempting refresh');
                         const refreshResult = await this.refreshToken();
                         if (!refreshResult.success) {
-                            console.log('Token refresh failed, clearing auth data');
+                            console.log('Token refresh failed, clearing auth data and showing login');
                             await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
                             this.showAuthSection();
                             this.showError('セッションが期限切れです。再度ログインしてください');
                             return;
                         }
                         // リフレッシュ成功時は新しいトークンを使用
+                        console.log('Token refresh successful, using new token');
                         await this.api.setAuthToken(refreshResult.token);
                     } else {
+                        console.log('Token still valid, using existing token');
                         await this.api.setAuthToken(authToken);
                     }
                 } else {
+                    console.log('No session info available, using token as-is');
                     await this.api.setAuthToken(authToken);
                 }
                 
@@ -488,8 +491,15 @@ class PopupManager {
 
     async refreshToken() {
         try {
+            console.log('Attempting token refresh...');
             const { sessionInfo } = await chrome.storage.sync.get(['sessionInfo']);
+            console.log('Session info for refresh:', {
+                hasSessionInfo: !!sessionInfo,
+                hasRefreshToken: !!(sessionInfo && sessionInfo.refresh_token)
+            });
+            
             if (!sessionInfo || !sessionInfo.refresh_token) {
+                console.log('No refresh token available');
                 return { success: false, error: 'リフレッシュトークンがありません' };
             }
 
