@@ -200,14 +200,20 @@ export default function Projects() {
 
   const confirmDeleteProject = async () => {
     try {
+      console.log('Attempting to delete project:', projectToDelete)
+      console.log('User ID:', user.id)
+      
       // ソフト削除（ゴミ箱に移動）
-      const { error } = await supabase
+      const { data, error, count } = await supabase
         .from('projects')
         .update({
           deleted_at: new Date().toISOString(),
           deleted_by: user.id
         })
         .eq('id', projectToDelete)
+        .select()
+
+      console.log('Delete operation result:', { data, error, count })
 
       if (error) {
         // deleted_atカラムが存在しない場合の特別なエラーハンドリング
@@ -218,11 +224,38 @@ export default function Projects() {
         throw error
       }
 
+      // データが返されない場合（RLSポリシーの問題の可能性）
+      if (!data || data.length === 0) {
+        console.warn('No data returned from delete operation - possible RLS policy issue')
+        
+        // プロジェクトが実際に更新されたか確認
+        const { data: checkData, error: checkError } = await supabase
+          .from('projects')
+          .select('id, deleted_at, deleted_by')
+          .eq('id', projectToDelete)
+          .single()
+
+        console.log('Verification check:', { checkData, checkError })
+
+        if (checkError) {
+          console.error('Verification failed:', checkError)
+        } else if (checkData && checkData.deleted_at) {
+          console.log('Project was actually deleted, RLS policy prevented return data')
+          toast.success('プロジェクトをゴミ箱に移動しました')
+        } else {
+          console.error('Project was not deleted')
+          toast.error('プロジェクトの削除に失敗しました（権限不足の可能性）')
+          return
+        }
+      } else {
+        console.log('Delete operation successful:', data)
+        toast.success('プロジェクトをゴミ箱に移動しました')
+      }
+
       await loadProjects()
-      toast.success('プロジェクトをゴミ箱に移動しました')
     } catch (error) {
       console.error('Failed to delete project:', error)
-      toast.error('プロジェクトの削除に失敗しました')
+      toast.error(`プロジェクトの削除に失敗しました: ${error.message}`)
     } finally {
       setShowConfirmDelete(false)
       setProjectToDelete(null)

@@ -163,9 +163,25 @@ END $$;
 
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update deleted projects they deleted') THEN
+    CREATE POLICY "Users can update deleted projects they deleted" ON projects
+      FOR UPDATE USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own deleted references') THEN
     CREATE POLICY "Users can view their own deleted references" ON references
       FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update deleted references they deleted') THEN
+    CREATE POLICY "Users can update deleted references they deleted" ON references
+      FOR UPDATE USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
   END IF;
 END $$;
     `
@@ -270,25 +286,31 @@ END $$;
             📋 マイグレーションSQL（クリックして表示）
           </summary>
           <pre className="bg-gray-100 p-3 rounded text-xs overflow-auto max-h-40 text-gray-800">
-{`-- ゴミ箱システムの実装
-ALTER TABLE projects 
-ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE,
-ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES auth.users(id);
+{`-- ゴミ箱システムの実装（安全版）
+-- 以下を順番に実行してください
 
-ALTER TABLE references 
-ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE,
-ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES auth.users(id);
+-- 1. カラム追加
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES auth.users(id);
+ALTER TABLE "references" ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE "references" ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES auth.users(id);
 
--- インデックス作成
+-- 2. インデックス作成
 CREATE INDEX IF NOT EXISTS idx_projects_deleted_at ON projects(deleted_at) WHERE deleted_at IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_references_deleted_at ON references(deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_references_deleted_at ON "references"(deleted_at) WHERE deleted_at IS NOT NULL;
 
--- RLSポリシー追加
+-- 3. RLSポリシー追加
 CREATE POLICY "Users can view their own deleted projects" ON projects
   FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
 
-CREATE POLICY "Users can view their own deleted references" ON references
-  FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);`}
+CREATE POLICY "Users can update deleted projects they deleted" ON projects
+  FOR UPDATE USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+
+CREATE POLICY "Users can view their own deleted references" ON "references"
+  FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+
+CREATE POLICY "Users can update deleted references they deleted" ON "references"
+  FOR UPDATE USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);`}
           </pre>
         </details>
       </div>
