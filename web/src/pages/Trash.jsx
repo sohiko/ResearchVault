@@ -69,7 +69,13 @@ export default function Trash() {
       setTrashedItems(allItems)
     } catch (error) {
       console.error('Failed to load trashed items:', error)
-      setError('ゴミ箱の読み込みに失敗しました')
+      
+      // データベースカラムが存在しない場合の特別なエラーハンドリング
+      if (error.code === '42703' && error.message.includes('deleted_by does not exist')) {
+        setError('migration_required')
+      } else {
+        setError('ゴミ箱の読み込みに失敗しました')
+      }
     } finally {
       setLoading(false)
     }
@@ -242,8 +248,64 @@ export default function Trash() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800 text-sm">{error}</p>
+        <div className={`border rounded-lg p-4 ${
+          error === 'migration_required' 
+            ? 'bg-blue-50 border-blue-200' 
+            : 'bg-red-50 border-red-200'
+        }`}>
+          {error === 'migration_required' ? (
+            <div>
+              <div className="flex items-start space-x-3">
+                <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <h4 className="text-sm font-medium text-blue-900 mb-2">
+                    データベースの更新が必要です
+                  </h4>
+                  <p className="text-sm text-blue-800 mb-3">
+                    ゴミ箱機能を使用するには、データベースマイグレーションを実行する必要があります。
+                  </p>
+                  <div className="bg-blue-100 rounded p-3 mb-3">
+                    <p className="text-xs text-blue-900 font-medium mb-2">実行手順:</p>
+                    <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                      <li>Supabaseダッシュボードにアクセス</li>
+                      <li>SQL Editorを開く</li>
+                      <li>以下のマイグレーションを実行</li>
+                    </ol>
+                  </div>
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-blue-700 hover:text-blue-900 font-medium mb-2">
+                      📋 マイグレーションSQL（クリックして表示）
+                    </summary>
+                    <pre className="bg-gray-100 p-3 rounded text-xs overflow-auto max-h-40 text-gray-800">
+{`-- ゴミ箱システムの実装
+ALTER TABLE projects 
+ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN deleted_by UUID REFERENCES auth.users(id);
+
+ALTER TABLE references 
+ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN deleted_by UUID REFERENCES auth.users(id);
+
+-- インデックス作成
+CREATE INDEX idx_projects_deleted_at ON projects(deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_references_deleted_at ON references(deleted_at) WHERE deleted_at IS NOT NULL;
+
+-- RLSポリシー追加
+CREATE POLICY "Users can view their own deleted projects" ON projects
+  FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);
+
+CREATE POLICY "Users can view their own deleted references" ON references
+  FOR SELECT USING (auth.uid() = deleted_by AND deleted_at IS NOT NULL);`}
+                    </pre>
+                  </details>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-red-800 text-sm">{error}</p>
+          )}
         </div>
       )}
 
