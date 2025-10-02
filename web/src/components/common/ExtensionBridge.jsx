@@ -28,13 +28,12 @@ const ExtensionBridge = () => {
         return
       }
       
-      if (data.type === 'RESEARCHVAULT_EXTENSION_RESPONSE' ||
-          (data.type === 'RESEARCHVAULT_EXTENSION_CHECK' && data.source === 'extension')) {
-        setExtensionInstalled(true)
-        setConnectionStatus('connected')
-        window.removeEventListener('message', messageHandler)
-        console.log('Extension found via DOM messaging')
-      }
+          if (data.type === 'RESEARCHVAULT_EXTENSION_RESPONSE' ||
+              (data.type === 'RESEARCHVAULT_EXTENSION_CHECK' && data.source === 'extension')) {
+            setExtensionInstalled(true)
+            setConnectionStatus('connected')
+            window.removeEventListener('message', messageHandler)
+          }
     }
 
     window.addEventListener('message', messageHandler)
@@ -48,20 +47,18 @@ const ExtensionBridge = () => {
           document.querySelector('meta[name*="researchvault"]') ||
           document.querySelector('link[href*="researchvault"]')
         
-        if (hasExtensionElements) {
-          setExtensionInstalled(true)
-          setConnectionStatus('connected')
-          window.removeEventListener('message', messageHandler)
-          console.log('Extension found via DOM elements')
-          return
-        }
+            if (hasExtensionElements) {
+              setExtensionInstalled(true)
+              setConnectionStatus('connected')
+              window.removeEventListener('message', messageHandler)
+              return
+            }
 
         // 方法5: その他のグローバル変数をチェック
         if (window.ResearchVault || window.researchVaultExtension) {
           setExtensionInstalled(true)
           setConnectionStatus('connected')
           window.removeEventListener('message', messageHandler)
-          console.log('Extension found via alternative global variables')
           return
         }
       } catch (additionalError) {
@@ -95,7 +92,6 @@ const ExtensionBridge = () => {
       if (window.ResearchVaultExtension && typeof window.ResearchVaultExtension === 'object') {
         setExtensionInstalled(true)
         setConnectionStatus('connected')
-        console.log('Extension found via global object')
         return
       }
 
@@ -113,7 +109,6 @@ const ExtensionBridge = () => {
             } else {
               setExtensionInstalled(true)
               setConnectionStatus('connected')
-              console.log('Extension found via Chrome API')
             }
           }
         )
@@ -160,7 +155,7 @@ const ExtensionBridge = () => {
               // フォールバック: DOM経由
               syncViaDOM(authData)
             } else {
-              console.log('Auth synced with extension via API')
+              // 認証同期成功（通知なし）
             }
           }
         )
@@ -187,7 +182,7 @@ const ExtensionBridge = () => {
     document.head.appendChild(script)
     document.head.removeChild(script)
     
-    console.log('Auth synced with extension via DOM')
+    // DOM経由での認証同期（通知なし）
   }, [])
 
   // 初期化効果
@@ -195,12 +190,12 @@ const ExtensionBridge = () => {
     checkExtensionInstallation()
   }, []) // 空の依存配列で循環依存を回避
 
-  // 認証同期効果
+  // 認証同期効果（拡張機能が実際に検出された時のみ）
   useEffect(() => {
-    if (session && extensionInstalled) {
+    if (session && extensionInstalled && connectionStatus === 'connected') {
       syncAuthToken()
     }
-  }, [session, extensionInstalled]) // syncAuthTokenを依存配列から削除
+  }, [session, extensionInstalled, connectionStatus]) // 接続状態も確認
 
   const installExtension = () => {
     window.open('https://chrome.google.com/webstore/detail/researchvault/extension-id', '_blank')
@@ -216,8 +211,8 @@ const ExtensionBridge = () => {
                      window.location.hostname === '127.0.0.1' ||
                      window.location.hostname.includes('localhost')
 
-  // 環境判定を使用（ESLint警告を回避）
-  console.log('Current environment:', isLocalhost ? 'localhost' : 'production')
+  // 環境判定（ESLint警告を回避するため使用）
+  const environment = isLocalhost ? 'localhost' : 'production'
 
   // チェック中は何も表示しない
   if (connectionStatus === 'checking') {
