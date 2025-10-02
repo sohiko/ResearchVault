@@ -157,8 +157,10 @@ export default function ProjectDetail() {
   }, [loadProject, loadReferences, loadMembers])
 
   useEffect(() => {
-    loadProjectData()
-  }, [loadProjectData])
+    if (user && id) {
+      loadProjectData()
+    }
+  }, [user, id, loadProjectData])
 
   const handleAddReference = async (referenceData) => {
     try {

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { dbHelpers } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import ExtensionBridge from '../components/common/ExtensionBridge'
+import { usePageFocus } from '../hooks/usePageFocus'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -32,9 +33,10 @@ export default function Dashboard() {
     }
   }, [user])
 
-  useEffect(() => {
-    loadDashboardData()
-  }, [loadDashboardData])
+  // ページフォーカス時の不要なリロードを防ぐ
+  usePageFocus(loadDashboardData, [user?.id], {
+    enableFocusReload: false // フォーカス時のリロードは無効
+  })
 
   if (loading) {
     return (

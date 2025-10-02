@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import { usePageFocus } from '../hooks/usePageFocus'
 
 export default function Account() {
   const { user, signOut } = useAuth()
@@ -30,13 +31,8 @@ export default function Account() {
     bookmarks: 0
   })
 
-  useEffect(() => {
-    if (user) {
-      loadAccountData()
-    }
-  }, [user, loadAccountData])
-
   const loadAccountData = useCallback(async () => {
+    if (!user) return
     try {
       setLoading(true)
       
@@ -79,6 +75,11 @@ export default function Account() {
       setLoading(false)
     }
   }, [user])
+
+  // ページフォーカス時の不要なリロードを防ぐ
+  usePageFocus(loadAccountData, [user?.id], {
+    enableFocusReload: false // フォーカス時のリロードは無効
+  })
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault()

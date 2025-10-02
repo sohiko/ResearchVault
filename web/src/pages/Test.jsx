@@ -78,8 +78,10 @@ export default function Test() {
   }, [user])
 
   useEffect(() => {
-    runTests()
-  }, [runTests])
+    if (user) {
+      runTests()
+    }
+  }, [user, runTests])
 
   return (
     <div className="space-y-6">

@@ -49,20 +49,54 @@ export default async function handler(req, res) {
 
 async function handleGetProjects(req, res, userId) {
   try {
-    const { data: projects, error } = await supabase
+    // 所有プロジェクトを取得
+    const { data: ownedProjects, error: ownedError } = await supabase
       .from('projects')
       .select(`
         *,
-        project_members!inner(role),
         references(id)
       `)
-      .or(`owner_id.eq.${userId},project_members.user_id.eq.${userId}`)
+      .eq('owner_id', userId)
       .order('updated_at', { ascending: false })
 
-    if (error) {
-      console.error('Get projects error:', error)
+    if (ownedError) {
+      console.error('Get owned projects error:', ownedError)
       return res.status(500).json({ error: 'プロジェクトの取得に失敗しました' })
     }
+
+    // メンバープロジェクトを取得
+    const { data: memberProjects, error: memberError } = await supabase
+      .from('project_members')
+      .select(`
+        role,
+        projects(
+          *,
+          references(id)
+        )
+      `)
+      .eq('user_id', userId)
+
+    if (memberError) {
+      console.error('Get member projects error:', memberError)
+      return res.status(500).json({ error: 'プロジェクトの取得に失敗しました' })
+    }
+
+    // データを統合
+    const allProjects = [
+      ...(ownedProjects || []).map(project => ({
+        ...project,
+        role: 'admin'
+      })),
+      ...(memberProjects || []).map(member => ({
+        ...member.projects,
+        role: member.role
+      }))
+    ]
+
+    // 重複を排除
+    const projects = allProjects.filter((project, index, self) => 
+      index === self.findIndex(p => p.id === project.id)
+    )
 
     // 参照数を計算してレスポンス用に整形
     const formattedProjects = projects.map(project => ({
@@ -75,7 +109,7 @@ async function handleGetProjects(req, res, userId) {
       createdAt: project.created_at,
       updatedAt: project.updated_at,
       referenceCount: project.references?.length || 0,
-      role: project.project_members?.[0]?.role || 'owner'
+      role: project.role
     }))
 
     return res.status(200).json(formattedProjects)
@@ -123,7 +157,7 @@ async function handleCreateProject(req, res, userId) {
       .insert({
         project_id: project.id,
         user_id: userId,
-        role: 'owner',
+        role: 'admin',  // 制約で許可されている値
         joined_at: new Date().toISOString()
       })
 
@@ -141,7 +175,7 @@ async function handleCreateProject(req, res, userId) {
       createdAt: project.created_at,
       updatedAt: project.updated_at,
       referenceCount: 0,
-      role: 'owner'
+      role: 'admin'
     }
 
     return res.status(201).json(formattedProject)

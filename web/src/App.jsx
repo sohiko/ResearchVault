@@ -4,6 +4,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ThemeProvider } from './hooks/useTheme'
 import { ProjectProvider } from './hooks/useProjects'
+import { handleComponentError } from './utils/errorHandler'
 
 // レイアウトコンポーネント
 import Layout from './components/layout/Layout'
@@ -28,6 +29,7 @@ import Candidates from './pages/Candidates'
 import Trash from './pages/Trash'
 import Feedback from './pages/Feedback'
 import Test from './pages/Test'
+import DatabaseTest from './pages/DatabaseTest'
 
 // プロテクトされたルートコンポーネント
 function ProtectedRoute({ children }) {
@@ -71,6 +73,54 @@ function PublicRoute({ children }) {
   }
 
   return children
+}
+
+// エラーバウンダリコンポーネント
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error, errorInfo) {
+    handleComponentError(error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-red-50">
+          <div className="text-center max-w-md mx-auto p-6">
+            <div className="mb-6">
+              <img 
+                src="../favicon/android-chrome-192x192.png" 
+                alt="ResearchVault" 
+                className="w-16 h-16 mx-auto"
+              />
+            </div>
+            <h1 className="text-2xl font-bold text-red-900 mb-2">
+              申し訳ございません
+            </h1>
+            <p className="text-red-700 mb-6">
+              ResearchVaultでエラーが発生しました
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-md font-medium"
+            >
+              もう一度試す
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
 }
 
 // メインAppコンポーネント
@@ -126,11 +176,12 @@ function App() {
   }
 
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <div className="App">
-          <SpeedInsights />
-          <Routes>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <div className="App">
+            <SpeedInsights />
+            <Routes>
             {/* 認証関連のルート */}
             <Route
               path="/auth/login"
@@ -205,6 +256,7 @@ function App() {
                         <Route path="/trash" element={<Trash />} />
                         <Route path="/feedback" element={<Feedback />} />
                         <Route path="/test" element={<Test />} />
+                        <Route path="/database-test" element={<DatabaseTest />} />
                         
                         {/* ルートパスはダッシュボードにリダイレクト */}
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -217,10 +269,11 @@ function App() {
                 </ProtectedRoute>
               }
             />
-          </Routes>
-        </div>
-      </AuthProvider>
-    </ThemeProvider>
+            </Routes>
+          </div>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

@@ -28,7 +28,8 @@ export function ProjectProvider({ children }) {
 
   // プロジェクト一覧の取得
   const fetchProjects = useCallback(async () => {
-    if (!user) {
+    const userId = user?.id
+    if (!userId) {
       setProjects([])
       setLoading(false)
       return
@@ -45,7 +46,7 @@ export function ProjectProvider({ children }) {
           references(id),
           owner:profiles!owner_id(name, email)
         `)
-        .eq('owner_id', user.id)
+        .eq('owner_id', userId)
         .order('updated_at', { ascending: false })
 
       if (ownedError) {throw ownedError}
@@ -68,7 +69,7 @@ export function ProjectProvider({ children }) {
             )
           )
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
 
       if (memberError) {throw memberError}
 
@@ -116,7 +117,7 @@ export function ProjectProvider({ children }) {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user?.id]) // user.idのみに依存
 
   // 初期データの読み込み
   useEffect(() => {
@@ -125,7 +126,7 @@ export function ProjectProvider({ children }) {
 
   // リアルタイム購読の設定
   useEffect(() => {
-    if (!user) {return}
+    if (!user?.id) {return}
 
     // プロジェクトの変更を監視
     const projectSubscription = supabase
@@ -151,11 +152,11 @@ export function ProjectProvider({ children }) {
     setSubscription(projectSubscription)
 
     return () => {
-      if (subscription) {
-        supabase.removeChannel(subscription)
+      if (projectSubscription) {
+        supabase.removeChannel(projectSubscription)
       }
     }
-  }, [user, fetchProjects, subscription])
+  }, [user?.id, fetchProjects])
 
   // プロジェクトの作成
   const createProject = async (projectData) => {

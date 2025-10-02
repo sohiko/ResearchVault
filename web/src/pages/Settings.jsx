@@ -19,13 +19,8 @@ export default function Settings() {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
 
-  useEffect(() => {
-    if (user) {
-      loadSettings()
-    }
-  }, [user, loadSettings])
-
   const loadSettings = useCallback(async () => {
+    if (!user) return
     try {
       setLoading(true)
       
@@ -54,6 +49,12 @@ export default function Settings() {
       setLoading(false)
     }
   }, [user, settings])
+
+  useEffect(() => {
+    if (user) {
+      loadSettings()
+    }
+  }, [user, loadSettings])
 
   const saveSettings = async () => {
     try {

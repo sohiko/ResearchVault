@@ -53,7 +53,6 @@ export function AuthProvider({ children }) {
     // 認証状態の変更を監視
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email)
         
         if (mounted) {
           setSession(session)
@@ -64,7 +63,7 @@ export function AuthProvider({ children }) {
         // イベントに応じた処理
         switch (event) {
           case 'SIGNED_IN':
-            toast.success('ログインしました')
+            // ログイン成功時のメッセージは表示しない
             break
           case 'SIGNED_OUT':
             toast.success('ログアウトしました')

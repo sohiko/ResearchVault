@@ -28,7 +28,7 @@ export default function Citations() {
         supabase
           .from('projects')
           .select('id, name, color, icon')
-          .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
+          .eq('owner_id', user.id)
           .order('name'),
         supabase
           .from('citation_settings')
@@ -78,8 +78,10 @@ export default function Citations() {
   }, [selectedProject, user])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    if (user) {
+      loadData()
+    }
+  }, [user, loadData])
 
   useEffect(() => {
     if (selectedProject) {

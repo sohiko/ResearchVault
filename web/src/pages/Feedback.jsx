@@ -13,13 +13,8 @@ export default function Feedback() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (user) {
-      loadFeedbacks()
-    }
-  }, [user, loadFeedbacks])
-
   const loadFeedbacks = useCallback(async () => {
+    if (!user) return
     try {
       setLoading(true)
       
@@ -68,6 +63,12 @@ export default function Feedback() {
       setLoading(false)
     }
   }, [user])
+
+  useEffect(() => {
+    if (user) {
+      loadFeedbacks()
+    }
+  }, [user, loadFeedbacks])
 
   const submitFeedback = async (feedbackData) => {
     try {

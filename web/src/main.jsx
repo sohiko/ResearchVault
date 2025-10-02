@@ -263,6 +263,8 @@ URL: ${window.location.href}
 // アプリケーションの初期化
 function initializeApp() {
   // サービスワーカーの登録（プロダクション環境のみ）
+  // 一時的に無効化 - sw.jsファイルが存在しないため
+  /*
   if ('serviceWorker' in navigator && import.meta.env.PROD) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js')
@@ -274,6 +276,7 @@ function initializeApp() {
         })
     })
   }
+  */
 
   // パフォーマンス測定
   if (import.meta.env.DEV) {

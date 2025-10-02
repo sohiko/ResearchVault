@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import { usePageFocus } from '../hooks/usePageFocus'
 
 export default function References() {
   const { user } = useAuth()
@@ -82,7 +83,7 @@ export default function References() {
         supabase
           .from('projects')
           .select('id, name, color, icon')
-          .or(`owner_id.eq.${user.id},project_members.user_id.eq.${user.id}`)
+          .eq('owner_id', user.id)
           .order('name'),
         loadReferences()
       ])
@@ -101,9 +102,10 @@ export default function References() {
     }
   }, [user, loadReferences])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  // ページフォーカス時の不要なリロードを防ぐ
+  usePageFocus(loadData, [user?.id], {
+    enableFocusReload: false // フォーカス時のリロードは無効
+  })
 
   const handleAddReference = async (referenceData) => {
     try {

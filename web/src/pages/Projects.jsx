@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import { usePageFocus } from '../hooks/usePageFocus'
 
 export default function Projects() {
   const { user } = useAuth()
@@ -83,9 +84,10 @@ export default function Projects() {
     }
   }, [user])
 
-  useEffect(() => {
-    loadProjects()
-  }, [loadProjects])
+  // ページフォーカス時の不要なリロードを防ぐ
+  usePageFocus(loadProjects, [user?.id], {
+    enableFocusReload: false // フォーカス時のリロードは無効
+  })
 
   const handleCreateProject = async (projectData) => {
     try {
@@ -114,7 +116,7 @@ export default function Projects() {
         .insert({
           project_id: project.id,
           user_id: user.id,
-          role: 'owner'
+          role: 'admin'
         })
 
       if (memberError) {

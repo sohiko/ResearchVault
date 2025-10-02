@@ -76,7 +76,6 @@ export const authStateManager = {
 
 // 認証状態の変更を監視
 supabase.auth.onAuthStateChange(async (event, session) => {
-  console.log('Auth state changed:', event, session?.user?.email)
   try {
     await authStateManager.notify(session, event)
   } catch (error) {
@@ -349,7 +348,7 @@ export const dbHelpers = {
         supabase
           .from('projects')
           .select('id', { count: 'exact' })
-          .or(`owner_id.eq.${userId},project_members.user_id.eq.${userId}`),
+          .eq('owner_id', userId),
         supabase
           .from('references')
           .select('id', { count: 'exact' })

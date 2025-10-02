@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
+import { usePageFocus } from '../hooks/usePageFocus'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function Trash() {
@@ -16,13 +17,8 @@ export default function Trash() {
   const [showConfirmEmptyTrash, setShowConfirmEmptyTrash] = useState(false)
   const [itemToDelete, setItemToDelete] = useState(null)
 
-  useEffect(() => {
-    if (user) {
-      loadTrashedItems()
-    }
-  }, [user, loadTrashedItems])
-
   const loadTrashedItems = useCallback(async () => {
+    if (!user) return
     try {
       setLoading(true)
       setError(null)
@@ -70,6 +66,11 @@ export default function Trash() {
       setLoading(false)
     }
   }, [user])
+
+  // ページフォーカス時の不要なリロードを防ぐ
+  usePageFocus(loadTrashedItems, [user?.id], {
+    enableFocusReload: false // フォーカス時のリロードは無効
+  })
 
   const restoreItem = async (item) => {
     try {

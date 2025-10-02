@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
+import { usePageFocus } from '../hooks/usePageFocus'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function Candidates() {
@@ -15,13 +16,9 @@ export default function Candidates() {
   const [error, setError] = useState(null)
   const [showConfirmDismissAll, setShowConfirmDismissAll] = useState(false)
 
-  useEffect(() => {
-    if (user) {
-      loadData()
-    }
-  }, [user, loadData])
-
   const loadData = useCallback(async () => {
+    if (!user) return
+    
     try {
       setLoading(true)
       
@@ -39,44 +36,62 @@ export default function Candidates() {
       setProjects(projectsData || [])
 
       // 実際の記録漏れ候補データを取得
-      const { data: candidatesData, error: candidatesError } = await supabase
-        .from('browsing_history_candidates')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('dismissed', false)
-        .order('visited_at', { ascending: false })
-        .limit(20)
+      try {
+        const { data: candidatesData, error: candidatesError } = await supabase
+          .from('browsing_history_candidates')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('dismissed', false)
+          .order('visited_at', { ascending: false })
+          .limit(20)
 
-      if (candidatesError) {
-        console.error('Failed to load candidates:', candidatesError)
-        // フォールバック: サンプルデータを表示
+        if (candidatesError) {
+          console.warn('Candidates table not available:', candidatesError)
+          // フォールバック: サンプルデータを表示
+          const fallbackCandidates = [
+            {
+              id: 'fallback_1',
+              url: 'https://scholar.google.com/scholar?q=climate+change+research',
+              title: 'Climate Change Research - Google Scholar',
+              visitedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+              favicon: 'https://scholar.google.com/favicon.ico',
+              reason: '学術検索サイトへのアクセス',
+              confidence: 0.9,
+              isAcademic: true
+            }
+          ]
+          setCandidates(fallbackCandidates)
+        } else {
+          // データ形式を統一
+          const formattedCandidates = (candidatesData || []).map(candidate => ({
+            id: candidate.id,
+            url: candidate.url,
+            title: candidate.title,
+            visitedAt: candidate.visited_at,
+            favicon: candidate.favicon,
+            reason: candidate.suggested_reason,
+            confidence: candidate.confidence_score,
+            isAcademic: candidate.is_academic,
+            visitCount: candidate.visit_count
+          }))
+          setCandidates(formattedCandidates)
+        }
+      } catch (tableError) {
+        console.warn('Candidates table access failed:', tableError)
+        // テーブルが存在しない場合のフォールバック
         const fallbackCandidates = [
           {
             id: 'fallback_1',
             url: 'https://scholar.google.com/scholar?q=climate+change+research',
             title: 'Climate Change Research - Google Scholar',
-            visited_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+            visitedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
             favicon: 'https://scholar.google.com/favicon.ico',
-            suggested_reason: '学術検索サイトへのアクセス',
-            confidence_score: 0.9,
-            is_academic: true
+            reason: '学術検索サイトへのアクセス',
+            confidence: 0.9,
+            isAcademic: true
           }
         ]
         setCandidates(fallbackCandidates)
-      } else {
-        // データ形式を統一
-        const formattedCandidates = (candidatesData || []).map(candidate => ({
-          id: candidate.id,
-          url: candidate.url,
-          title: candidate.title,
-          visitedAt: candidate.visited_at,
-          favicon: candidate.favicon,
-          reason: candidate.suggested_reason,
-          confidence: candidate.confidence_score,
-          isAcademic: candidate.is_academic,
-          visitCount: candidate.visit_count
-        }))
-        setCandidates(formattedCandidates)
       }
     } catch (error) {
       console.error('Failed to load data:', error)
@@ -85,6 +100,11 @@ export default function Candidates() {
       setLoading(false)
     }
   }, [user])
+
+  // ページフォーカス時の不要なリロードを防ぐ
+  usePageFocus(loadData, [user?.id], {
+    enableFocusReload: false // フォーカス時のリロードは無効
+  })
 
   const saveCandidate = async (candidate, projectId) => {
     try {
@@ -126,6 +146,13 @@ export default function Candidates() {
 
   const dismissCandidate = async (candidateId) => {
     try {
+      // フォールバックデータの場合は直接UIから削除
+      if (candidateId.startsWith('fallback_')) {
+        setCandidates(prev => prev.filter(c => c.id !== candidateId))
+        toast.success('候補を削除しました')
+        return
+      }
+
       // データベースで候補を却下としてマーク
       const { error } = await supabase
         .from('browsing_history_candidates')
@@ -157,22 +184,36 @@ export default function Candidates() {
 
   const confirmDismissAll = async () => {
     try {
-      // すべての表示中の候補を却下
-      const candidateIds = candidates.map(c => c.id)
+      // フォールバックデータのみの場合は直接UIから削除
+      const hasRealCandidates = candidates.some(c => !c.id.startsWith('fallback_'))
       
-      const { error } = await supabase
-        .from('browsing_history_candidates')
-        .update({
-          dismissed: true,
-          dismissed_at: new Date().toISOString()
-        })
-        .in('id', candidateIds)
-        .eq('user_id', user.id)
-
-      if (error) {
-        console.error('Failed to dismiss all candidates:', error)
-        toast.error('すべての候補の削除に失敗しました')
+      if (!hasRealCandidates) {
+        setCandidates([])
+        setShowConfirmDismissAll(false)
+        toast.success('すべての候補を削除しました')
         return
+      }
+
+      // 実際のデータベースの候補を却下
+      const realCandidateIds = candidates
+        .filter(c => !c.id.startsWith('fallback_'))
+        .map(c => c.id)
+      
+      if (realCandidateIds.length > 0) {
+        const { error } = await supabase
+          .from('browsing_history_candidates')
+          .update({
+            dismissed: true,
+            dismissed_at: new Date().toISOString()
+          })
+          .in('id', realCandidateIds)
+          .eq('user_id', user.id)
+
+        if (error) {
+          console.error('Failed to dismiss all candidates:', error)
+          toast.error('すべての候補の削除に失敗しました')
+          return
+        }
       }
 
       setCandidates([])
