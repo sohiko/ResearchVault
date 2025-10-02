@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
@@ -90,12 +89,7 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
               </span>
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-1 line-clamp-2">
-              <Link
-                to={`/references/${reference.id}`}
-                className="hover:text-primary-600 transition-colors"
-              >
-                {reference.title}
-              </Link>
+              {reference.title}
             </h3>
           </div>
           
@@ -231,33 +225,24 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
         )}
 
         {/* フッター */}
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-          <div className="flex items-center gap-4 text-sm text-gray-500">
-            <span>保存: {formatDate(reference.saved_at)}</span>
-            {reference.textCount > 0 && (
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                {reference.textCount}
-              </span>
-            )}
-            {reference.bookmarkCount > 0 && (
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
-                {reference.bookmarkCount}
-              </span>
-            )}
-          </div>
-          
-          <Link
-            to={`/references/${reference.id}`}
-            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-          >
-            詳細を見る
-          </Link>
+        <div className="flex items-center gap-4 text-sm text-gray-500 pt-3 border-t border-gray-100">
+          <span>保存: {formatDate(reference.saved_at)}</span>
+          {reference.textCount > 0 && (
+            <span className="flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {reference.textCount}
+            </span>
+          )}
+          {reference.bookmarkCount > 0 && (
+            <span className="flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+              {reference.bookmarkCount}
+            </span>
+          )}
         </div>
       </div>
 

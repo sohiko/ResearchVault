@@ -1,8 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { format } from 'date-fns'
-import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import ReferenceCard from '../components/common/ReferenceCard'
