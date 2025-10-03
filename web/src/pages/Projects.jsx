@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
@@ -6,9 +7,11 @@ import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import { usePageFocus } from '../hooks/usePageFocus'
+import { renderProjectIcon, getAvailableLucideIcons, getAvailableEmojiIcons } from '../utils/iconRenderer.jsx'
 
 export default function Projects() {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -166,6 +169,23 @@ export default function Projects() {
     enableFocusReload: false // フォーカス時のリロードは無効
   })
 
+  // URLパラメータの処理
+  useEffect(() => {
+    const action = searchParams.get('action')
+    if (action === 'create') {
+      setShowCreateModal(true)
+    }
+  }, [searchParams])
+
+  // モーダルを閉じる際にURLパラメータをクリア
+  const handleCloseCreateModal = () => {
+    setShowCreateModal(false)
+    // URLパラメータからactionを削除
+    const newSearchParams = new URLSearchParams(searchParams)
+    newSearchParams.delete('action')
+    setSearchParams(newSearchParams, { replace: true })
+  }
+
   const handleCreateProject = async (projectData) => {
     try {
       setCreateLoading(true)
@@ -177,7 +197,8 @@ export default function Projects() {
           name: projectData.name.trim(),
           description: projectData.description?.trim() || '',
           color: projectData.color || '#3B82F6',
-          icon: projectData.icon || '📂',
+          icon: projectData.icon || 'Folder',
+          icon_type: projectData.iconType || 'lucide',
           owner_id: user.id
         })
         .select()
@@ -202,7 +223,7 @@ export default function Projects() {
 
       // プロジェクトリストを更新
       await loadProjects()
-      setShowCreateModal(false)
+      handleCloseCreateModal()
     } catch (error) {
       console.error('Failed to create project:', error)
       setError('プロジェクトの作成に失敗しました')
@@ -364,7 +385,7 @@ export default function Projects() {
 
       {showCreateModal && (
         <CreateProjectModal
-          onClose={() => setShowCreateModal(false)}
+          onClose={handleCloseCreateModal}
           onCreate={handleCreateProject}
           loading={createLoading}
         />
@@ -395,7 +416,7 @@ function ProjectCard({ project, onDelete }) {
               className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-medium"
               style={{ backgroundColor: project.color }}
             >
-              {project.icon || '📂'}
+              {renderProjectIcon(project.icon, project.icon_type, 'w-5 h-5')}
             </div>
             <div>
               <h3 className="text-lg font-semibold text-secondary-900 dark:text-secondary-100">
@@ -453,20 +474,49 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
     name: '',
     description: '',
     color: '#3B82F6',
-    icon: '📂'
+    icon: 'Folder',
+    iconType: 'lucide' // 'lucide' or 'emoji'
   })
+  const [iconSearchQuery, setIconSearchQuery] = useState('')
+  const [showAllIcons, setShowAllIcons] = useState(false)
 
-  const projectIcons = ['📂', '📚', '🔬', '📊', '🎯', '🔍', '📝', '💡', '🧪', '📋']
+  // アイコンデータを取得
+  const lucideIcons = getAvailableLucideIcons()
+  const emojiIcons = getAvailableEmojiIcons()
+
   const projectColors = [
     '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
-    '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'
+    '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',
+    '#F97316', '#6366F1', '#14B8A6', '#F59E0B'
   ]
+
+  // アイコン検索フィルタリング
+  const filteredLucideIcons = lucideIcons.filter(icon =>
+    icon.label.toLowerCase().includes(iconSearchQuery.toLowerCase()) ||
+    icon.name.toLowerCase().includes(iconSearchQuery.toLowerCase())
+  )
+
+  const filteredEmojiIcons = emojiIcons.filter(icon =>
+    icon.label.toLowerCase().includes(iconSearchQuery.toLowerCase())
+  )
+
+  // 表示するアイコン数を制限
+  const displayedLucideIcons = showAllIcons ? filteredLucideIcons : filteredLucideIcons.slice(0, 12)
+  const displayedEmojiIcons = showAllIcons ? filteredEmojiIcons : filteredEmojiIcons.slice(0, 12)
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (formData.name.trim()) {
-      onCreate(formData)
+      onCreate({
+        ...formData,
+        // Lucideアイコンの場合は名前を保存、絵文字の場合はそのまま保存
+        icon: formData.iconType === 'lucide' ? formData.icon : formData.icon
+      })
     }
+  }
+
+  const renderIcon = (iconName, iconType, size = 'w-5 h-5') => {
+    return renderProjectIcon(iconName, iconType, size)
   }
 
   return (
@@ -525,19 +575,98 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
               <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
                 アイコン
               </label>
-              <div className="grid grid-cols-5 gap-2">
-                {projectIcons.map((icon) => (
-                  <button
-                    key={icon}
-                    type="button"
-                    className={`p-2 text-lg border rounded-lg hover:bg-gray-50 ${
-                      formData.icon === icon ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
-                    }`}
-                    onClick={() => setFormData({ ...formData, icon })}
-                  >
-                    {icon}
-                  </button>
-                ))}
+              
+              {/* アイコンタイプ選択 */}
+              <div className="flex space-x-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, iconType: 'lucide', icon: 'Folder' })}
+                  className={`px-3 py-1 text-sm rounded-md ${
+                    formData.iconType === 'lucide' 
+                      ? 'bg-primary-100 text-primary-800 border border-primary-300' 
+                      : 'bg-gray-100 text-gray-600 border border-gray-300'
+                  }`}
+                >
+                  アイコン
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, iconType: 'emoji', icon: '📂' })}
+                  className={`px-3 py-1 text-sm rounded-md ${
+                    formData.iconType === 'emoji' 
+                      ? 'bg-primary-100 text-primary-800 border border-primary-300' 
+                      : 'bg-gray-100 text-gray-600 border border-gray-300'
+                  }`}
+                >
+                  絵文字
+                </button>
+              </div>
+
+              {/* アイコン検索 */}
+              <div className="mb-3">
+                <input
+                  type="text"
+                  placeholder="アイコンを検索..."
+                  value={iconSearchQuery}
+                  onChange={(e) => setIconSearchQuery(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+
+              {/* アイコン選択グリッド */}
+              <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                {formData.iconType === 'lucide' ? (
+                  displayedLucideIcons.map((iconData) => (
+                    <button
+                      key={iconData.name}
+                      type="button"
+                      title={iconData.label}
+                      className={`p-2 border rounded-lg hover:bg-gray-50 flex items-center justify-center ${
+                        formData.icon === iconData.name ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
+                      }`}
+                      onClick={() => setFormData({ ...formData, icon: iconData.name })}
+                    >
+                      <iconData.component className="w-5 h-5" />
+                    </button>
+                  ))
+                ) : (
+                  displayedEmojiIcons.map((iconData) => (
+                    <button
+                      key={iconData.name}
+                      type="button"
+                      title={iconData.label}
+                      className={`p-2 text-lg border rounded-lg hover:bg-gray-50 ${
+                        formData.icon === iconData.name ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
+                      }`}
+                      onClick={() => setFormData({ ...formData, icon: iconData.name })}
+                    >
+                      {iconData.name}
+                    </button>
+                  ))
+                )}
+              </div>
+
+              {/* もっと見るボタン */}
+              {((formData.iconType === 'lucide' && filteredLucideIcons.length > 12) ||
+                (formData.iconType === 'emoji' && filteredEmojiIcons.length > 12)) && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllIcons(!showAllIcons)}
+                  className="mt-2 text-sm text-primary-600 hover:text-primary-700"
+                >
+                  {showAllIcons ? '少なく表示' : 'もっと見る'}
+                </button>
+              )}
+
+              {/* 選択中のアイコンプレビュー */}
+              <div className="mt-3 flex items-center space-x-2">
+                <span className="text-sm text-gray-600">選択中:</span>
+                <div 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+                  style={{ backgroundColor: formData.color }}
+                >
+                  {renderIcon(formData.icon, formData.iconType)}
+                </div>
               </div>
             </div>
 
@@ -545,17 +674,23 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
               <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
                 カラー
               </label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-6 gap-2">
                 {projectColors.map((color) => (
                   <button
                     key={color}
                     type="button"
-                    className={`w-8 h-8 rounded-lg border-2 ${
-                      formData.color === color ? 'border-gray-400' : 'border-gray-200'
+                    className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center ${
+                      formData.color === color ? 'border-gray-800' : 'border-gray-200 hover:border-gray-300'
                     }`}
                     style={{ backgroundColor: color }}
                     onClick={() => setFormData({ ...formData, color })}
-                  />
+                  >
+                    {formData.color === color && (
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
                 ))}
               </div>
             </div>
