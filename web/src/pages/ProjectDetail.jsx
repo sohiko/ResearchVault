@@ -219,10 +219,9 @@ export default function ProjectDetail() {
     }
   }, [loadProject, loadReferences, loadMembers, loadCitationSettings])
 
-  // ページフォーカス時の自動リロードを制御
-  usePageFocus(loadProjectData, [id, user?.id], {
-    enableFocusReload: false, // フォーカス時のリロードは無効
-    skipWhenModalOpen: true   // モーダルが開いている時はスキップ
+  // ページフォーカス時の自動リロードを無効化（モーダルがあるページなので完全に無効）
+  usePageFocus(() => {}, [], {
+    enableFocusReload: false
   })
 
   useEffect(() => {

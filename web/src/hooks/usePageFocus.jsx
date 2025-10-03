@@ -85,13 +85,13 @@ export function usePageFocus(callback, deps = [], options = {}) {
     }
   }, [enableFocusReload, debounceMs, hasOpenModals, skipWhenModalOpen])
 
-  // 依存配列が変更された場合のみコールバックを実行（モーダルが開いていない場合のみ）
+  // 依存配列が変更された場合のみコールバックを実行（初回のみ、モーダル状態は除外）
   useEffect(() => {
-    if ((!skipWhenModalOpen || !hasOpenModals) && callbackRef.current) {
+    if (callbackRef.current) {
       callbackRef.current()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, hasOpenModals, skipWhenModalOpen])
+  }, [...deps])
 }
 
 export default usePageFocus
