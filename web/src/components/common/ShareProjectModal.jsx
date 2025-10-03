@@ -19,7 +19,13 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
   // モーダルを開いた状態として登録
   useEffect(() => {
     openModal(modalId)
-  }, [openModal])
+    
+    // クリーンアップ関数でモーダル状態をクリア
+    return () => {
+      // モーダルが閉じられる時は既にProtectedModalでクリアされるため、
+      // ここでは何もしない（重複クリアを避ける）
+    }
+  }, [openModal, modalId])
 
   // 未保存の変更があるかチェック（招待フォームに入力がある場合）
   const hasUnsavedChanges = inviteEmail.trim() !== ''

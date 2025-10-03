@@ -13,7 +13,9 @@ export const useModalDataPersistence = (modalId, data, setData) => {
 
   // データを自動保存
   const saveData = useCallback(() => {
-    if (!data || Object.keys(data).length === 0) return
+    if (!data || Object.keys(data).length === 0) {
+      return
+    }
     
     try {
       const savePayload = {
@@ -33,7 +35,9 @@ export const useModalDataPersistence = (modalId, data, setData) => {
   const restoreData = useCallback(() => {
     try {
       const saved = sessionStorage.getItem(storageKey)
-      if (!saved) return false
+      if (!saved) {
+        return false
+      }
 
       const { data: savedData, timestamp, modalId: savedModalId } = JSON.parse(saved)
       
@@ -73,7 +77,9 @@ export const useModalDataPersistence = (modalId, data, setData) => {
 
   // データが変更されたら自動保存（デバウンス付き）
   useEffect(() => {
-    if (!hasOpenModals || !data) return
+    if (!hasOpenModals || !data) {
+      return
+    }
 
     // 前回の保存から1秒以内は保存しない
     const timeSinceLastSave = Date.now() - lastSaveTime.current
@@ -104,6 +110,14 @@ export const useModalDataPersistence = (modalId, data, setData) => {
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasOpenModals, data, saveData])
+
+  // モーダルが閉じられた時にデータをクリア
+  useEffect(() => {
+    return () => {
+      // コンポーネントがアンマウントされる時（モーダルが閉じられる時）にデータをクリア
+      clearData()
+    }
+  }, [clearData])
 
   return {
     saveData,

@@ -24,7 +24,10 @@ export const ModalProvider = ({ children }) => {
       newMap.delete(modalId)
       return newMap
     })
-  }, [])
+    
+    // デバッグログ
+    console.log(`Modal ${modalId} closed. Remaining modals:`, Array.from(openModals).filter(id => id !== modalId))
+  }, [openModals])
 
   const getModalData = useCallback((modalId) => {
     return modalData.get(modalId)

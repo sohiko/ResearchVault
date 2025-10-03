@@ -28,15 +28,20 @@ const ProtectedModal = ({
   // モーダルを閉じる処理
   const handleClose = useCallback(() => {
     if (hasUnsavedChanges) {
+      // eslint-disable-next-line no-alert
       if (window.confirm(confirmMessage)) {
+        // 未保存の変更状態をクリア
+        setUnsavedChanges(modalId, false)
         closeModal(modalId)
         onClose?.()
       }
     } else {
+      // 未保存の変更状態をクリア
+      setUnsavedChanges(modalId, false)
       closeModal(modalId)
       onClose?.()
     }
-  }, [hasUnsavedChanges, confirmMessage, closeModal, modalId, onClose])
+  }, [hasUnsavedChanges, confirmMessage, closeModal, modalId, onClose, setUnsavedChanges])
 
   // ESCキーでモーダルを閉じる
   useEffect(() => {
@@ -49,6 +54,14 @@ const ProtectedModal = ({
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
   }, [handleClose])
+
+  // コンポーネントのアンマウント時にモーダル状態をクリア
+  useEffect(() => {
+    return () => {
+      setUnsavedChanges(modalId, false)
+      closeModal(modalId)
+    }
+  }, [modalId, closeModal, setUnsavedChanges])
 
   // モーダル外クリックで閉じる
   const handleBackdropClick = useCallback((e) => {

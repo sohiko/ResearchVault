@@ -11,14 +11,15 @@ export const useNavigationBlock = (shouldBlock, message = '変更内容が失わ
 
   // ページ離脱時の確認
   useEffect(() => {
-    if (!shouldBlock) return
-
     const handleBeforeUnload = (e) => {
-      e.preventDefault()
-      e.returnValue = message
-      return message
+      if (shouldBlock) {
+        e.preventDefault()
+        e.returnValue = message
+        return message
+      }
     }
 
+    // shouldBlockの状態に関わらず常にリスナーを登録し、内部で条件判定
     window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
@@ -28,14 +29,13 @@ export const useNavigationBlock = (shouldBlock, message = '変更内容が失わ
 
   // ブラウザの戻る/進むボタンの制御
   useEffect(() => {
-    if (!shouldBlock) return
-
     const handlePopState = () => {
       if (shouldBlock) {
         // 現在の位置に戻す
         window.history.pushState(null, '', location.pathname + location.search)
         
         // 確認ダイアログを表示
+        // eslint-disable-next-line no-alert
         if (window.confirm(message)) {
           // ユーザーが離脱を選択した場合
           window.removeEventListener('popstate', handlePopState)
@@ -44,8 +44,11 @@ export const useNavigationBlock = (shouldBlock, message = '変更内容が失わ
       }
     }
 
-    // 現在の位置をスタックにプッシュ
-    window.history.pushState(null, '', location.pathname + location.search)
+    if (shouldBlock) {
+      // 現在の位置をスタックにプッシュ（shouldBlockがtrueの時のみ）
+      window.history.pushState(null, '', location.pathname + location.search)
+    }
+    
     window.addEventListener('popstate', handlePopState)
 
     return () => {
@@ -56,6 +59,7 @@ export const useNavigationBlock = (shouldBlock, message = '変更内容が失わ
   // プログラマティックナビゲーションの制御
   const blockedNavigate = useCallback((to, options = {}) => {
     if (shouldBlock) {
+      // eslint-disable-next-line no-alert
       if (window.confirm(message)) {
         navigate(to, options)
       }
