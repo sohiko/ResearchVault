@@ -171,7 +171,7 @@ export default function Projects() {
     } finally {
       setLoading(false)
     }
-  }, [user, hasOpenModals])
+  }, [user])
 
   // ページフォーカス時の不要なリロードを防ぐ
   usePageFocus(loadProjects, [user?.id], {

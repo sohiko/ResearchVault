@@ -129,7 +129,7 @@ export default function References() {
     } finally {
       setLoading(false)
     }
-  }, [user, loadReferences, loadCitationSettings, hasOpenModals])
+  }, [user, loadReferences, loadCitationSettings])
 
   // ページフォーカス時の不要なリロードを防ぐ
   usePageFocus(loadData, [user?.id], {

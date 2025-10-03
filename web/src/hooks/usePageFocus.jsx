@@ -82,14 +82,9 @@ export function usePageFocus(callback, deps = [], options = {}) {
 
   // 依存配列が変更された場合のみコールバックを実行
   useEffect(() => {
-    // モーダルが開いている場合は初期ロードもスキップ
-    if (hasOpenModals) {
-      console.log('モーダルが開いているため、初期データロードをスキップします')
-      return
-    }
     callbackRef.current()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, hasOpenModals])
+  }, deps)
 }
 
 export default usePageFocus

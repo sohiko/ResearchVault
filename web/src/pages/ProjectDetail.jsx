@@ -112,7 +112,7 @@ export default function ProjectDetail() {
     }
 
     setProject(projectData)
-  }, [id, user, navigate, hasOpenModals])
+  }, [id, user, navigate])
 
   const loadReferences = useCallback(async () => {
     if (!id) {return}
@@ -157,7 +157,7 @@ export default function ProjectDetail() {
     }))
 
     setReferences(formattedReferences)
-  }, [id, searchQuery, sortBy, sortOrder, hasOpenModals])
+  }, [id, searchQuery, sortBy, sortOrder])
 
   const loadMembers = useCallback(async () => {
     if (!id) {return}
@@ -179,7 +179,7 @@ export default function ProjectDetail() {
     if (error) {throw error}
 
     setMembers(data)
-  }, [id, hasOpenModals])
+  }, [id])
 
   const loadCitationSettings = useCallback(async () => {
     if (!user) return
