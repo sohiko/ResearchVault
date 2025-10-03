@@ -6,7 +6,9 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import ProtectedModal from '../components/common/ProtectedModal'
 import { usePageFocus } from '../hooks/usePageFocus'
+import { useModalContext } from '../hooks/useModalContext'
 import { renderProjectIcon, getAvailableLucideIcons, getAvailableEmojiIcons } from '../utils/iconRenderer.jsx'
 
 export default function Projects() {
@@ -476,6 +478,9 @@ function ProjectCard({ project, onDelete }) {
 }
 
 function CreateProjectModal({ onClose, onCreate, loading }) {
+  const { openModal } = useModalContext()
+  const modalId = 'create-project'
+  
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -485,6 +490,14 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
   })
   const [iconSearchQuery, setIconSearchQuery] = useState('')
   const [showAllIcons, setShowAllIcons] = useState(false)
+
+  // モーダルを開いた状態として登録
+  useEffect(() => {
+    openModal(modalId)
+  }, [openModal])
+
+  // 未保存の変更があるかチェック
+  const hasUnsavedChanges = formData.name.trim() || formData.description.trim()
 
   // アイコンデータを取得
   const lucideIcons = getAvailableLucideIcons()
@@ -522,9 +535,11 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
   }
 
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+    <ProtectedModal 
+      modalId={modalId}
+      onClose={onClose}
+      hasUnsavedChanges={hasUnsavedChanges}
+      confirmMessage="入力内容が失われますが、よろしいですか？"
     >
       <div className="bg-white dark:bg-secondary-800 rounded-lg max-w-md w-full">
         <form onSubmit={handleSubmit}>
@@ -717,6 +732,6 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
           </div>
         </form>
       </div>
-    </div>
+    </ProtectedModal>
   )
 }

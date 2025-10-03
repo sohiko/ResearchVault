@@ -1,7 +1,12 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
+import ProtectedModal from './ProtectedModal'
+import { useModalContext } from '../../hooks/useModalContext'
 
 const EditProjectModal = ({ project, onClose, onUpdate }) => {
+  const { openModal } = useModalContext()
+  const modalId = 'edit-project'
+  
   const [formData, setFormData] = useState({
     name: project.name || '',
     description: project.description || '',
@@ -10,6 +15,17 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
   })
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
+
+  // モーダルを開いた状態として登録
+  useEffect(() => {
+    openModal(modalId)
+  }, [openModal])
+
+  // 未保存の変更があるかチェック
+  const hasUnsavedChanges = formData.name !== (project.name || '') ||
+                           formData.description !== (project.description || '') ||
+                           formData.color !== (project.color || '#3B82F6') ||
+                           formData.isPublic !== (project.is_public || false)
 
   const colorOptions = [
     { value: '#3B82F6', label: 'ブルー', class: 'bg-blue-500' },
@@ -78,9 +94,11 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
   }
 
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+    <ProtectedModal 
+      modalId={modalId}
+      onClose={onClose}
+      hasUnsavedChanges={hasUnsavedChanges}
+      confirmMessage="変更内容が失われますが、よろしいですか？"
     >
       <div className="bg-white rounded-lg max-w-md w-full">
         <div className="px-6 py-4 border-b border-gray-200">
@@ -212,7 +230,7 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
           </button>
         </div>
       </div>
-    </div>
+    </ProtectedModal>
   )
 }
 

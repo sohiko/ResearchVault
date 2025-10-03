@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
+import ProtectedModal from './ProtectedModal'
+import { useModalContext } from '../../hooks/useModalContext'
 
 const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
+  const { openModal } = useModalContext()
+  const modalId = 'edit-reference'
+  
   const [formData, setFormData] = useState({
     title: '',
     url: '',
@@ -9,9 +14,14 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
     author: '',
     siteName: '',
     publishedDate: '',
-    accessDate: ''
+    accessedDate: ''
   })
   const [loading, setLoading] = useState(false)
+
+  // モーダルを開いた状態として登録
+  useEffect(() => {
+    openModal(modalId)
+  }, [openModal])
 
   useEffect(() => {
     if (reference) {
@@ -20,13 +30,28 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
         title: reference.title || '',
         url: reference.url || '',
         description: reference.description || '',
-        author: metadata.author || '',
+        author: reference.author || metadata.author || '',
         siteName: metadata.siteName || '',
-        publishedDate: metadata.publishedDate ? metadata.publishedDate.split('T')[0] : '',
-        accessDate: reference.saved_at ? reference.saved_at.split('T')[0] : ''
+        publishedDate: reference.published_date ? reference.published_date.split('T')[0] : 
+                      (metadata.publishedDate ? metadata.publishedDate.split('T')[0] : ''),
+        accessedDate: reference.accessed_date ? reference.accessed_date.split('T')[0] : 
+                     (reference.saved_at ? reference.saved_at.split('T')[0] : '')
       })
     }
   }, [reference])
+
+  // 未保存の変更があるかチェック
+  const hasUnsavedChanges = reference && (
+    formData.title !== (reference.title || '') ||
+    formData.url !== (reference.url || '') ||
+    formData.description !== (reference.description || '') ||
+    formData.author !== (reference.author || (reference.metadata?.author || '')) ||
+    formData.siteName !== ((reference.metadata?.siteName || '')) ||
+    formData.publishedDate !== (reference.published_date ? reference.published_date.split('T')[0] : 
+                               (reference.metadata?.publishedDate ? reference.metadata.publishedDate.split('T')[0] : '')) ||
+    formData.accessedDate !== (reference.accessed_date ? reference.accessed_date.split('T')[0] : 
+                              (reference.saved_at ? reference.saved_at.split('T')[0] : ''))
+  )
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -57,6 +82,9 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
         title: formData.title.trim(),
         url: formData.url.trim(),
         description: formData.description.trim(),
+        author: formData.author.trim() || null,
+        published_date: formData.publishedDate || null,
+        accessed_date: formData.accessedDate || null,
         metadata: {
           ...reference.metadata,
           author: formData.author.trim(),
@@ -85,9 +113,11 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
   }
 
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+    <ProtectedModal 
+      modalId={modalId}
+      onClose={onClose}
+      hasUnsavedChanges={hasUnsavedChanges}
+      confirmMessage="変更内容が失われますが、よろしいですか？"
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-xl">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -200,8 +230,8 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
               </label>
               <input
                 type="date"
-                value={formData.accessDate}
-                onChange={(e) => handleChange('accessDate', e.target.value)}
+                value={formData.accessedDate}
+                onChange={(e) => handleChange('accessedDate', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -229,7 +259,7 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
           </button>
         </div>
       </div>
-    </div>
+    </ProtectedModal>
   )
 }
 

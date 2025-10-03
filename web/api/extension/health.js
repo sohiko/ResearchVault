@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       extension: {
         detected: isExtension,
         version: req.headers['x-extension-version'] || 'unknown',
-        userAgent: userAgent
+        userAgent
       },
       api: {
         version: '1.0.0',

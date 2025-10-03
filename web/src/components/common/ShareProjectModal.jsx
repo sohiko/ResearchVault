@@ -1,15 +1,28 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from './ConfirmDialog'
+import ProtectedModal from './ProtectedModal'
+import { useModalContext } from '../../hooks/useModalContext'
 
 const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
+  const { openModal } = useModalContext()
+  const modalId = 'share-project'
+  
   const [loading, setLoading] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('viewer')
   const [copyLinkLoading, setCopyLinkLoading] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [memberToDelete, setMemberToDelete] = useState(null)
+
+  // モーダルを開いた状態として登録
+  useEffect(() => {
+    openModal(modalId)
+  }, [openModal])
+
+  // 未保存の変更があるかチェック（招待フォームに入力がある場合）
+  const hasUnsavedChanges = inviteEmail.trim() !== ''
 
   const handleInviteMember = async (e) => {
     e.preventDefault()
@@ -129,9 +142,12 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
   }
 
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+    <>
+    <ProtectedModal 
+      modalId={modalId}
+      onClose={onClose}
+      hasUnsavedChanges={hasUnsavedChanges}
+      confirmMessage="入力内容が失われますが、よろしいですか？"
     >
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
@@ -302,7 +318,9 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
           </button>
         </div>
       </div>
+    </ProtectedModal>
 
+    {showConfirmDelete && (
       <ConfirmDialog
         isOpen={showConfirmDelete}
         onClose={() => setShowConfirmDelete(false)}
@@ -312,7 +330,8 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
         confirmText="削除"
         cancelText="キャンセル"
       />
-    </div>
+    )}
+    </>
   )
 }
 

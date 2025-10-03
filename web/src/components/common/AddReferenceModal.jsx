@@ -1,17 +1,35 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
+import ProtectedModal from './ProtectedModal'
+import { useModalContext } from '../../hooks/useModalContext'
 
 const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
+  const { openModal } = useModalContext()
+  const modalId = 'add-reference'
+  
   const [formData, setFormData] = useState({
     url: '',
     title: '',
     description: '',
     tags: '',
-    memo: ''
+    memo: '',
+    author: '',
+    publishedDate: '',
+    accessedDate: new Date().toISOString().split('T')[0] // 今日の日付をデフォルト
   })
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const [isExtracting, setIsExtracting] = useState(false)
+
+  // モーダルを開いた状態として登録
+  useEffect(() => {
+    openModal(modalId)
+  }, [openModal])
+
+  // 未保存の変更があるかチェック
+  const hasUnsavedChanges = formData.url.trim() || formData.title.trim() || 
+                           formData.description.trim() || formData.tags.trim() || 
+                           formData.memo.trim() || formData.author.trim()
 
   const validateForm = () => {
     const newErrors = {}
@@ -64,6 +82,9 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
         description: formData.description.trim() || null,
         tags: tagsArray,
         memo: formData.memo.trim() || null,
+        author: formData.author.trim() || null,
+        published_date: formData.publishedDate || null,
+        accessed_date: formData.accessedDate || new Date().toISOString().split('T')[0],
         saved_at: new Date().toISOString()
       }
 
@@ -107,21 +128,24 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
     try {
       setIsExtracting(true)
       
-      // 簡単なページ情報の抽出（実際の実装ではAPI経由で行う）
-      const response = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(formData.url)}`)
-      const data = await response.json()
-
-      if (data.status === 'success') {
-        if (data.data.title && !formData.title) {
-          handleChange('title', data.data.title)
-        }
-        if (data.data.description && !formData.description) {
-          handleChange('description', data.data.description)
-        }
-        toast.success('ページ情報を取得しました')
-      } else {
-        throw new Error('Failed to extract page info')
+      // 複数のAPIを試行して最適な情報を取得
+      const extractedInfo = await extractWebPageInfo(formData.url)
+      
+      // 取得した情報をフォームに反映
+      if (extractedInfo.title && !formData.title) {
+        handleChange('title', extractedInfo.title)
       }
+      if (extractedInfo.description && !formData.description) {
+        handleChange('description', extractedInfo.description)
+      }
+      if (extractedInfo.author && !formData.author) {
+        handleChange('author', extractedInfo.author)
+      }
+      if (extractedInfo.publishedDate && !formData.publishedDate) {
+        handleChange('publishedDate', extractedInfo.publishedDate)
+      }
+      
+      toast.success('ページ情報を取得しました')
     } catch (error) {
       console.error('Failed to extract page info:', error)
       toast.error('ページ情報の取得に失敗しました')
@@ -130,10 +154,132 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
     }
   }
 
+  // 高度なウェブページ情報抽出関数
+  const extractWebPageInfo = async (url) => {
+    const results = {
+      title: '',
+      description: '',
+      author: '',
+      publishedDate: ''
+    }
+
+    try {
+      // 1. Microlink.io APIを使用（メタデータ取得）
+      const microlinkResponse = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&meta=true`)
+      const microlinkData = await microlinkResponse.json()
+
+      if (microlinkData.status === 'success' && microlinkData.data) {
+        const data = microlinkData.data
+        
+        results.title = data.title || ''
+        results.description = data.description || ''
+        results.author = data.author || ''
+        
+        // 公開日の抽出（複数のフィールドを確認）
+        results.publishedDate = 
+          data.date || 
+          data.publishedTime || 
+          data['article:published_time'] ||
+          data['og:article:published_time'] ||
+          ''
+      }
+
+      // 2. JSONLDデータの抽出を試行
+      try {
+        const jsonldResponse = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&data.jsonld=true`)
+        const jsonldData = await jsonldResponse.json()
+        
+        if (jsonldData.status === 'success' && jsonldData.data?.jsonld) {
+          const jsonld = Array.isArray(jsonldData.data.jsonld) 
+            ? jsonldData.data.jsonld[0] 
+            : jsonldData.data.jsonld
+
+          if (jsonld) {
+            // 著者情報の抽出
+            if (!results.author && jsonld.author) {
+              if (typeof jsonld.author === 'string') {
+                results.author = jsonld.author
+              } else if (jsonld.author.name) {
+                results.author = jsonld.author.name
+              } else if (Array.isArray(jsonld.author) && jsonld.author[0]?.name) {
+                results.author = jsonld.author[0].name
+              }
+            }
+
+            // 公開日の抽出
+            if (!results.publishedDate) {
+              results.publishedDate = 
+                jsonld.datePublished ||
+                jsonld.dateCreated ||
+                jsonld.dateModified ||
+                ''
+            }
+          }
+        }
+      } catch (jsonldError) {
+        console.warn('JSONLDデータの取得に失敗:', jsonldError)
+      }
+
+      // 3. Open Graph / Twitter Cardデータの抽出
+      try {
+        const ogResponse = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&data.og=true`)
+        const ogData = await ogResponse.json()
+        
+        if (ogData.status === 'success' && ogData.data?.og) {
+          const og = ogData.data.og
+          
+          if (!results.author && og['article:author']) {
+            results.author = og['article:author']
+          }
+          
+          if (!results.publishedDate && og['article:published_time']) {
+            results.publishedDate = og['article:published_time']
+          }
+        }
+      } catch (ogError) {
+        console.warn('Open Graphデータの取得に失敗:', ogError)
+      }
+
+    } catch (error) {
+      console.error('ページ情報の抽出に失敗:', error)
+      
+      // フォールバック: 基本的なメタデータのみ取得
+      try {
+        const fallbackResponse = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`)
+        const fallbackData = await fallbackResponse.json()
+        
+        if (fallbackData.status === 'success' && fallbackData.data) {
+          results.title = fallbackData.data.title || ''
+          results.description = fallbackData.data.description || ''
+        }
+      } catch (fallbackError) {
+        console.error('フォールバック抽出も失敗:', fallbackError)
+      }
+    }
+
+    // 日付の正規化
+    if (results.publishedDate) {
+      try {
+        const date = new Date(results.publishedDate)
+        if (!isNaN(date.getTime())) {
+          results.publishedDate = date.toISOString().split('T')[0]
+        } else {
+          results.publishedDate = ''
+        }
+      } catch (dateError) {
+        results.publishedDate = ''
+      }
+    }
+
+    return results
+  }
+
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+    <ProtectedModal 
+      modalId={modalId}
+      onClose={onClose}
+      hasUnsavedChanges={hasUnsavedChanges}
+      confirmMessage="入力内容が失われますが、よろしいですか？"
     >
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
@@ -248,6 +394,59 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
             </p>
           </div>
 
+          {/* 著者 */}
+          <div>
+            <label htmlFor="author" className="block text-sm font-medium text-gray-700 mb-1">
+              著者・制作者
+            </label>
+            <input
+              type="text"
+              id="author"
+              value={formData.author}
+              onChange={(e) => handleChange('author', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="著者名または制作者名（自動取得）"
+              maxLength={200}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              ウェブページから自動取得されます
+            </p>
+          </div>
+
+          {/* 公開日 */}
+          <div>
+            <label htmlFor="publishedDate" className="block text-sm font-medium text-gray-700 mb-1">
+              公開日
+            </label>
+            <input
+              type="date"
+              id="publishedDate"
+              value={formData.publishedDate}
+              onChange={(e) => handleChange('publishedDate', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              ページの公開日（自動取得または手動入力）
+            </p>
+          </div>
+
+          {/* アクセス日 */}
+          <div>
+            <label htmlFor="accessedDate" className="block text-sm font-medium text-gray-700 mb-1">
+              アクセス日
+            </label>
+            <input
+              type="date"
+              id="accessedDate"
+              value={formData.accessedDate}
+              onChange={(e) => handleChange('accessedDate', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              このページにアクセスした日（デフォルト: 今日）
+            </p>
+          </div>
+
           {/* メモ */}
           <div>
             <label htmlFor="memo" className="block text-sm font-medium text-gray-700 mb-1">
@@ -290,7 +489,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           </button>
         </div>
       </div>
-    </div>
+    </ProtectedModal>
   )
 }
 

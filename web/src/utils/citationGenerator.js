@@ -5,14 +5,18 @@ export const generateCitation = (reference, citationFormat) => {
   const title = reference.title || 'タイトルなし'
   const url = reference.url
   const metadata = reference.metadata || {}
-  const author = metadata.author || ''
-  const siteName = metadata.siteName || new URL(url).hostname
-  const publishedDate = metadata.publishedDate || ''
   
-  // アクセス日は参照の保存日時を使用
-  const accessDate = reference.saved_at 
-    ? format(new Date(reference.saved_at), 'yyyy年MM月dd日', { locale: ja })
-    : format(new Date(), 'yyyy年MM月dd日', { locale: ja })
+  // 新しいフィールドを優先し、なければメタデータから取得
+  const author = reference.author || metadata.author || ''
+  const siteName = metadata.siteName || new URL(url).hostname
+  const publishedDate = reference.published_date || metadata.publishedDate || ''
+  
+  // アクセス日は新しいフィールドを優先
+  const accessDate = reference.accessed_date 
+    ? format(new Date(reference.accessed_date), 'yyyy年MM月dd日', { locale: ja })
+    : (reference.saved_at 
+        ? format(new Date(reference.saved_at), 'yyyy年MM月dd日', { locale: ja })
+        : format(new Date(), 'yyyy年MM月dd日', { locale: ja }))
 
   switch (citationFormat.toUpperCase()) {
     case 'APA':

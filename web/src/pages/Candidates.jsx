@@ -17,7 +17,9 @@ export default function Candidates() {
   const [showConfirmDismissAll, setShowConfirmDismissAll] = useState(false)
 
   const loadData = useCallback(async () => {
-    if (!user) return
+    if (!user) {
+      return
+    }
     
     try {
       setLoading(true)

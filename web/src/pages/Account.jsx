@@ -32,7 +32,9 @@ export default function Account() {
   })
 
   const loadAccountData = useCallback(async () => {
-    if (!user) return
+    if (!user) {
+      return
+    }
     try {
       setLoading(true)
       

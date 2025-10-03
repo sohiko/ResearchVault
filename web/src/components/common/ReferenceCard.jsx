@@ -204,25 +204,49 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
         )}
 
         {/* メタデータ */}
-        {reference.metadata && (
-          <div className="mb-3 space-y-1">
-            {reference.metadata.author && (
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">著者:</span> {reference.metadata.author}
-              </div>
-            )}
-            {reference.metadata.publishedDate && (
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">公開日:</span> {formatDate(reference.metadata.publishedDate)}
-              </div>
-            )}
-            {reference.metadata.siteName && (
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">サイト:</span> {reference.metadata.siteName}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="mb-3 space-y-1">
+          {/* 新しいフィールド: 著者 */}
+          {reference.author && (
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">著者:</span> {reference.author}
+            </div>
+          )}
+          
+          {/* 新しいフィールド: 公開日 */}
+          {reference.published_date && (
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">公開日:</span> {formatDate(reference.published_date)}
+            </div>
+          )}
+          
+          {/* 新しいフィールド: アクセス日 */}
+          {reference.accessed_date && (
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">アクセス日:</span> {formatDate(reference.accessed_date)}
+            </div>
+          )}
+
+          {/* 既存のメタデータ（後方互換性のため） */}
+          {reference.metadata && (
+            <>
+              {reference.metadata.author && !reference.author && (
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">著者:</span> {reference.metadata.author}
+                </div>
+              )}
+              {reference.metadata.publishedDate && !reference.published_date && (
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">公開日:</span> {formatDate(reference.metadata.publishedDate)}
+                </div>
+              )}
+              {reference.metadata.siteName && (
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">サイト:</span> {reference.metadata.siteName}
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
         {/* フッター */}
         <div className="flex items-center gap-4 text-sm text-gray-500 pt-3 border-t border-gray-100">

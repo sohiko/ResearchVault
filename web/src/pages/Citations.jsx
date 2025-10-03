@@ -10,7 +10,9 @@ export default function Citations() {
   const [saving, setSaving] = useState(false)
 
   const loadSettings = useCallback(async () => {
-    if (!user) return
+    if (!user) {
+      return
+    }
     
     try {
       setLoading(true)
@@ -42,7 +44,9 @@ export default function Citations() {
   }, [user, loadSettings])
 
   const saveSettings = async () => {
-    if (!user) return
+    if (!user) {
+      return
+    }
 
     try {
       setSaving(true)

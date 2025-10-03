@@ -4,6 +4,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ThemeProvider } from './hooks/useTheme'
 import { ProjectProvider } from './hooks/useProjects'
+import { ModalProvider } from './hooks/useModalContext'
 import { handleComponentError } from './utils/errorHandler'
 
 // レイアウトコンポーネント
@@ -179,7 +180,8 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <div className="App">
+          <ModalProvider>
+            <div className="App">
             <SpeedInsights />
             <Routes>
             {/* 認証関連のルート */}
@@ -270,7 +272,8 @@ function App() {
               }
             />
             </Routes>
-          </div>
+            </div>
+          </ModalProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

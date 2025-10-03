@@ -281,7 +281,7 @@ async function handleDeleteProject(req, res, userId, userSupabase) {
 
     return res.status(200).json({
       message: 'プロジェクトをゴミ箱に移動しました',
-      projectId: projectId
+      projectId
     })
 
   } catch (error) {

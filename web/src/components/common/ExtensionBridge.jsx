@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 
 const ExtensionBridge = () => {
-  const [extensionInstalled, setExtensionInstalled] = useState(false)
+  const [, setExtensionInstalled] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('checking')
 
   // 代替検出方法（ESLintエラーを避けるため、コンポーネントのトップレベルで定義）
@@ -119,14 +119,14 @@ const ExtensionBridge = () => {
       setExtensionInstalled(false)
       setConnectionStatus('not_installed')
     }
-  }, []) // 空の依存配列で循環依存を完全に回避
+  }, [checkAlternativeMethods]) // checkAlternativeMethodsを依存関係に追加
 
   // 認証同期機能は削除（不要なため）
 
   // 初期化効果
   useEffect(() => {
     checkExtensionInstallation()
-  }, []) // 空の依存配列で循環依存を回避
+  }, [checkExtensionInstallation]) // checkExtensionInstallationを依存関係に追加
 
   // 認証同期効果は削除（不要なため）
 
@@ -145,7 +145,7 @@ const ExtensionBridge = () => {
                      window.location.hostname.includes('localhost')
 
   // 環境判定（ESLint警告を回避するため使用）
-  const environment = isLocalhost ? 'localhost' : 'production'
+  const _environment = isLocalhost ? 'localhost' : 'production'
 
   // チェック中は何も表示しない
   if (connectionStatus === 'checking') {

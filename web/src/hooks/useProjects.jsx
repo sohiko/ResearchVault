@@ -143,7 +143,7 @@ export function ProjectProvider({ children }) {
     if (user?.id) {
       fetchProjects()
     }
-  }, [user?.id]) // fetchProjectsを依存配列から削除して循環依存を回避
+  }, [user?.id, fetchProjects]) // fetchProjectsを依存配列に追加
 
   // リアルタイム購読の設定
   useEffect(() => {
@@ -177,7 +177,7 @@ export function ProjectProvider({ children }) {
         supabase.removeChannel(projectSubscription)
       }
     }
-  }, [user?.id]) // fetchProjectsを依存配列から削除して循環依存を回避
+  }, [user?.id, fetchProjects]) // fetchProjectsを依存配列に追加
 
   // プロジェクトの作成
   const createProject = async (projectData) => {
