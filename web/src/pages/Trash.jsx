@@ -33,13 +33,12 @@ export default function Trash() {
 
       if (projectsError) throw projectsError
 
-      // ゴミ箱の参照を取得（プロジェクトに属さない個別削除のもののみ）
+      // ゴミ箱の参照を取得（すべての削除された参照）
       const { data: references, error: referencesError } = await supabase
         .from('references')
         .select('*')
         .eq('deleted_by', user.id)
         .not('deleted_at', 'is', null)
-        .is('project_id', null)
         .order('deleted_at', { ascending: false })
 
       if (referencesError) throw referencesError

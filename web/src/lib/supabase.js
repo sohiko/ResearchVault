@@ -295,16 +295,29 @@ export const dbHelpers = {
           references(id)
         `)
         .eq('owner_id', userId)
+        .is('deleted_at', null)
         .order('updated_at', { ascending: false })
       
       if (error) {throw error}
       
-      // 参照数を計算
-      return (data || []).map(project => ({
-        ...project,
-        referenceCount: project.references?.length || 0,
-        references: undefined // 参照リストは削除（メモリ節約）
-      }))
+      // 各プロジェクトの削除されていない参照数を正確に計算
+      const projectsWithCounts = await Promise.all(
+        (data || []).map(async project => {
+          const { count } = await supabase
+            .from('references')
+            .select('id', { count: 'exact' })
+            .eq('project_id', project.id)
+            .is('deleted_at', null)
+          
+          return {
+            ...project,
+            referenceCount: count || 0,
+            references: undefined // 参照リストは削除（メモリ節約）
+          }
+        })
+      )
+      
+      return projectsWithCounts
     } catch (error) {
       console.error('Failed to get projects:', error)
       return []
@@ -321,6 +334,7 @@ export const dbHelpers = {
           projects(name),
           reference_tags(tags(name, color))
         `)
+        .is('deleted_at', null) // 削除されていないもののみ
         .order('saved_at', { ascending: false })
 
       if (projectId) {
@@ -348,11 +362,13 @@ export const dbHelpers = {
         supabase
           .from('projects')
           .select('id', { count: 'exact' })
-          .eq('owner_id', userId),
+          .eq('owner_id', userId)
+          .is('deleted_at', null), // 削除されていないプロジェクトのみ
         supabase
           .from('references')
           .select('id', { count: 'exact' })
-          .eq('saved_by', userId),
+          .eq('saved_by', userId)
+          .is('deleted_at', null), // 削除されていない参照のみ
         supabase
           .from('selected_texts')
           .select('id', { count: 'exact' })

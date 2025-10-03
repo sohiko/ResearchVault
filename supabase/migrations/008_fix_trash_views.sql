@@ -28,7 +28,6 @@ SELECT
   id,
   title,
   url,
-  description,
   memo,
   project_id,
   saved_by,
@@ -41,13 +40,7 @@ SELECT
 FROM "references" 
 WHERE deleted_at IS NOT NULL;
 
--- RLSポリシーをビューに適用
-ALTER VIEW trash_projects ENABLE ROW LEVEL SECURITY;
-ALTER VIEW trash_references ENABLE ROW LEVEL SECURITY;
-
--- ゴミ箱ビュー用のRLSポリシー
-CREATE POLICY "Users can view their own deleted projects" ON trash_projects
-  FOR SELECT USING (auth.uid() = deleted_by);
-
-CREATE POLICY "Users can view their own deleted references" ON trash_references
-  FOR SELECT USING (auth.uid() = deleted_by);
+-- ビューはベースとなるテーブルのRLSポリシーを継承するため、
+-- 個別のRLS設定は不要です。
+-- security_invoker = on により、ビューにアクセスするユーザーの権限で
+-- ベーステーブルのRLSポリシーが適用されます。

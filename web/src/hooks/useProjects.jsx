@@ -43,7 +43,6 @@ export function ProjectProvider({ children }) {
         .from('projects')
         .select(`
           *,
-          references(id),
           owner:profiles!owner_id(name, email)
         `)
         .eq('owner_id', userId)
@@ -61,7 +60,6 @@ export function ProjectProvider({ children }) {
           profiles(name, email),
           projects(
             *,
-            references(id),
             owner:profiles!owner_id(name, email),
             project_members(
               role,
@@ -74,37 +72,55 @@ export function ProjectProvider({ children }) {
 
       if (memberError) {throw memberError}
 
-      // データを統合・整形
-      const allProjects = [
+      // 各プロジェクトの削除されていない参照数を取得
+      const projectsWithCounts = await Promise.all([
         // 所有プロジェクト
-        ...(ownedProjects || []).map(project => ({
-          ...project,
-          referenceCount: project.references?.length || 0,
-          memberCount: 1, // 所有者のみ
-          members: [{
-            role: 'owner',
-            joinedAt: project.created_at,
-            user: project.owner
-          }],
-          isOwner: true,
-          userRole: 'owner'
-        })),
+        ...(ownedProjects || []).map(async project => {
+          const { count } = await supabase
+            .from('references')
+            .select('id', { count: 'exact' })
+            .eq('project_id', project.id)
+            .is('deleted_at', null)
+          
+          return {
+            ...project,
+            referenceCount: count || 0,
+            memberCount: 1, // 所有者のみ
+            members: [{
+              role: 'owner',
+              joinedAt: project.created_at,
+              user: project.owner
+            }],
+            isOwner: true,
+            userRole: 'owner'
+          }
+        }),
         // メンバープロジェクト（削除されていないもののみ）
         ...(memberData || [])
           .filter(member => member.projects && !member.projects.deleted_at)
-          .map(member => ({
-            ...member.projects,
-            referenceCount: member.projects.references?.length || 0,
-            memberCount: member.projects.project_members?.length || 0,
-            members: member.projects.project_members?.map(pm => ({
-              role: pm.role,
-              joinedAt: pm.joined_at,
-              user: pm.profiles
-          })) || [],
-          isOwner: false,
-          userRole: member.role
-        }))
-      ]
+          .map(async member => {
+            const { count } = await supabase
+              .from('references')
+              .select('id', { count: 'exact' })
+              .eq('project_id', member.projects.id)
+              .is('deleted_at', null)
+            
+            return {
+              ...member.projects,
+              referenceCount: count || 0,
+              memberCount: member.projects.project_members?.length || 0,
+              members: member.projects.project_members?.map(pm => ({
+                role: pm.role,
+                joinedAt: pm.joined_at,
+                user: pm.profiles
+              })) || [],
+              isOwner: false,
+              userRole: member.role
+            }
+          })
+      ])
+
+      const allProjects = projectsWithCounts
 
       // 重複を排除して更新日順でソート
       const uniqueProjects = allProjects

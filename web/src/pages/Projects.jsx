@@ -45,8 +45,7 @@ export default function Projects() {
         .select(`
           role,
           projects!inner(
-            *,
-            references(id)
+            *
           )
         `)
         .eq('user_id', user.id)
@@ -57,18 +56,37 @@ export default function Projects() {
       }
 
       // データを統合
-      const allProjects = [
-        ...(ownedProjects || []).map(project => ({
-          ...project,
-          role: 'owner',
-          referenceCount: project.references?.length || 0
-        })),
-        ...(memberProjects || []).map(member => ({
-          ...member.projects,
-          role: member.role,
-          referenceCount: member.projects?.references?.length || 0
-        }))
-      ]
+      // 各プロジェクトの削除されていない参照数を取得
+      const projectsWithCounts = await Promise.all([
+        ...(ownedProjects || []).map(async project => {
+          const { count } = await supabase
+            .from('references')
+            .select('id', { count: 'exact' })
+            .eq('project_id', project.id)
+            .is('deleted_at', null)
+          
+          return {
+            ...project,
+            role: 'owner',
+            referenceCount: count || 0
+          }
+        }),
+        ...(memberProjects || []).map(async member => {
+          const { count } = await supabase
+            .from('references')
+            .select('id', { count: 'exact' })
+            .eq('project_id', member.projects.id)
+            .is('deleted_at', null)
+          
+          return {
+            ...member.projects,
+            role: member.role,
+            referenceCount: count || 0
+          }
+        })
+      ])
+
+      const allProjects = projectsWithCounts
 
       // 重複を排除して更新日順でソート
       const uniqueProjects = allProjects

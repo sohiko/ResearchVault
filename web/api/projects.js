@@ -89,6 +89,7 @@ async function handleGetProjects(req, res, userId, userSupabase) {
       `)
       .eq('owner_id', userId)
       .is('deleted_at', null)
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
 
     if (ownedError) {
@@ -131,19 +132,29 @@ async function handleGetProjects(req, res, userId, userSupabase) {
       index === self.findIndex(p => p.id === project.id)
     )
 
-    // 参照数を計算してレスポンス用に整形
-    const formattedProjects = projects.map(project => ({
-      id: project.id,
-      name: project.name,
-      description: project.description,
-      color: project.color,
-      isPublic: project.is_public,
-      ownerId: project.owner_id,
-      createdAt: project.created_at,
-      updatedAt: project.updated_at,
-      referenceCount: project.references?.length || 0,
-      role: project.role
-    }))
+    // 各プロジェクトの削除されていない参照数を正確に計算
+    const formattedProjects = await Promise.all(
+      projects.map(async project => {
+        const { count } = await userSupabase
+          .from('references')
+          .select('id', { count: 'exact' })
+          .eq('project_id', project.id)
+          .is('deleted_at', null)
+        
+        return {
+          id: project.id,
+          name: project.name,
+          description: project.description,
+          color: project.color,
+          isPublic: project.is_public,
+          ownerId: project.owner_id,
+          createdAt: project.created_at,
+          updatedAt: project.updated_at,
+          referenceCount: count || 0,
+          role: project.role
+        }
+      })
+    )
 
     return res.status(200).json(formattedProjects)
 
