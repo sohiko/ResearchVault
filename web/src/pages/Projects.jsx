@@ -191,14 +191,20 @@ export default function Projects() {
       setCreateLoading(true)
       setError(null)
 
+      // アイコンタイプに応じてアイコンデータを準備
+      let iconValue = projectData.icon || 'Folder'
+      if (projectData.iconType === 'lucide') {
+        // Lucideアイコンの場合は "lucide:" プレフィックスを付ける
+        iconValue = `lucide:${projectData.icon}`
+      }
+
       const { data: project, error } = await supabase
         .from('projects')
         .insert({
           name: projectData.name.trim(),
           description: projectData.description?.trim() || '',
           color: projectData.color || '#3B82F6',
-          icon: projectData.icon || 'Folder',
-          icon_type: projectData.iconType || 'lucide',
+          icon: iconValue,
           owner_id: user.id
         })
         .select()
@@ -416,7 +422,7 @@ function ProjectCard({ project, onDelete }) {
               className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-medium"
               style={{ backgroundColor: project.color }}
             >
-              {renderProjectIcon(project.icon, project.icon_type, 'w-5 h-5')}
+              {renderProjectIcon(project.icon, null, 'w-5 h-5')}
             </div>
             <div>
               <h3 className="text-lg font-semibold text-secondary-900 dark:text-secondary-100">
@@ -507,11 +513,7 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (formData.name.trim()) {
-      onCreate({
-        ...formData,
-        // Lucideアイコンの場合は名前を保存、絵文字の場合はそのまま保存
-        icon: formData.iconType === 'lucide' ? formData.icon : formData.icon
-      })
+      onCreate(formData)
     }
   }
 

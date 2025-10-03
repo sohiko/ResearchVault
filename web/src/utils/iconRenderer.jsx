@@ -57,23 +57,50 @@ export const lucideIconMap = {
 }
 
 /**
+ * アイコン文字列からタイプとアイコン名を判定する関数
+ * @param {string} iconString - アイコン文字列
+ * @returns {Object} { type, name }
+ */
+const parseIconString = (iconString) => {
+  if (!iconString) {
+    return { type: 'emoji', name: '📂' }
+  }
+  
+  // "lucide:" プレフィックスがある場合はLucideアイコン
+  if (iconString.startsWith('lucide:')) {
+    return { type: 'lucide', name: iconString.replace('lucide:', '') }
+  }
+  
+  // Lucideアイコン名として認識される場合
+  if (lucideIconMap[iconString]) {
+    return { type: 'lucide', name: iconString }
+  }
+  
+  // それ以外は絵文字として扱う
+  return { type: 'emoji', name: iconString }
+}
+
+/**
  * プロジェクトアイコンをレンダリングする関数
  * @param {string} icon - アイコン名または絵文字
- * @param {string} iconType - 'lucide' または 'emoji'
+ * @param {string} iconType - 'lucide' または 'emoji' (省略可能、自動判定)
  * @param {string} className - CSSクラス名
  * @returns {JSX.Element} レンダリングされたアイコン
  */
-export const renderProjectIcon = (icon, iconType = 'emoji', className = 'w-5 h-5') => {
-  // icon_typeがlucideの場合はLucideアイコンを使用
-  if (iconType === 'lucide') {
-    const IconComponent = lucideIconMap[icon]
+export const renderProjectIcon = (icon, iconType = null, className = 'w-5 h-5') => {
+  // iconTypeが指定されていない場合は自動判定
+  const { type, name } = iconType ? { type: iconType, name: icon } : parseIconString(icon)
+  
+  // Lucideアイコンの場合
+  if (type === 'lucide') {
+    const IconComponent = lucideIconMap[name]
     if (IconComponent) {
       return <IconComponent className={className} />
     }
   }
   
-  // 絵文字またはフォールバック（既存のプロジェクト用）
-  return <span className="text-lg">{icon || '📂'}</span>
+  // 絵文字またはフォールバック
+  return <span className="text-lg">{name || '📂'}</span>
 }
 
 /**
