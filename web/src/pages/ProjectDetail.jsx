@@ -5,6 +5,17 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { 
+  FileText, 
+  Plus, 
+  MoreVertical, 
+  Share2, 
+  Edit3, 
+  Trash2,
+  Copy,
+  Download,
+  X
+} from 'lucide-react'
 
 // コンポーネント
 import ReferenceCard from '../components/common/ReferenceCard'
@@ -35,6 +46,8 @@ export default function ProjectDetail() {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [referenceToDelete, setReferenceToDelete] = useState(null)
   const [showCitationModal, setShowCitationModal] = useState(false)
+  const [showProjectDeleteConfirm, setShowProjectDeleteConfirm] = useState(false)
+  const [showDropdownMenu, setShowDropdownMenu] = useState(false)
   
   // 引用生成状態
   const [citationFormat, setCitationFormat] = useState('APA')
@@ -191,6 +204,20 @@ export default function ProjectDetail() {
     }
   }, [user, id, loadProjectData])
 
+  // ドロップダウンメニューの外側クリックで閉じる
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showDropdownMenu && !event.target.closest('.dropdown-menu')) {
+        setShowDropdownMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDropdownMenu])
+
   const handleAddReference = async (referenceData) => {
     try {
       const { error } = await supabase
@@ -335,6 +362,28 @@ export default function ProjectDetail() {
     URL.revokeObjectURL(url)
   }
 
+  const handleDeleteProject = async () => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: user.id
+        })
+        .eq('id', id)
+
+      if (error) throw error
+
+      toast.success('プロジェクトを削除しました')
+      navigate('/projects')
+    } catch (error) {
+      console.error('Failed to delete project:', error)
+      toast.error('プロジェクトの削除に失敗しました')
+    } finally {
+      setShowProjectDeleteConfirm(false)
+    }
+  }
+
   const isOwner = project?.owner_id === user?.id
   const userRole = project?.project_members?.[0]?.role || (isOwner ? 'owner' : 'viewer')
   const canEdit = isOwner || userRole === 'editor'
@@ -412,42 +461,77 @@ export default function ProjectDetail() {
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* メインボタン */}
           <button
             onClick={handleGenerateCitations}
             disabled={generating || references.length === 0}
-            className="btn btn-secondary"
+            className="btn btn-secondary flex items-center gap-2"
           >
-            <span className="text-lg">📝</span>
-            {generating ? '生成中...' : '引用生成'}
+            <FileText className="w-4 h-4" />
+            {generating ? '生成中...' : '引用作成'}
           </button>
-          {canShare && (
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="btn btn-outline"
-            >
-              <span className="text-lg">👥</span>
-              共有
-            </button>
-          )}
-          {canEdit && (
-            <button
-              onClick={() => setShowEditModal(true)}
-              className="btn btn-outline"
-            >
-              <span className="text-lg">✏️</span>
-              編集
-            </button>
-          )}
+          
           {canEdit && (
             <button
               onClick={() => setShowAddReference(true)}
-              className="btn btn-primary"
+              className="btn btn-primary flex items-center gap-2"
             >
-              <span className="text-lg">➕</span>
-              参照を追加
+              <Plus className="w-4 h-4" />
+              参照追加
             </button>
           )}
+
+          {/* 3点リーダーメニュー */}
+          <div className="relative dropdown-menu">
+            <button
+              onClick={() => setShowDropdownMenu(!showDropdownMenu)}
+              className="btn btn-outline p-2"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            
+            {showDropdownMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                {canShare && (
+                  <button
+                    onClick={() => {
+                      setShowShareModal(true)
+                      setShowDropdownMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    共有
+                  </button>
+                )}
+                {canEdit && (
+                  <button
+                    onClick={() => {
+                      setShowEditModal(true)
+                      setShowDropdownMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    編集
+                  </button>
+                )}
+                {isOwner && (
+                  <button
+                    onClick={() => {
+                      setShowProjectDeleteConfirm(true)
+                      setShowDropdownMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    削除
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -625,7 +709,10 @@ export default function ProjectDetail() {
 
       {/* 引用生成モーダル */}
       {showCitationModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div 
+          className="fixed inset-0 flex items-center justify-center p-4 z-50"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+        >
           <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
@@ -661,9 +748,7 @@ export default function ProjectDetail() {
                     onClick={() => setShowCitationModal(false)}
                     className="text-gray-400 hover:text-gray-600"
                   >
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <X className="w-6 h-6" />
                   </button>
                 </div>
               </div>
@@ -681,26 +766,33 @@ export default function ProjectDetail() {
             <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
               <button
                 onClick={copyCitations}
-                className="btn btn-outline"
+                className="btn btn-outline flex items-center gap-2"
               >
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
+                <Copy className="w-4 h-4" />
                 コピー
               </button>
               <button
                 onClick={exportCitations}
-                className="btn btn-primary"
+                className="btn btn-primary flex items-center gap-2"
               >
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <Download className="w-4 h-4" />
                 エクスポート
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* プロジェクト削除確認ダイアログ */}
+      <ConfirmDialog
+        isOpen={showProjectDeleteConfirm}
+        onClose={() => setShowProjectDeleteConfirm(false)}
+        onConfirm={handleDeleteProject}
+        title="プロジェクトを削除"
+        message="このプロジェクトを削除しますか？この操作は取り消せません。"
+        confirmText="削除"
+        cancelText="キャンセル"
+      />
     </div>
   )
 }
