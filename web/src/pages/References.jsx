@@ -6,9 +6,11 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import ReferenceCard from '../components/common/ReferenceCard'
 import AddReferenceModal from '../components/common/AddReferenceModal'
 import { usePageFocus } from '../hooks/usePageFocus'
+import { useModalContext } from '../hooks/useModalContext'
 
 export default function References() {
   const { user } = useAuth()
+  const { hasOpenModals } = useModalContext()
   const [references, setReferences] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -94,6 +96,12 @@ export default function References() {
   const loadData = useCallback(async () => {
     if (!user) {return}
     
+    // モーダルが開いている場合はリロードをスキップ
+    if (hasOpenModals) {
+      console.log('モーダルが開いているため、参照データのリロードをスキップします')
+      return
+    }
+    
     try {
       setLoading(true)
       setError(null)
@@ -121,7 +129,7 @@ export default function References() {
     } finally {
       setLoading(false)
     }
-  }, [user, loadReferences, loadCitationSettings])
+  }, [user, loadReferences, loadCitationSettings, hasOpenModals])
 
   // ページフォーカス時の不要なリロードを防ぐ
   usePageFocus(loadData, [user?.id], {

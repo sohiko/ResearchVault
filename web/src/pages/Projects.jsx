@@ -13,6 +13,7 @@ import { renderProjectIcon, getAvailableLucideIcons, getAvailableEmojiIcons } fr
 
 export default function Projects() {
   const { user } = useAuth()
+  const { hasOpenModals } = useModalContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -24,6 +25,12 @@ export default function Projects() {
 
   const loadProjects = useCallback(async () => {
     if (!user) {return}
+    
+    // モーダルが開いている場合はリロードをスキップ
+    if (hasOpenModals) {
+      console.log('モーダルが開いているため、プロジェクトのリロードをスキップします')
+      return
+    }
     
     try {
       setLoading(true)
@@ -164,7 +171,7 @@ export default function Projects() {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, hasOpenModals])
 
   // ページフォーカス時の不要なリロードを防ぐ
   usePageFocus(loadProjects, [user?.id], {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useModalContext } from '../hooks/useModalContext'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -31,6 +32,7 @@ export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { hasOpenModals } = useModalContext()
   
   // 状態管理
   const [project, setProject] = useState(null)
@@ -61,6 +63,12 @@ export default function ProjectDetail() {
 
   const loadProject = useCallback(async () => {
     if (!id || !user) {return}
+    
+    // モーダルが開いている場合はリロードをスキップ
+    if (hasOpenModals) {
+      console.log('モーダルが開いているため、プロジェクト詳細のリロードをスキップします')
+      return
+    }
     
     // プロジェクトの基本情報を取得
     const { data: projectData, error: projectError } = await supabase
@@ -104,10 +112,16 @@ export default function ProjectDetail() {
     }
 
     setProject(projectData)
-  }, [id, user, navigate])
+  }, [id, user, navigate, hasOpenModals])
 
   const loadReferences = useCallback(async () => {
     if (!id) {return}
+    
+    // モーダルが開いている場合はリロードをスキップ
+    if (hasOpenModals) {
+      console.log('モーダルが開いているため、参照データのリロードをスキップします')
+      return
+    }
     
     let query = supabase
       .from('references')
@@ -143,10 +157,16 @@ export default function ProjectDetail() {
     }))
 
     setReferences(formattedReferences)
-  }, [id, searchQuery, sortBy, sortOrder])
+  }, [id, searchQuery, sortBy, sortOrder, hasOpenModals])
 
   const loadMembers = useCallback(async () => {
     if (!id) {return}
+    
+    // モーダルが開いている場合はリロードをスキップ
+    if (hasOpenModals) {
+      console.log('モーダルが開いているため、メンバーデータのリロードをスキップします')
+      return
+    }
     
     const { data, error } = await supabase
       .from('project_members')
@@ -159,7 +179,7 @@ export default function ProjectDetail() {
     if (error) {throw error}
 
     setMembers(data)
-  }, [id])
+  }, [id, hasOpenModals])
 
   const loadCitationSettings = useCallback(async () => {
     if (!user) return

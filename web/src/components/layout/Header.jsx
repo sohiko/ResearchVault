@@ -1,16 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useProjects } from '../../hooks/useProjects'
 import { ThemeToggle } from '../../hooks/useTheme'
+import { useNavigationBlock } from '../../hooks/useNavigationBlock'
+import { useModalContext } from '../../hooks/useModalContext'
 
 export default function Header({ onMenuClick }) {
   const { user, signOut } = useAuth()
   const { currentProject } = useProjects()
-  const navigate = useNavigate()
+  const { hasOpenModals } = useModalContext()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const userMenuRef = useRef(null)
+  
+  // モーダルが開いている時のナビゲーションをブロック
+  const blockedNavigate = useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
 
   // ユーザーメニューの外側クリックで閉じる
   useEffect(() => {
@@ -29,7 +34,7 @@ export default function Header({ onMenuClick }) {
   const handleLogout = async () => {
     try {
       await signOut()
-      navigate('/auth/login')
+      blockedNavigate('/auth/login')
     } catch (error) {
       console.error('Logout error:', error)
     }
@@ -38,7 +43,7 @@ export default function Header({ onMenuClick }) {
   const handleSearch = (e) => {
     e.preventDefault()
     if (searchQuery.trim()) {
-      navigate(`/references?search=${encodeURIComponent(searchQuery.trim())}`)
+      blockedNavigate(`/references?search=${encodeURIComponent(searchQuery.trim())}`)
       setSearchQuery('')
     }
   }

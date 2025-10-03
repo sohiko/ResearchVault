@@ -1,6 +1,8 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useProjects } from '../../hooks/useProjects'
+import { useNavigationBlock } from '../../hooks/useNavigationBlock'
+import { useModalContext } from '../../hooks/useModalContext'
 
 const navigation = [
   {
@@ -76,6 +78,10 @@ const quickActions = [
 export default function Sidebar() {
   const location = useLocation()
   const { projects, currentProject } = useProjects()
+  const { hasOpenModals } = useModalContext()
+  
+  // モーダルが開いている時のナビゲーションをブロック
+  const blockedNavigate = useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
 
   const isActiveLink = (href) => {
     if (href === '/dashboard') {
@@ -105,7 +111,10 @@ export default function Sidebar() {
     <div className="flex h-full flex-col bg-white dark:bg-secondary-800 border-r border-secondary-200 dark:border-secondary-700">
       {/* ロゴエリア */}
       <div className="flex h-16 items-center justify-between px-6 border-b border-secondary-200 dark:border-secondary-700">
-        <Link to="/dashboard" className="flex items-center space-x-3">
+        <button 
+          onClick={() => blockedNavigate('/dashboard')}
+          className="flex items-center space-x-3 w-full text-left"
+        >
           <img 
             src="/favicon/android-chrome-192x192.png" 
             alt="ResearchVault" 
@@ -114,7 +123,7 @@ export default function Sidebar() {
           <span className="text-xl font-bold text-secondary-900 dark:text-secondary-100">
             ResearchVault
           </span>
-        </Link>
+        </button>
       </div>
 
       {/* ナビゲーション */}
@@ -124,15 +133,18 @@ export default function Sidebar() {
           <ul className="space-y-1">
             {navigation.map((item) => (
               <li key={item.name}>
-                <Link
-                  to={item.href}
-                  className={`nav-link ${
+                <button
+                  onClick={() => blockedNavigate(item.href)}
+                  className={`nav-link w-full text-left ${
                     isActiveLink(item.href) ? 'nav-link-active' : 'nav-link-inactive'
+                  } ${
+                    hasOpenModals && !isActiveLink(item.href) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                   }`}
+                  disabled={hasOpenModals && !isActiveLink(item.href)}
                 >
                   {item.icon}
                   <span className="ml-3">{item.name}</span>
-                </Link>
+                </button>
               </li>
             ))}
           </ul>
@@ -144,25 +156,31 @@ export default function Sidebar() {
             <h3 className="text-sm font-medium text-secondary-700 dark:text-secondary-300">
               プロジェクト
             </h3>
-            <Link
-              to="/projects?action=create"
-              className="p-1 rounded text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-200"
+            <button
+              onClick={() => blockedNavigate('/projects?action=create')}
+              className={`p-1 rounded text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-200 ${
+                hasOpenModals ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              }`}
               title="新規プロジェクト"
+              disabled={hasOpenModals}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-            </Link>
+            </button>
           </div>
           
           <ul className="space-y-1">
             {projects.slice(0, 5).map((project) => (
               <li key={project.id}>
-                <Link
-                  to={`/projects/${project.id}`}
-                  className={`nav-link ${
+                <button
+                  onClick={() => blockedNavigate(`/projects/${project.id}`)}
+                  className={`nav-link w-full text-left ${
                     currentProject?.id === project.id ? 'nav-link-active' : 'nav-link-inactive'
+                  } ${
+                    hasOpenModals && currentProject?.id !== project.id ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                   }`}
+                  disabled={hasOpenModals && currentProject?.id !== project.id}
                 >
                   <span className="text-lg">{getProjectIcon(project)}</span>
                   <div className="flex-1 ml-3 min-w-0">
@@ -173,26 +191,32 @@ export default function Sidebar() {
                       {project.referenceCount} 件の参照
                     </div>
                   </div>
-                </Link>
+                </button>
               </li>
             ))}
             
             {projects.length > 5 && (
               <li>
-                <Link
-                  to="/projects"
-                  className="nav-link nav-link-inactive text-center"
+                <button
+                  onClick={() => blockedNavigate('/projects')}
+                  className={`nav-link nav-link-inactive text-center w-full ${
+                    hasOpenModals ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                  }`}
+                  disabled={hasOpenModals}
                 >
                   <span className="text-sm">すべて表示 ({projects.length})</span>
-                </Link>
+                </button>
               </li>
             )}
             
             {projects.length === 0 && (
               <li>
-                <Link
-                  to="/projects?action=create"
-                  className="nav-link nav-link-inactive text-center border-2 border-dashed border-secondary-300 dark:border-secondary-600"
+                <button
+                  onClick={() => blockedNavigate('/projects?action=create')}
+                  className={`nav-link nav-link-inactive text-center border-2 border-dashed border-secondary-300 dark:border-secondary-600 w-full ${
+                    hasOpenModals ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                  }`}
+                  disabled={hasOpenModals}
                 >
                   <svg className="w-5 h-5 mx-auto text-secondary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -200,7 +224,7 @@ export default function Sidebar() {
                   <span className="text-sm text-secondary-500 dark:text-secondary-400 mt-1 block">
                     新規プロジェクト
                   </span>
-                </Link>
+                </button>
               </li>
             )}
           </ul>
@@ -214,9 +238,12 @@ export default function Sidebar() {
           <ul className="space-y-1">
             {quickActions.map((item) => (
               <li key={item.name}>
-                <Link
-                  to={item.href}
-                  className={`nav-link nav-link-inactive justify-between`}
+                <button
+                  onClick={() => blockedNavigate(item.href)}
+                  className={`nav-link nav-link-inactive justify-between w-full text-left ${
+                    hasOpenModals ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                  }`}
+                  disabled={hasOpenModals}
                 >
                   <div className="flex items-center">
                     {item.icon}
@@ -227,7 +254,7 @@ export default function Sidebar() {
                       {item.badge}
                     </span>
                   )}
-                </Link>
+                </button>
               </li>
             ))}
           </ul>
@@ -251,12 +278,15 @@ export default function Sidebar() {
                 </p>
               </div>
             </div>
-            <a
-              href="/extension/install"
-              className="btn-primary w-full text-xs"
+            <button
+              onClick={() => blockedNavigate('/extension/install')}
+              className={`btn-primary w-full text-xs ${
+                hasOpenModals ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              }`}
+              disabled={hasOpenModals}
             >
               インストール
-            </a>
+            </button>
           </div>
         </div>
       </nav>

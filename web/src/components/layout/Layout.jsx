@@ -2,10 +2,17 @@ import React, { useState } from 'react'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import { useTheme } from '../../hooks/useTheme'
+import { useNavigationBlock } from '../../hooks/useNavigationBlock'
+import { useModalContext } from '../../hooks/useModalContext'
 
 export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { hasOpenModals } = useModalContext()
+  
   useTheme() // テーマの読み込みのため
+  
+  // モーダルが開いている時のナビゲーションをブロック
+  useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
 
   return (
     <div className="min-h-screen bg-secondary-50 dark:bg-secondary-900">

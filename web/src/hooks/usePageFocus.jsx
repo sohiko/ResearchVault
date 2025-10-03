@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useModalContext } from './useModalContext'
 
 /**
  * ページフォーカス時の不要なリロードを防ぐフック
@@ -9,6 +10,7 @@ import { useEffect, useRef } from 'react'
  * @param {number} options.debounceMs - デバウンス時間（ミリ秒）
  */
 export function usePageFocus(callback, deps = [], options = {}) {
+  const { hasOpenModals } = useModalContext()
   const {
     enableFocusReload = false,
     debounceMs = 1000
@@ -27,6 +29,12 @@ export function usePageFocus(callback, deps = [], options = {}) {
     if (!enableFocusReload) return
 
     const handleFocus = () => {
+      // モーダルが開いている場合はリロードを実行しない
+      if (hasOpenModals) {
+        console.log('モーダルが開いているため、ページフォーカス時のリロードをスキップします')
+        return
+      }
+
       const now = Date.now()
       const timeSinceLastFocus = now - lastFocusTimeRef.current
 
@@ -50,6 +58,11 @@ export function usePageFocus(callback, deps = [], options = {}) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        // モーダルが開いている場合はリロードを実行しない
+        if (hasOpenModals) {
+          console.log('モーダルが開いているため、ページ可視化時のリロードをスキップします')
+          return
+        }
         handleFocus()
       }
     }
@@ -65,12 +78,18 @@ export function usePageFocus(callback, deps = [], options = {}) {
         clearTimeout(timeoutRef.current)
       }
     }
-  }, [enableFocusReload, debounceMs])
+  }, [enableFocusReload, debounceMs, hasOpenModals])
 
   // 依存配列が変更された場合のみコールバックを実行
   useEffect(() => {
+    // モーダルが開いている場合は初期ロードもスキップ
+    if (hasOpenModals) {
+      console.log('モーダルが開いているため、初期データロードをスキップします')
+      return
+    }
     callbackRef.current()
-  }, [deps])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, hasOpenModals])
 }
 
 export default usePageFocus
