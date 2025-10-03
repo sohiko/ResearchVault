@@ -1,226 +1,72 @@
-# モーダルリロード保護機能の完璧な実装完了
+# モーダル再読み込み保護機能 - 修正完了
 
-## 概要
-前回実装したモーダルナビゲーション保護機能を完璧に修正・拡張し、モーダルが開いている間のページリロードを完全に防ぐ機能を実装しました。
+## 修正内容
 
-## 完璧な修正・実装が完了しました！
+### 1. 主要な問題の修正
 
-### 最終実装の概要：
+#### 問題1: モーダル閉じた後も離脱警告が出る
+- **原因**: `useNavigationBlock`フックで`beforeunload`イベントリスナーが適切にクリーンアップされていない
+- **修正**: イベントリスナー内で`shouldBlock`の状態を確認するように変更
 
-1. **完全なページリロード防止システム**
-   - モーダルが開いている間は、ページフォーカス時の自動リロードを完全に無効化
-   - タブ切り替え後の復帰時リロードも防止
-   - 初期データロード時もモーダル状態をチェック
+#### 問題2: ページ再アクティブ化時にモーダルの入力データが消える
+- **原因**: DOM再読み込み時にモーダル状態が適切に管理されていない
+- **修正**: モーダル状態管理の改善とデータ永続化の強化
 
-2. **統合されたナビゲーション保護**
-   - `useNavigationBlock`フックによる統一されたナビゲーション制御
-   - サイドバーのすべてのナビゲーションリンクを保護（視覚的フィードバック付き）
-   - ヘッダーのナビゲーション（検索、ログアウト）も保護
-   - ブラウザの戻る/進むボタンの完全制御
+### 2. 修正されたファイル
 
-3. **レイアウトレベルでの統合保護**
-   - Layout.jsxでグローバルナビゲーションブロックを適用
-   - Header.jsxとSidebar.jsxで統一されたナビゲーション制御
-   - Linkコンポーネントをbuttonに変更してより確実な制御を実現
+#### `web/src/hooks/useNavigationBlock.jsx`
+- `beforeunload`イベントハンドラーを条件付きで実行するように修正
+- `popstate`イベントの処理を改善
 
-4. **データ読み込み制御の完全実装**
-   - Projects、References、ProjectDetailページでのデータリロードを制御
-   - モーダル開放中は不要なAPI呼び出しをスキップ
-   - 依存関係の適切な管理でReactフックの警告を解消
+#### `web/src/components/common/ProtectedModal.jsx`
+- モーダル閉じる時に確実に状態をクリアするように修正
+- アンマウント時のクリーンアップ処理を追加
 
-5. **視覚的フィードバックの強化**
-   - モーダル開放中はナビゲーションボタンが無効化される
-   - カーソルが`cursor-not-allowed`に変更される
-   - 透明度50%で視覚的に無効状態を表示
-   - 現在のページは無効化されない（ユーザビリティ向上）
+#### `web/src/hooks/useModalContext.jsx`
+- `closeModal`関数にデバッグログを追加
+- モーダル状態のクリーンアップを強化
 
-6. **デバッグ機能の充実**
-   - 各保護機能の動作をコンソールログで確認可能
-   - 開発時のトラブルシューティングが容易
-   - ESLintの警告を適切に処理
+#### `web/src/hooks/useModalDataPersistence.jsx`
+- モーダルアンマウント時にデータをクリアする機能を追加
 
-### 最終テスト結果：
-- ✅ ビルドテスト: 成功
-- ✅ Lintテスト: 成功（警告40個、50個以下の制限内）
-- ✅ 依存関係の警告: 解消
-- ✅ TypeScriptエラー: 解消
+#### 各モーダルコンポーネント
+- `CreateProjectModal`, `AddReferenceModal`, `EditProjectModal`, `ShareProjectModal`
+- `useEffect`のクリーンアップ関数を改善
 
-### 完全に保護される操作：
-- ✅ ページフォーカス時の自動リロード
-- ✅ ページ可視化時の自動リロード
-- ✅ 初期データロード時のモーダル状態チェック
-- ✅ サイドバーナビゲーション（プロジェクト、メニュー項目）
-- ✅ ヘッダーナビゲーション（検索、ログアウト）
-- ✅ ブラウザ戻る/進むボタン
-- ✅ ページリロード（F5キー）
-- ✅ タブ/ウィンドウを閉じる
-- ✅ ESCキー、背景クリック
-- ✅ プログラマティックナビゲーション
+### 3. 修正後の動作
 
-### 技術的改善点：
-- `useNavigationBlock`による統一されたナビゲーション制御
-- 適切な依存関係管理でReactフックの警告を解消
-- ESLintルールの適切な処理
-- TypeScriptエラーの完全解消
-- パフォーマンス最適化
+#### ✅ 修正された動作
+1. **モーダルが開いている時**: ページ再読み込み処理が停止される
+2. **モーダルを閉じた後**: 離脱警告が表示されない
+3. **入力データの保護**: モーダル内の入力データが再読み込み時に保持される
+4. **適切なクリーンアップ**: モーダル閉じる時に全ての状態がクリアされる
 
-## 修正された主要ファイル
+#### 🔧 技術的改善
+- イベントリスナーの適切な管理
+- モーダル状態の確実なクリーンアップ
+- データ永続化の改善
+- デバッグログの追加
 
-### 1. usePageFocus.jsx の改善
-```jsx
-// モーダル状態チェックを追加
-const handleFocus = () => {
-  if (hasOpenModals) {
-    console.log('モーダルが開いているため、ページフォーカス時のリロードをスキップします')
-    return
-  }
-  // ... 既存の処理
-}
+### 4. テスト方法
 
-// 初期データロード時もモーダル状態をチェック
-useEffect(() => {
-  if (hasOpenModals) {
-    console.log('モーダルが開いているため、初期データロードをスキップします')
-    return
-  }
-  callbackRef.current()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [...deps, hasOpenModals])
-```
+1. **基本動作テスト**:
+   - モーダルを開く → 入力 → ページを別タブに移動 → 戻る → 入力データが保持されている
 
-### 2. Layout.jsx の統合保護
-```jsx
-import { useNavigationBlock } from '../../hooks/useNavigationBlock'
-import { useModalContext } from '../../hooks/useModalContext'
+2. **離脱警告テスト**:
+   - モーダルを開く → 入力 → モーダルを閉じる → ページ離脱 → 警告が出ない
 
-export default function Layout({ children }) {
-  const { hasOpenModals } = useModalContext()
-  
-  // モーダルが開いている時のナビゲーションをブロック
-  useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
-  
-  // ... 既存のコード
-}
-```
-
-### 3. Header.jsx の完全保護
-```jsx
-export default function Header({ onMenuClick }) {
-  const { hasOpenModals } = useModalContext()
-  
-  // モーダルが開いている時のナビゲーションをブロック
-  const blockedNavigate = useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
-
-  const handleLogout = async () => {
-    try {
-      await signOut()
-      blockedNavigate('/auth/login') // 保護されたナビゲーション
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
-  }
-
-  const handleSearch = (e) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      blockedNavigate(`/references?search=${encodeURIComponent(searchQuery.trim())}`)
-      setSearchQuery('')
-    }
-  }
-}
-```
-
-### 4. Sidebar.jsx の視覚的フィードバック付き保護
-```jsx
-export default function Sidebar() {
-  const { hasOpenModals } = useModalContext()
-  const blockedNavigate = useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
-
-  // すべてのLinkをbuttonに変更し、視覚的フィードバックを追加
-  {navigation.map((item) => (
-    <li key={item.name}>
-      <button
-        onClick={() => blockedNavigate(item.href)}
-        className={`nav-link w-full text-left ${
-          isActiveLink(item.href) ? 'nav-link-active' : 'nav-link-inactive'
-        } ${
-          hasOpenModals && !isActiveLink(item.href) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-        }`}
-        disabled={hasOpenModals && !isActiveLink(item.href)}
-      >
-        {item.icon}
-        <span className="ml-3">{item.name}</span>
-      </button>
-    </li>
-  ))}
-}
-```
-
-### 5. ページレベルでの完全なデータ読み込み制御
-
-**Projects.jsx, References.jsx, ProjectDetail.jsx**
-```jsx
-const loadData = useCallback(async () => {
-  if (!user) return
-  
-  // モーダルが開いている場合はリロードをスキップ
-  if (hasOpenModals) {
-    console.log('モーダルが開いているため、データのリロードをスキップします')
-    return
-  }
-  
-  // ... データ読み込み処理
-}, [user, hasOpenModals]) // 適切な依存関係
-```
-
-## 使用方法
-
-### 新しいページでの保護機能追加
-
-```jsx
-import { useModalContext } from '../hooks/useModalContext'
-import { useNavigationBlock } from '../hooks/useNavigationBlock'
-
-const YourPage = () => {
-  const { hasOpenModals } = useModalContext()
-  
-  // ナビゲーション保護
-  const blockedNavigate = useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
-  
-  const loadData = useCallback(async () => {
-    if (!user) return
-    
-    // モーダル保護
-    if (hasOpenModals) {
-      console.log('モーダルが開いているため、データのリロードをスキップします')
-      return
-    }
-    
-    // データ読み込み処理
-  }, [user, hasOpenModals])
-  
-  // usePageFocusは自動的に保護される
-  usePageFocus(loadData, [user?.id], {
-    enableFocusReload: false
-  })
-}
-```
-
-## 今後の改善点
-
-1. **カスタム確認ダイアログ**: ブラウザ標準の`confirm`をカスタムUIに置き換え
-2. **自動保存機能**: 一定間隔での入力内容の自動保存
-3. **復元機能**: ページリロード後の入力内容復元
-4. **詳細なログ**: 操作の詳細な追跡とデバッグ情報
-5. **テスト**: 自動テストによる保護機能の検証
+3. **再読み込み保護テスト**:
+   - モーダルを開く → 入力中 → ページフォーカス変更 → 自動リロードが停止される
 
 ## 注意事項
 
-1. **ブラウザ制限**: `beforeunload`の確認ダイアログはブラウザによって表示が異なる
-2. **モバイル対応**: モバイルブラウザでは一部機能が制限される場合がある
-3. **パフォーマンス**: 大量のモーダルが同時に開かれる場合は注意が必要
-4. **デバッグログ**: 本番環境では適切にログレベルを調整する必要がある
+- この修正により、モーダルが開いている間は自動リロード機能が一時停止されます
+- モーダルを閉じると通常の動作に戻ります
+- 入力データは最大5分間保持されます（セキュリティ考慮）
 
-これで、ユーザーがモーダルで作業中に**どのような操作をしても**入力内容が失われることは完全に防止されます。学術研究での長時間の入力作業において、この機能は極めて重要な改善となります！
+## 今後の改善案
 
-特に、別ページに移動して戻ってきた際のリロード問題は完全に解決され、すべてのナビゲーション操作が適切に制御されています。
+1. モーダル状態の可視化（開発者ツール）
+2. データ永続化の設定可能化
+3. より詳細なログ機能
+4. ユーザー向けの状態表示UI
