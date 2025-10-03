@@ -2,15 +2,24 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
+import { usePageFocus } from '../hooks/usePageFocus'
+import { useModalContext } from '../hooks/useModalContext'
 
 export default function Citations() {
   const { user } = useAuth()
+  const { hasOpenModals } = useModalContext()
   const [citationFormat, setCitationFormat] = useState('APA')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const loadSettings = useCallback(async () => {
     if (!user) {
+      return
+    }
+    
+    // モーダルが開いている場合はリロードをスキップ
+    if (hasOpenModals) {
+      console.log('モーダルが開いているため、引用設定のリロードをスキップします')
       return
     }
     
@@ -35,7 +44,12 @@ export default function Citations() {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, hasOpenModals])
+
+  // ページフォーカス時の自動リロードを制御
+  usePageFocus(loadSettings, [user?.id], {
+    enableFocusReload: false // フォーカス時のリロードは無効
+  })
 
   useEffect(() => {
     if (user) {

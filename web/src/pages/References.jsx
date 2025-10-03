@@ -131,9 +131,10 @@ export default function References() {
     }
   }, [user, loadReferences, loadCitationSettings])
 
-  // ページフォーカス時の不要なリロードを防ぐ
-  usePageFocus(loadData, [user?.id], {
-    enableFocusReload: false // フォーカス時のリロードは無効
+  // ページフォーカス時の自動リロードを制御
+  usePageFocus(loadData, [user?.id, filters], {
+    enableFocusReload: false, // フォーカス時のリロードは無効
+    skipWhenModalOpen: true   // モーダルが開いている時はスキップ
   })
 
   const handleAddReference = async (referenceData) => {

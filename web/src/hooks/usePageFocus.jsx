@@ -7,12 +7,14 @@ import { useModalContext } from './useModalContext'
  * @param {Array} deps - 依存配列
  * @param {Object} options - オプション
  * @param {boolean} options.enableFocusReload - フォーカス時のリロードを有効にするか
+ * @param {boolean} options.skipWhenModalOpen - モーダルが開いている時はスキップするか
  * @param {number} options.debounceMs - デバウンス時間（ミリ秒）
  */
 export function usePageFocus(callback, deps = [], options = {}) {
   const { hasOpenModals } = useModalContext()
   const {
     enableFocusReload = false,
+    skipWhenModalOpen = true,
     debounceMs = 1000
   } = options
 
@@ -30,7 +32,7 @@ export function usePageFocus(callback, deps = [], options = {}) {
 
     const handleFocus = () => {
       // モーダルが開いている場合はリロードを実行しない
-      if (hasOpenModals) {
+      if (skipWhenModalOpen && hasOpenModals) {
         console.log('モーダルが開いているため、ページフォーカス時のリロードをスキップします')
         return
       }
@@ -53,7 +55,7 @@ export function usePageFocus(callback, deps = [], options = {}) {
       // デバウンス後にコールバックを実行
       timeoutRef.current = setTimeout(() => {
         // 実行時に再度モーダル状態をチェック
-        if (callbackRef.current && !hasOpenModals) {
+        if (callbackRef.current && (!skipWhenModalOpen || !hasOpenModals)) {
           callbackRef.current()
         }
       }, 100) // より短いデバウンス時間
@@ -62,7 +64,7 @@ export function usePageFocus(callback, deps = [], options = {}) {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         // モーダルが開いている場合はリロードを実行しない
-        if (hasOpenModals) {
+        if (skipWhenModalOpen && hasOpenModals) {
           console.log('モーダルが開いているため、ページ可視化時のリロードをスキップします')
           return
         }
@@ -81,15 +83,15 @@ export function usePageFocus(callback, deps = [], options = {}) {
         clearTimeout(timeoutRef.current)
       }
     }
-  }, [enableFocusReload, debounceMs, hasOpenModals])
+  }, [enableFocusReload, debounceMs, hasOpenModals, skipWhenModalOpen])
 
   // 依存配列が変更された場合のみコールバックを実行（モーダルが開いていない場合のみ）
   useEffect(() => {
-    if (!hasOpenModals && callbackRef.current) {
+    if ((!skipWhenModalOpen || !hasOpenModals) && callbackRef.current) {
       callbackRef.current()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, hasOpenModals])
+  }, [...deps, hasOpenModals, skipWhenModalOpen])
 }
 
 export default usePageFocus

@@ -173,9 +173,10 @@ export default function Projects() {
     }
   }, [user])
 
-  // ページフォーカス時の不要なリロードを防ぐ
+  // ページフォーカス時の自動リロードを制御
   usePageFocus(loadProjects, [user?.id], {
-    enableFocusReload: false // フォーカス時のリロードは無効
+    enableFocusReload: false, // フォーカス時のリロードは無効
+    skipWhenModalOpen: true   // モーダルが開いている時はスキップ
   })
 
   // URLパラメータの処理

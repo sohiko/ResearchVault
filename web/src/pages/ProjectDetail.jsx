@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useModalContext } from '../hooks/useModalContext'
+import { usePageFocus } from '../hooks/usePageFocus'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -217,6 +218,12 @@ export default function ProjectDetail() {
       setLoading(false)
     }
   }, [loadProject, loadReferences, loadMembers, loadCitationSettings])
+
+  // ページフォーカス時の自動リロードを制御
+  usePageFocus(loadProjectData, [id, user?.id], {
+    enableFocusReload: false, // フォーカス時のリロードは無効
+    skipWhenModalOpen: true   // モーダルが開いている時はスキップ
+  })
 
   useEffect(() => {
     if (user && id) {
