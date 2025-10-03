@@ -69,3 +69,16 @@ export const useModalContext = () => {
   }
   return context
 }
+
+// モーダル状態の変更を監視するためのカスタムフック
+export const useModalStateChange = (callback) => {
+  const { hasOpenModals } = useModalContext()
+  const prevHasOpenModalsRef = React.useRef(hasOpenModals)
+
+  React.useEffect(() => {
+    if (prevHasOpenModalsRef.current !== hasOpenModals) {
+      callback(hasOpenModals, prevHasOpenModalsRef.current)
+      prevHasOpenModalsRef.current = hasOpenModals
+    }
+  }, [hasOpenModals, callback])
+}

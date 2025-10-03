@@ -52,8 +52,11 @@ export function usePageFocus(callback, deps = [], options = {}) {
 
       // デバウンス後にコールバックを実行
       timeoutRef.current = setTimeout(() => {
-        callbackRef.current()
-      }, debounceMs)
+        // 実行時に再度モーダル状態をチェック
+        if (callbackRef.current && !hasOpenModals) {
+          callbackRef.current()
+        }
+      }, 100) // より短いデバウンス時間
     }
 
     const handleVisibilityChange = () => {
@@ -80,11 +83,13 @@ export function usePageFocus(callback, deps = [], options = {}) {
     }
   }, [enableFocusReload, debounceMs, hasOpenModals])
 
-  // 依存配列が変更された場合のみコールバックを実行
+  // 依存配列が変更された場合のみコールバックを実行（モーダルが開いていない場合のみ）
   useEffect(() => {
-    callbackRef.current()
+    if (!hasOpenModals && callbackRef.current) {
+      callbackRef.current()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+  }, [...deps, hasOpenModals])
 }
 
 export default usePageFocus
