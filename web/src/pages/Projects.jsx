@@ -242,6 +242,8 @@ export default function Projects() {
         } else if (checkData && checkData.deleted_at) {
           console.log('Project was actually deleted, RLS policy prevented return data')
           toast.success('プロジェクトをゴミ箱に移動しました')
+          // ローカル状態から削除されたプロジェクトを即座に除去
+          setProjects(prev => prev.filter(project => project.id !== projectToDelete))
         } else {
           console.error('Project was not deleted')
           toast.error('プロジェクトの削除に失敗しました（権限不足の可能性）')
@@ -250,9 +252,9 @@ export default function Projects() {
       } else {
         console.log('Delete operation successful:', data)
         toast.success('プロジェクトをゴミ箱に移動しました')
+        // ローカル状態から削除されたプロジェクトを即座に除去
+        setProjects(prev => prev.filter(project => project.id !== projectToDelete))
       }
-
-      await loadProjects()
     } catch (error) {
       console.error('Failed to delete project:', error)
       toast.error(`プロジェクトの削除に失敗しました: ${error.message}`)

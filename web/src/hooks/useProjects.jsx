@@ -47,6 +47,7 @@ export function ProjectProvider({ children }) {
           owner:profiles!owner_id(name, email)
         `)
         .eq('owner_id', userId)
+        .is('deleted_at', null) // 削除されていないプロジェクトのみ
         .order('updated_at', { ascending: false })
 
       if (ownedError) {throw ownedError}
@@ -88,15 +89,17 @@ export function ProjectProvider({ children }) {
           isOwner: true,
           userRole: 'owner'
         })),
-        // メンバープロジェクト
-        ...(memberData || []).map(member => ({
-          ...member.projects,
-          referenceCount: member.projects.references?.length || 0,
-          memberCount: member.projects.project_members?.length || 0,
-          members: member.projects.project_members?.map(pm => ({
-            role: pm.role,
-            joinedAt: pm.joined_at,
-            user: pm.profiles
+        // メンバープロジェクト（削除されていないもののみ）
+        ...(memberData || [])
+          .filter(member => member.projects && !member.projects.deleted_at)
+          .map(member => ({
+            ...member.projects,
+            referenceCount: member.projects.references?.length || 0,
+            memberCount: member.projects.project_members?.length || 0,
+            members: member.projects.project_members?.map(pm => ({
+              role: pm.role,
+              joinedAt: pm.joined_at,
+              user: pm.profiles
           })) || [],
           isOwner: false,
           userRole: member.role
@@ -262,15 +265,18 @@ export function ProjectProvider({ children }) {
         // メンバー削除エラーでも続行
       }
 
-      // プロジェクトを削除
+      // プロジェクトをソフト削除（ゴミ箱に移動）
       const { error } = await supabase
         .from('projects')
-        .delete()
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: user.id
+        })
         .eq('id', projectId)
 
       if (error) {throw error}
 
-      toast.success('プロジェクトを削除しました')
+      toast.success('プロジェクトをゴミ箱に移動しました')
       
       // 現在のプロジェクトが削除されたプロジェクトの場合はクリア
       if (currentProject?.id === projectId) {

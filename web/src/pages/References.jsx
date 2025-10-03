@@ -38,6 +38,7 @@ export default function References() {
           bookmarks(id)
         `)
         .eq('saved_by', user.id)
+        .is('deleted_at', null) // 削除されていないアイテムのみ取得
 
       // フィルター適用
       if (filters.project) {
@@ -174,7 +175,8 @@ export default function References() {
         throw error
       }
 
-      await loadData()
+      // ローカル状態から削除されたアイテムを即座に除去
+      setReferences(prev => prev.filter(ref => ref.id !== referenceToDelete))
       toast.success('参照をゴミ箱に移動しました')
     } catch (error) {
       console.error('Failed to delete reference:', error)
