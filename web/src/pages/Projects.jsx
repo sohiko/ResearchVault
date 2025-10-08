@@ -171,7 +171,14 @@ export default function Projects() {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, hasOpenModals])
+
+  // 初回ロード
+  useEffect(() => {
+    if (user) {
+      loadProjects()
+    }
+  }, [user, loadProjects])
 
   // ページフォーカス時の自動リロードを無効化（モーダルがあるページなので完全に無効）
   usePageFocus(() => {}, [], {
