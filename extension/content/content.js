@@ -931,6 +931,38 @@ class ContentScriptManager {
             // 認証データを拡張機能のストレージに保存
             this.syncAuthFromWebpage(event.data.data);
         }
+
+        if (event.data.type === 'RESEARCHVAULT_ANALYZE_HISTORY') {
+            // 履歴分析リクエストをbackground scriptに転送
+            this.relayAnalyzeHistoryRequest(event.data.data);
+        }
+    }
+
+    async relayAnalyzeHistoryRequest(data) {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'analyzeHistory',
+                data: data
+            });
+            
+            // 結果をWebページに返す
+            window.postMessage({
+                type: 'RESEARCHVAULT_ANALYZE_HISTORY_RESPONSE',
+                source: 'content_script',
+                response: response
+            }, '*');
+        } catch (error) {
+            console.error('Failed to relay analyze history request:', error);
+            // エラーもWebページに返す
+            window.postMessage({
+                type: 'RESEARCHVAULT_ANALYZE_HISTORY_RESPONSE',
+                source: 'content_script',
+                response: {
+                    success: false,
+                    error: error.message
+                }
+            }, '*');
+        }
     }
 
     async syncAuthFromWebpage(authData) {

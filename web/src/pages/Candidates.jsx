@@ -20,6 +20,8 @@ export default function Candidates() {
   const [classifying, setClassifying] = useState(false)
   const [classificationProgress, setClassificationProgress] = useState({ processed: 0, total: 0 })
   const [subjectFilter, setSubjectFilter] = useState('')
+  const [autoAnalyzing, setAutoAnalyzing] = useState(false)
+  const [lastAnalyzedTime, setLastAnalyzedTime] = useState(null)
 
   const loadData = useCallback(async () => {
     if (!user) {
@@ -96,55 +98,96 @@ export default function Candidates() {
     enableFocusReload: false // フォーカス時のリロードは無効
   })
 
-  // 初回ロード時に候補が空なら自動的に履歴を分析
+  // リアルタイム履歴分析（定期的に実行）
   useEffect(() => {
+    let intervalId = null
+    let isComponentMounted = true
+    
     const autoAnalyzeHistory = async () => {
-      if (!user || loading || candidates.length > 0) {
+      if (!isComponentMounted || !user || autoAnalyzing) {
         return
       }
 
       // 拡張機能が利用可能かチェック
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+      if (typeof chrome === 'undefined' || !chrome.runtime) {
+        return
+      }
+
+      // 最後の分析から5分以上経過している場合のみ実行
+      if (lastAnalyzedTime && Date.now() - lastAnalyzedTime < 5 * 60 * 1000) {
         return
       }
 
       try {
+        setAutoAnalyzing(true)
         console.log('Auto-analyzing browsing history...')
         
+        // content scriptを通じてメッセージを送信
+        window.postMessage({
+          type: 'RESEARCHVAULT_ANALYZE_HISTORY',
+          data: {
+            days: 30,
+            limit: 50,
+            threshold: 0.5,
+            saveToDatabase: true
+          }
+        }, '*')
+
+        // content scriptからの応答を待つ
         const response = await new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage(
-            { 
-              action: 'analyzeHistory',
-              data: {
-                days: 30,
-                limit: 50,
-                threshold: 0.5,
-                saveToDatabase: true
-              }
-            },
-            (response) => {
-              if (chrome.runtime.lastError) {
-                reject(chrome.runtime.lastError)
-              } else {
-                resolve(response)
-              }
-            }
-          )
+          const timeout = setTimeout(() => reject(new Error('タイムアウト')), 30000)
           
-          setTimeout(() => reject(new Error('タイムアウト')), 30000)
+          const messageHandler = (event) => {
+            if (event.data && event.data.type === 'RESEARCHVAULT_ANALYZE_HISTORY_RESPONSE') {
+              clearTimeout(timeout)
+              window.removeEventListener('message', messageHandler)
+              resolve(event.data.response)
+            }
+          }
+          
+          window.addEventListener('message', messageHandler)
         })
 
-        if (response && response.success && response.saved > 0) {
-          console.log(`Auto-analyzed: ${response.saved} new candidates found`)
-          await loadData()
+        if (isComponentMounted && response && response.success) {
+          setLastAnalyzedTime(Date.now())
+          if (response.saved > 0) {
+            console.log(`Auto-analyzed: ${response.saved} new candidates found`)
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            await loadData()
+            toast.success(`${response.saved}件の新しい学術サイトを検出しました`, {
+              duration: 3000
+            })
+          }
         }
       } catch (error) {
         console.debug('Auto-analysis skipped:', error.message)
+      } finally {
+        if (isComponentMounted) {
+          setAutoAnalyzing(false)
+        }
       }
     }
 
-    autoAnalyzeHistory()
-  }, [user, loading, candidates.length, loadData])
+    // 初回実行
+    if (user) {
+      autoAnalyzeHistory()
+    }
+
+    // 5分ごとに自動分析を実行
+    if (user) {
+      intervalId = setInterval(() => {
+        autoAnalyzeHistory()
+      }, 5 * 60 * 1000) // 5分
+    }
+
+    return () => {
+      isComponentMounted = false
+      if (intervalId) {
+        clearInterval(intervalId)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]) // loadDataを依存配列から除外（意図的）
 
   const saveCandidate = async (candidate, projectId) => {
     try {
@@ -270,39 +313,46 @@ export default function Candidates() {
   const handleAnalyzeHistory = async () => {
     // 拡張機能から履歴を分析
     try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+      if (typeof chrome === 'undefined' || !chrome.runtime) {
         toast.error('拡張機能が利用できません。Chrome拡張機能をインストールしてください。')
         return
       }
 
       setLoading(true)
-      toast.info('履歴を分析しています...')
+      const loadingToast = toast.loading('履歴を分析しています...')
 
+      // content scriptを通じてメッセージを送信
+      window.postMessage({
+        type: 'RESEARCHVAULT_ANALYZE_HISTORY',
+        data: {
+          days: 30,
+          limit: 50,
+          threshold: 0.5,
+          saveToDatabase: true
+        }
+      }, '*')
+
+      // content scriptからの応答を待つ
       const response = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          { 
-            action: 'analyzeHistory',
-            data: {
-              days: 30,
-              limit: 50,
-              threshold: 0.5,
-              saveToDatabase: true
-            }
-          },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              reject(chrome.runtime.lastError)
-            } else {
-              resolve(response)
-            }
-          }
-        )
+        const timeout = setTimeout(() => reject(new Error('タイムアウト')), 30000)
         
-        setTimeout(() => reject(new Error('タイムアウト')), 30000)
+        const messageHandler = (event) => {
+          if (event.data && event.data.type === 'RESEARCHVAULT_ANALYZE_HISTORY_RESPONSE') {
+            clearTimeout(timeout)
+            window.removeEventListener('message', messageHandler)
+            resolve(event.data.response)
+          }
+        }
+        
+        window.addEventListener('message', messageHandler)
       })
 
+      toast.dismiss(loadingToast)
+
       if (response && response.success) {
+        setLastAnalyzedTime(Date.now()) // 最終分析時刻を更新
         toast.success(`${response.saved || 0}件の新しい候補を検出しました`)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         await loadData() // データをリロード
       } else {
         toast.error('履歴の分析に失敗しました: ' + (response.error || '不明なエラー'))
@@ -467,6 +517,40 @@ export default function Candidates() {
 
       {/* ツールバー */}
       <div className="space-y-4">
+        {/* リアルタイム分析ステータス */}
+        {autoAnalyzing && (
+          <div className="card p-3 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-blue-200 dark:border-blue-800">
+            <div className="flex items-center space-x-3">
+              <svg className="animate-spin h-4 w-4 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="text-sm text-blue-900 dark:text-blue-100 font-medium">
+                🔍 ブラウジング履歴をリアルタイム分析中...
+              </span>
+            </div>
+          </div>
+        )}
+        
+        {/* 最終分析時刻表示 */}
+        {lastAnalyzedTime && !autoAnalyzing && (
+          <div className="card p-3 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-900/20 dark:to-slate-900/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <svg className="h-4 w-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-xs text-secondary-600 dark:text-secondary-400">
+                  最終分析: {format(new Date(lastAnalyzedTime), 'HH:mm', { locale: ja })}
+                </span>
+              </div>
+              <span className="text-xs text-secondary-500 dark:text-secondary-500">
+                自動分析は5分ごとに実行されます
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* 履歴分析ボタン */}
         <div className="card p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
           <div className="flex items-center justify-between">
@@ -481,9 +565,9 @@ export default function Candidates() {
             <button
               className="btn-primary flex items-center space-x-2"
               onClick={handleAnalyzeHistory}
-              disabled={loading}
+              disabled={loading || autoAnalyzing}
             >
-              {loading ? (
+              {loading || autoAnalyzing ? (
                 <>
                   <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -493,7 +577,7 @@ export default function Candidates() {
                 </>
               ) : (
                 <>
-                  <span>履歴を分析</span>
+                  <span>今すぐ履歴を分析</span>
                 </>
               )}
             </button>
@@ -621,15 +705,18 @@ export default function Candidates() {
           </svg>
           <div>
             <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
-              記録漏れ候補について
+              リアルタイム履歴分析について
             </h4>
             <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
-              Chrome拡張機能がブラウザの履歴を分析し、学術サイトや研究に関連するページで未保存のものを候補として表示します。
+              Chrome拡張機能がブラウザの履歴を<strong>リアルタイムで自動分析</strong>し、学術サイトや研究に関連するページで未保存のものを候補として表示します。
+              分析は5分ごとに自動実行され、新しい学術サイトを見逃しません。
+            </p>
+            <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
               候補の信頼度が高いほど、研究に重要な資料である可能性があります。
+              教科分類機能を使えば、Gemini AIが自動的に各候補を教科ごとに分類します。
             </p>
             <p className="text-sm text-blue-700 dark:text-blue-300">
               ※ この機能を使用するには、ResearchVault Chrome拡張機能がインストールされている必要があります。
-              候補が表示されない場合は、ページをリロードしてください。
             </p>
           </div>
         </div>
