@@ -221,7 +221,7 @@ export default function ProjectDetail() {
     } finally {
       setLoading(false)
     }
-  }, [loadProject, loadReferences, loadMembers, loadCitationSettings])
+  }, [hasOpenModals, loadProject, loadReferences, loadMembers, loadCitationSettings])
 
   // ページフォーカス時の自動リロードを無効化（モーダルがあるページなので完全に無効）
   usePageFocus(() => {}, [], {

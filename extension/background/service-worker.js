@@ -566,46 +566,67 @@ class BackgroundManager {
 
             console.log(`Found ${sortedCandidates.length} candidates`);
 
-            // データベースに保存
+            // データベースに保存（個別に保存して重複をスキップ）
+            let savedCount = 0;
             if (saveToDatabase && sortedCandidates.length > 0) {
-                const candidatesToSave = sortedCandidates.map(c => ({
-                    user_id: userId,
-                    url: c.url,
-                    title: c.title,
-                    visited_at: c.visitedAt,
-                    visit_count: c.visitCount,
-                    confidence_score: Math.round(c.confidence * 100) / 100, // 小数点2桁に丸める
-                    suggested_reason: c.reason,
-                    is_academic: c.isAcademic,
-                    category: c.category,
-                    favicon: `https://www.google.com/s2/favicons?domain=${new URL(c.url).hostname}&sz=32`,
-                    dismissed: false
-                }));
+                console.log(`Attempting to save ${sortedCandidates.length} candidates to database...`);
+                
+                for (const candidate of sortedCandidates) {
+                    try {
+                        const candidateData = {
+                            user_id: userId,
+                            url: candidate.url,
+                            title: candidate.title,
+                            visited_at: candidate.visitedAt,
+                            visit_count: candidate.visitCount,
+                            confidence_score: Math.round(candidate.confidence * 100) / 100,
+                            suggested_reason: candidate.reason,
+                            is_academic: candidate.isAcademic,
+                            category: candidate.category,
+                            favicon: `https://www.google.com/s2/favicons?domain=${new URL(candidate.url).hostname}&sz=32`,
+                            dismissed: false
+                        };
 
-                const saveResponse = await fetch(`${supabaseUrl}/rest/v1/browsing_history_candidates`, {
-                    method: 'POST',
-                    headers: {
-                        'apikey': supabaseAnonKey,
-                        'Authorization': `Bearer ${authData.authToken}`,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
-                    },
-                    body: JSON.stringify(candidatesToSave)
-                });
+                        const saveResponse = await fetch(`${supabaseUrl}/rest/v1/browsing_history_candidates`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': supabaseAnonKey,
+                                'Authorization': `Bearer ${authData.authToken}`,
+                                'Content-Type': 'application/json',
+                                'Prefer': 'return=minimal'
+                            },
+                            body: JSON.stringify(candidateData)
+                        });
 
-                if (!saveResponse.ok) {
-                    const errorText = await saveResponse.text();
-                    console.error('Failed to save candidates to database:', errorText);
-                } else {
-                    console.log(`Saved ${candidatesToSave.length} candidates to database`);
+                        if (saveResponse.ok) {
+                            savedCount++;
+                            console.log(`Saved candidate: ${candidate.title}`);
+                        } else {
+                            const errorText = await saveResponse.text();
+                            // 重複エラーの場合は静かにスキップ
+                            if (saveResponse.status === 409 || errorText.includes('duplicate') || errorText.includes('unique')) {
+                                console.debug(`Candidate already exists: ${candidate.url}`);
+                            } else {
+                                console.error('Failed to save candidate:', {
+                                    url: candidate.url,
+                                    status: saveResponse.status,
+                                    error: errorText
+                                });
+                            }
+                        }
+                    } catch (saveError) {
+                        console.error('Error saving candidate:', candidate.url, saveError);
+                    }
                 }
+                
+                console.log(`Database save complete: ${savedCount} new candidates saved`);
             }
 
             return {
                 success: true,
                 candidates: sortedCandidates,
                 analyzed: historyItems.length,
-                saved: saveToDatabase ? sortedCandidates.length : 0
+                saved: savedCount
             };
         } catch (error) {
             console.error('History analysis error:', error);

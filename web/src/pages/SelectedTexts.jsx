@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useProjects } from '../hooks/useProjects';
@@ -20,11 +20,7 @@ export default function SelectedTexts() {
     const [selectedTextId, setSelectedTextId] = useState(null);
     const [browserSupportsFragments] = useState(supportsTextFragments());
 
-    useEffect(() => {
-        loadSelectedTexts();
-    }, [sortOrder, session]);
-
-    async function loadSelectedTexts() {
+    const loadSelectedTexts = useCallback(async () => {
         if (!session?.access_token) {return;}
 
         try {
@@ -81,7 +77,11 @@ export default function SelectedTexts() {
         } finally {
             setLoading(false);
         }
-    }
+    }, [session, user, sortOrder]);
+
+    useEffect(() => {
+        loadSelectedTexts();
+    }, [loadSelectedTexts]);
 
     async function handleDelete(textId) {
         const confirmed = window.confirm('この選択テキストを削除しますか？');

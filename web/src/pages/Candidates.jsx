@@ -102,24 +102,29 @@ export default function Candidates() {
   useEffect(() => {
     let intervalId = null
     let isComponentMounted = true
+    let isAnalyzing = false // ローカル状態でロックを管理
     
     const autoAnalyzeHistory = async () => {
-      if (!isComponentMounted || !user || autoAnalyzing) {
+      if (!isComponentMounted || !user || isAnalyzing) {
         return
       }
 
       // 拡張機能が利用可能かチェック
       if (typeof chrome === 'undefined' || !chrome.runtime) {
+        console.debug('Chrome extension not available')
         return
       }
 
       // 最後の分析から5分以上経過している場合のみ実行
       if (lastAnalyzedTime && Date.now() - lastAnalyzedTime < 5 * 60 * 1000) {
+        console.debug('Skipping auto-analysis: too soon since last analysis')
         return
       }
 
+      isAnalyzing = true
+      setAutoAnalyzing(true)
+
       try {
-        setAutoAnalyzing(true)
         console.log('Auto-analyzing browsing history...')
         
         // content scriptを通じてメッセージを送信
@@ -135,7 +140,9 @@ export default function Candidates() {
 
         // content scriptからの応答を待つ
         const response = await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('タイムアウト')), 30000)
+          const timeout = setTimeout(() => {
+            reject(new Error('タイムアウト'))
+          }, 30000)
           
           const messageHandler = (event) => {
             if (event.data && event.data.type === 'RESEARCHVAULT_ANALYZE_HISTORY_RESPONSE') {
@@ -148,43 +155,59 @@ export default function Candidates() {
           window.addEventListener('message', messageHandler)
         })
 
-        if (isComponentMounted && response && response.success) {
-          setLastAnalyzedTime(Date.now())
+        if (!isComponentMounted) {
+          return
+        }
+
+        setLastAnalyzedTime(Date.now())
+
+        if (response && response.success) {
+          console.log(`Auto-analysis complete: ${response.saved || 0} new candidates saved`)
+          
           if (response.saved > 0) {
-            console.log(`Auto-analyzed: ${response.saved} new candidates found`)
-            // eslint-disable-next-line react-hooks/exhaustive-deps
+            // データをリロード
             await loadData()
             toast.success(`${response.saved}件の新しい学術サイトを検出しました`, {
               duration: 3000
             })
           }
+        } else {
+          console.warn('Auto-analysis failed:', response?.error)
         }
       } catch (error) {
-        console.debug('Auto-analysis skipped:', error.message)
+        console.debug('Auto-analysis error:', error.message)
       } finally {
+        isAnalyzing = false
         if (isComponentMounted) {
           setAutoAnalyzing(false)
         }
       }
     }
 
-    // 初回実行
+    // 初回実行（少し遅延させる）
     if (user) {
-      autoAnalyzeHistory()
-    }
+      const initialTimeout = setTimeout(() => {
+        if (isComponentMounted) {
+          autoAnalyzeHistory()
+        }
+      }, 1000) // 1秒後に実行
 
-    // 5分ごとに自動分析を実行
-    if (user) {
+      // 5分ごとに自動分析を実行
       intervalId = setInterval(() => {
         autoAnalyzeHistory()
       }, 5 * 60 * 1000) // 5分
+
+      return () => {
+        clearTimeout(initialTimeout)
+        isComponentMounted = false
+        if (intervalId) {
+          clearInterval(intervalId)
+        }
+      }
     }
 
     return () => {
       isComponentMounted = false
-      if (intervalId) {
-        clearInterval(intervalId)
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]) // loadDataを依存配列から除外（意図的）
@@ -352,7 +375,6 @@ export default function Candidates() {
       if (response && response.success) {
         setLastAnalyzedTime(Date.now()) // 最終分析時刻を更新
         toast.success(`${response.saved || 0}件の新しい候補を検出しました`)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
         await loadData() // データをリロード
       } else {
         toast.error('履歴の分析に失敗しました: ' + (response.error || '不明なエラー'))
