@@ -1,46 +1,37 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useProjects } from '../../hooks/useProjects'
 import { useNavigationBlock } from '../../hooks/useNavigationBlock'
 import { useModalContext } from '../../hooks/useModalContext'
+import { renderProjectIcon } from '../../utils/iconRenderer'
+
+import { LayoutDashboard, FileText, FolderKanban, Quote, AlertTriangle, Trash2, Lightbulb, Download, Bookmark } from 'lucide-react'
 
 const navigation = [
   {
     name: 'ダッシュボード',
     href: '/dashboard',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2V7z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v1H8V5z" />
-      </svg>
-    )
+    icon: <LayoutDashboard className="w-5 h-5" />
   },
   {
     name: '参照一覧',
     href: '/references',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    )
+    icon: <FileText className="w-5 h-5" />
+  },
+  {
+    name: '保存済みテキスト',
+    href: '/selected-texts',
+    icon: <Bookmark className="w-5 h-5" />
   },
   {
     name: 'プロジェクト',
     href: '/projects',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-      </svg>
-    )
+    icon: <FolderKanban className="w-5 h-5" />
   },
   {
     name: '引用生成',
     href: '/citations',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-      </svg>
-    )
+    icon: <Quote className="w-5 h-5" />
   }
 ]
 
@@ -48,30 +39,18 @@ const quickActions = [
   {
     name: '記録漏れ候補',
     href: '/candidates',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-      </svg>
-    ),
+    icon: <AlertTriangle className="w-5 h-5" />,
     badge: '3'
   },
   {
     name: 'ゴミ箱',
     href: '/trash',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-      </svg>
-    )
+    icon: <Trash2 className="w-5 h-5" />
   },
   {
     name: '機能リクエスト',
     href: '/feedback',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-      </svg>
-    )
+    icon: <Lightbulb className="w-5 h-5" />
   }
 ]
 
@@ -79,6 +58,7 @@ export default function Sidebar() {
   const location = useLocation()
   const { projects, currentProject } = useProjects()
   const { hasOpenModals } = useModalContext()
+  const [showAllProjects, setShowAllProjects] = useState(false)
   
   // モーダルが開いている時のナビゲーションをブロック
   const blockedNavigate = useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
@@ -88,23 +68,6 @@ export default function Sidebar() {
       return location.pathname === '/dashboard' || location.pathname === '/'
     }
     return location.pathname.startsWith(href)
-  }
-
-  const getProjectIcon = (project) => {
-    // プロジェクトタイプに応じたアイコンを返す
-    const projectType = project.name.toLowerCase()
-    
-    if (projectType.includes('extended essay') || projectType.includes('ee')) {
-      return '📝'
-    } else if (projectType.includes('tok') || projectType.includes('theory of knowledge')) {
-      return '💭'
-    } else if (projectType.includes('cas')) {
-      return '🎯'
-    } else if (projectType.includes('ia') || projectType.includes('internal assessment')) {
-      return '🔬'
-    } else {
-      return '📂'
-    }
   }
 
   return (
@@ -171,7 +134,7 @@ export default function Sidebar() {
           </div>
           
           <ul className="space-y-1">
-            {projects.slice(0, 5).map((project) => (
+            {(showAllProjects ? projects : projects.slice(0, 5)).map((project) => (
               <li key={project.id}>
                 <button
                   onClick={() => blockedNavigate(`/projects/${project.id}`)}
@@ -182,7 +145,9 @@ export default function Sidebar() {
                   }`}
                   disabled={hasOpenModals && currentProject?.id !== project.id}
                 >
-                  <span className="text-lg">{getProjectIcon(project)}</span>
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    {renderProjectIcon(project.icon, null, 'w-4 h-4')}
+                  </div>
                   <div className="flex-1 ml-3 min-w-0">
                     <div className="text-sm font-medium truncate">
                       {project.name}
@@ -198,13 +163,12 @@ export default function Sidebar() {
             {projects.length > 5 && (
               <li>
                 <button
-                  onClick={() => blockedNavigate('/projects')}
-                  className={`nav-link nav-link-inactive text-center w-full ${
-                    hasOpenModals ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-                  }`}
-                  disabled={hasOpenModals}
+                  onClick={() => setShowAllProjects(!showAllProjects)}
+                  className="nav-link nav-link-inactive text-center w-full"
                 >
-                  <span className="text-sm">すべて表示 ({projects.length})</span>
+                  <span className="text-xs text-secondary-500">
+                    {showAllProjects ? '表示を減らす' : `すべて表示 (${projects.length})`}
+                  </span>
                 </button>
               </li>
             )}
@@ -265,9 +229,7 @@ export default function Sidebar() {
           <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
             <div className="flex items-center space-x-3 mb-2">
               <div className="flex-shrink-0">
-                <svg className="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                </svg>
+                <Download className="w-6 h-6 text-primary-600 dark:text-primary-400" />
               </div>
               <div className="flex-1">
                 <h4 className="text-sm font-medium text-primary-900 dark:text-primary-100">

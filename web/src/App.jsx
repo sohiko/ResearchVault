@@ -31,6 +31,7 @@ import Trash from './pages/Trash'
 import Feedback from './pages/Feedback'
 import Test from './pages/Test'
 import DatabaseTest from './pages/DatabaseTest'
+import SelectedTexts from './pages/SelectedTexts'
 
 // プロテクトされたルートコンポーネント
 function ProtectedRoute({ children }) {
@@ -259,6 +260,7 @@ function App() {
                         <Route path="/feedback" element={<Feedback />} />
                         <Route path="/test" element={<Test />} />
                         <Route path="/database-test" element={<DatabaseTest />} />
+                        <Route path="/selected-texts" element={<SelectedTexts />} />
                         
                         {/* ルートパスはダッシュボードにリダイレクト */}
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />

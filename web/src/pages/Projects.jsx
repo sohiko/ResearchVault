@@ -24,11 +24,13 @@ export default function Projects() {
   const [projectToDelete, setProjectToDelete] = useState(null)
 
   const loadProjects = useCallback(async () => {
-    if (!user) {return}
+    if (!user) {
+      setLoading(false)
+      return
+    }
     
     // モーダルが開いている場合はリロードをスキップ
     if (hasOpenModals) {
-      console.log('モーダルが開いているため、プロジェクトのリロードをスキップします')
       return
     }
     
@@ -175,10 +177,10 @@ export default function Projects() {
 
   // 初回ロード
   useEffect(() => {
-    if (user) {
+    if (user && !hasOpenModals) {
       loadProjects()
     }
-  }, [user, loadProjects])
+  }, [user, hasOpenModals, loadProjects])
 
   // ページフォーカス時の自動リロードを無効化（モーダルがあるページなので完全に無効）
   usePageFocus(() => {}, [], {
@@ -188,10 +190,10 @@ export default function Projects() {
   // URLパラメータの処理
   useEffect(() => {
     const action = searchParams.get('action')
-    if (action === 'create') {
+    if (action === 'create' && !hasOpenModals) {
       setShowCreateModal(true)
     }
-  }, [searchParams])
+  }, [searchParams, hasOpenModals])
 
   // モーダルを閉じる際にURLパラメータをクリア
   const handleCloseCreateModal = () => {
@@ -492,7 +494,7 @@ function ProjectCard({ project, onDelete }) {
 }
 
 function CreateProjectModal({ onClose, onCreate, loading }) {
-  const { openModal } = useModalContext()
+  const { openModal, closeModal } = useModalContext()
   const modalId = 'create-project'
   
   const [formData, setFormData] = useState({
@@ -509,12 +511,10 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
   useEffect(() => {
     openModal(modalId)
     
-    // クリーンアップ関数でモーダル状態をクリア
     return () => {
-      // モーダルが閉じられる時は既にProtectedModalでクリアされるため、
-      // ここでは何もしない（重複クリアを避ける）
+      closeModal(modalId)
     }
-  }, [openModal, modalId])
+  }, [openModal, closeModal, modalId])
 
   // 未保存の変更があるかチェック
   const hasUnsavedChanges = formData.name.trim() || formData.description.trim()
@@ -526,7 +526,7 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
   const projectColors = [
     '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
     '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',
-    '#F97316', '#6366F1', '#14B8A6', '#F59E0B'
+    '#F97316', '#6366F1', '#14B8A6', '#F87171'
   ]
 
   // アイコン検索フィルタリング

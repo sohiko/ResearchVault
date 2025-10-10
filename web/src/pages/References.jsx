@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
@@ -94,11 +94,13 @@ export default function References() {
   }, [user])
 
   const loadData = useCallback(async () => {
-    if (!user) {return}
+    if (!user) {
+      setLoading(false)
+      return
+    }
     
     // モーダルが開いている場合はリロードをスキップ
     if (hasOpenModals) {
-      console.log('モーダルが開いているため、参照データのリロードをスキップします')
       return
     }
     
@@ -129,7 +131,14 @@ export default function References() {
     } finally {
       setLoading(false)
     }
-  }, [user, loadReferences, loadCitationSettings])
+  }, [user, loadReferences, loadCitationSettings, hasOpenModals])
+
+  // 初回ロード＆フィルター変更時のリロード
+  useEffect(() => {
+    if (user && !hasOpenModals) {
+      loadData()
+    }
+  }, [user, hasOpenModals, loadData])
 
   // ページフォーカス時の自動リロードを無効化（モーダルがあるページなので完全に無効）
   usePageFocus(() => {}, [], {

@@ -55,14 +55,6 @@ const ProtectedModal = ({
     return () => document.removeEventListener('keydown', handleEscape)
   }, [handleClose])
 
-  // コンポーネントのアンマウント時にモーダル状態をクリア
-  useEffect(() => {
-    return () => {
-      setUnsavedChanges(modalId, false)
-      closeModal(modalId)
-    }
-  }, [modalId, closeModal, setUnsavedChanges])
-
   // モーダル外クリックで閉じる
   const handleBackdropClick = useCallback((e) => {
     if (e.target === e.currentTarget) {

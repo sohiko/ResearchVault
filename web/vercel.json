@@ -23,6 +23,9 @@
     },
     "api/health.js": {
       "maxDuration": 10
+    },
+    "api/selected-texts.js": {
+      "maxDuration": 30
     }
   },
   "headers": [

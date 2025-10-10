@@ -201,6 +201,10 @@ export default function ProjectDetail() {
   }, [user])
 
   const loadProjectData = useCallback(async () => {
+    if (hasOpenModals) {
+      return
+    }
+    
     try {
       setLoading(true)
       setError(null)
@@ -225,10 +229,10 @@ export default function ProjectDetail() {
   })
 
   useEffect(() => {
-    if (user && id) {
+    if (user && id && !hasOpenModals) {
       loadProjectData()
     }
-  }, [user, id, loadProjectData])
+  }, [user, id, hasOpenModals, loadProjectData])
 
   // ドロップダウンメニューの外側クリックで閉じる
   useEffect(() => {

@@ -78,6 +78,27 @@ export const authStateManager = {
 supabase.auth.onAuthStateChange(async (event, session) => {
   try {
     await authStateManager.notify(session, event)
+    
+    // 拡張機能にログイン情報を同期（ログイン時のみ）
+    if (event === 'SIGNED_IN' && session) {
+      try {
+        window.postMessage({
+          type: 'RESEARCHVAULT_AUTH_SYNC',
+          source: 'webpage',
+          data: {
+            authToken: session.access_token,
+            userInfo: {
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.user_metadata?.name
+            },
+            sessionInfo: session
+          }
+        }, '*')
+      } catch (err) {
+        console.log('Extension sync failed (extension may not be installed):', err)
+      }
+    }
   } catch (error) {
     await handleError(error, {
       method: 'onAuthStateChange',

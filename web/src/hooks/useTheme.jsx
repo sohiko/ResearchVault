@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
+import { Sun, Moon, Monitor } from 'lucide-react'
 
 // テーマコンテキストの作成
 const ThemeContext = createContext({
@@ -117,9 +118,9 @@ export function ThemeProvider({ children }) {
   // テーマアイコンの取得
   const getThemeIcon = () => {
     if (isSystemTheme) {
-      return '🖥️' // システム
+      return <Monitor className="w-5 h-5" />
     }
-    return theme === 'dark' ? '🌙' : '☀️'
+    return theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />
   }
 
   // テーマ名の取得
@@ -211,7 +212,7 @@ export function ThemeProvider({ children }) {
     {
       id: 'light',
       name: 'ライトモード',
-      icon: '☀️',
+      icon: <Sun className="w-6 h-6" />,
       colors: {
         background: '#ffffff',
         surface: '#f8fafc',
@@ -222,7 +223,7 @@ export function ThemeProvider({ children }) {
     {
       id: 'dark',
       name: 'ダークモード', 
-      icon: '🌙',
+      icon: <Moon className="w-6 h-6" />,
       colors: {
         background: '#0f172a',
         surface: '#1e293b',
@@ -233,7 +234,7 @@ export function ThemeProvider({ children }) {
     {
       id: 'system',
       name: 'システム',
-      icon: '🖥️',
+      icon: <Monitor className="w-6 h-6" />,
       description: 'OSの設定に従います'
     }
   ]
@@ -278,11 +279,11 @@ export function ThemeToggle({ className = '' }) {
   return (
     <button
       onClick={toggleTheme}
-      className={`p-2 rounded-lg bg-secondary-100 hover:bg-secondary-200 dark:bg-secondary-800 dark:hover:bg-secondary-700 transition-colors duration-200 ${className}`}
+      className={`p-2 rounded-lg text-secondary-600 hover:text-secondary-900 hover:bg-secondary-100 dark:text-secondary-400 dark:hover:text-secondary-100 dark:hover:bg-secondary-700 transition-colors duration-200 ${className}`}
       title={`現在: ${getThemeName()}`}
       aria-label="テーマを切り替え"
     >
-      <span className="text-lg">{getThemeIcon()}</span>
+      {getThemeIcon()}
     </button>
   )
 }
@@ -308,7 +309,7 @@ export function ThemeSelector({ className = '' }) {
                 : 'border-secondary-200 hover:border-secondary-300 dark:border-secondary-700 dark:hover:border-secondary-600'
             }`}
           >
-            <div className="text-2xl mb-1">{preset.icon}</div>
+            <div className="flex justify-center mb-1">{preset.icon}</div>
             <div className="text-xs font-medium">{preset.name}</div>
           </button>
         ))}

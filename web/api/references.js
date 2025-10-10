@@ -40,7 +40,7 @@ export default async function handler(req, res) {
       })
       
       // トークンを設定
-      const sessionResult = await userSupabase.auth.setSession({
+      await userSupabase.auth.setSession({
         access_token: token,
         refresh_token: '' // リフレッシュトークンは不要
       })
