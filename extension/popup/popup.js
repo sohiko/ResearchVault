@@ -61,56 +61,18 @@ class PopupManager {
 
     async checkAuthState() {
         try {
-            const { authToken, sessionInfo, lastLoginTime } = await chrome.storage.sync.get(['authToken', 'sessionInfo', 'lastLoginTime']);
+            const { authToken, userInfo } = await chrome.storage.sync.get(['authToken', 'userInfo']);
             
-            if (authToken) {
-                // JWTトークンから有効期限を直接取得
-                const tokenExpiry = this.getTokenExpiry(authToken);
-                
-                // JWTトークンが期限切れの場合は即座にクリア
-                if (tokenExpiry && tokenExpiry.isExpired) {
-                    await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
-                    this.showAuthSection();
-                    this.showError('セッションが期限切れです。再度ログインしてください');
-                    return;
-                }
-                
-                // トークンの有効期限をチェック
-                if (sessionInfo && sessionInfo.expires_at) {
-                    const expiresAt = new Date(sessionInfo.expires_at * 1000);
-                    const now = new Date();
-                    const timeUntilExpiry = expiresAt.getTime() - now.getTime();
-                    
-                    // 期限切れの場合はリフレッシュを試行
-                    if (timeUntilExpiry <= 0) {
-                        const refreshResult = await this.refreshToken();
-                        if (!refreshResult.success) {
-                            await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
-                            this.showAuthSection();
-                            this.showError('セッションが期限切れです。再度ログインしてください');
-                            return;
-                        }
-                        await this.api.setAuthToken(refreshResult.token);
-                    } else {
-                        await this.api.setAuthToken(authToken);
-                    }
-                } else {
-                    await this.api.setAuthToken(authToken);
-                }
-                
-                const user = await this.api.getCurrentUser();
-                
-                if (user) {
-                    this.currentUser = user;
-                    await this.loadProjects();
-                    this.showMainSection();
-                    return;
-                }
+            if (authToken && userInfo) {
+                // トークンがあれば信頼してそのまま使用（最長セッション）
+                await this.api.setAuthToken(authToken);
+                this.currentUser = userInfo;
+                await this.loadProjects();
+                this.showMainSection();
+                return;
             }
         } catch (error) {
             console.error('Auth check failed:', error);
-            // 認証エラーの場合はストレージをクリア
-            await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
         }
         this.showAuthSection();
     }
@@ -126,26 +88,70 @@ class PopupManager {
     }
 
     updateProjectSelect() {
-        const select = document.getElementById('projectSelect');
-        if (!select) {
-            console.error('Project select element not found');
+        const searchInput = document.getElementById('projectSearch');
+        const dropdown = document.getElementById('projectDropdown');
+        const hiddenSelect = document.getElementById('projectSelect');
+        
+        if (!searchInput || !dropdown || !hiddenSelect) {
+            console.error('Project select elements not found');
             return;
         }
-        
-        select.innerHTML = '<option value="">プロジェクトを選択</option>';
-        
-        this.projects.forEach(project => {
-            const option = document.createElement('option');
-            option.value = project.id;
-            option.textContent = project.name;
-            select.appendChild(option);
+
+        // 検索機能を追加
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            this.filterProjects(query);
         });
+
+        searchInput.addEventListener('focus', () => {
+            dropdown.classList.remove('hidden');
+            this.filterProjects(searchInput.value.toLowerCase());
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.searchable-select')) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        this.filterProjects('');
 
         // 最後に選択したプロジェクトを復元
         chrome.storage.sync.get(['lastSelectedProject']).then(({ lastSelectedProject }) => {
             if (lastSelectedProject) {
-                select.value = lastSelectedProject;
+                const project = this.projects.find(p => p.id === lastSelectedProject);
+                if (project) {
+                    hiddenSelect.value = project.id;
+                    searchInput.value = project.name;
+                }
             }
+        });
+    }
+
+    filterProjects(query) {
+        const dropdown = document.getElementById('projectDropdown');
+        dropdown.innerHTML = '';
+
+        const filtered = query 
+            ? this.projects.filter(p => p.name.toLowerCase().includes(query))
+            : this.projects;
+
+        if (filtered.length === 0) {
+            dropdown.innerHTML = '<div class="dropdown-item">プロジェクトが見つかりません</div>';
+            return;
+        }
+
+        filtered.forEach(project => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = `${project.icon || '📁'} ${project.name}`;
+            item.addEventListener('click', () => {
+                document.getElementById('projectSearch').value = project.name;
+                document.getElementById('projectSelect').value = project.id;
+                dropdown.classList.add('hidden');
+                chrome.storage.sync.set({ lastSelectedProject: project.id });
+            });
+            dropdown.appendChild(item);
         });
     }
 
@@ -204,16 +210,12 @@ class PopupManager {
         
         // クイックアクションボタン
         document.getElementById('saveTextBtn')?.addEventListener('click', () => this.handleSaveSelectedText());
-        document.getElementById('createBookmarkBtn')?.addEventListener('click', () => this.handleCreateBookmark());
         document.getElementById('generateCitationBtn')?.addEventListener('click', () => this.handleGenerateCitation());
         
         // ログアウトボタン
         document.getElementById('logoutBtn')?.addEventListener('click', () => this.handleLogout());
 
-        // プロジェクト選択の保存
-        document.getElementById('projectSelect')?.addEventListener('change', (e) => {
-            chrome.storage.sync.set({ lastSelectedProject: e.target.value });
-        });
+        // プロジェクト選択の保存は updateProjectSelect で処理
 
         // Enterキーでログイン
         document.getElementById('email')?.addEventListener('keypress', (e) => {
@@ -377,15 +379,40 @@ class PopupManager {
     async handleSaveSelectedText() {
         try {
             const selectedText = await this.getSelectedText();
-            if (!selectedText) {
+            
+            if (!selectedText || selectedText.trim().length === 0) {
                 this.showError('テキストが選択されていません');
                 return;
             }
 
-            this.showSuccess('選択テキストを保存しました');
+            this.showLoading(true);
+
+            // コンテキストを取得
+            const context = await this.getSelectionContext();
+
+            const textData = {
+                text: selectedText.trim(),
+                url: this.currentTab.url,
+                title: this.currentTab.title,
+                context: context
+            };
+
+            // バックグラウンドスクリプトを通じて保存
+            const response = await chrome.runtime.sendMessage({
+                action: 'saveSelectedText',
+                data: textData
+            });
+
+            if (response && response.success) {
+                this.showSuccess('選択テキストを保存しました');
+            } else {
+                this.showError(response?.error || '保存に失敗しました');
+            }
         } catch (error) {
             console.error('Save selected text error:', error);
             this.showError('選択テキストの保存に失敗しました');
+        } finally {
+            this.showLoading(false);
         }
     }
 
@@ -417,9 +444,70 @@ class PopupManager {
         }
     }
 
-    async handleCreateBookmark() {
-        this.showSuccess('ブックマークを作成しました');
+    async getSelectionContext() {
+        try {
+            if (!this.currentTab?.id) {
+                return null;
+            }
+
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: this.currentTab.id },
+                func: () => {
+                    const selection = window.getSelection();
+                    if (selection.rangeCount === 0) return null;
+                    
+                    const range = selection.getRangeAt(0);
+                    const startContainer = range.startContainer;
+                    const endContainer = range.endContainer;
+                    
+                    // XPath取得
+                    function getXPath(element) {
+                        if (element.nodeType === Node.TEXT_NODE) {
+                            element = element.parentNode;
+                        }
+                        const components = [];
+                        let child = element;
+                        
+                        for (; child && child.nodeType === Node.ELEMENT_NODE; child = child.parentNode) {
+                            let currentComponent = child.tagName.toLowerCase();
+                            if (child.id) {
+                                currentComponent += `[@id="${child.id}"]`;
+                                components.unshift(currentComponent);
+                                break;
+                            }
+                            const siblings = Array.from(child.parentNode?.children || [])
+                                .filter(sibling => sibling.tagName === child.tagName);
+                            if (siblings.length > 1) {
+                                const index = siblings.indexOf(child) + 1;
+                                currentComponent += `[${index}]`;
+                            }
+                            components.unshift(currentComponent);
+                        }
+                        return `/${components.join('/')}`;
+                    }
+                    
+                    return {
+                        xpath: getXPath(range.commonAncestorContainer),
+                        before: startContainer.textContent.substring(
+                            Math.max(0, range.startOffset - 50), 
+                            range.startOffset
+                        ),
+                        after: endContainer.textContent.substring(
+                            range.endOffset,
+                            Math.min(endContainer.textContent.length, range.endOffset + 50)
+                        )
+                    };
+                }
+            });
+            
+            return results[0]?.result || null;
+        } catch (error) {
+            console.error('Get selection context error:', error);
+            return null;
+        }
     }
+
+    // ブックマーク機能は削除
 
     async handleGenerateCitation() {
         try {
@@ -428,22 +516,41 @@ class PopupManager {
                 return;
             }
 
-            const citation = await this.api.generateCitation({
-                url: this.currentTab.url,
-                title: this.currentTab.title,
-                accessDate: new Date().toISOString(),
-                format: 'APA'
-            });
+            this.showLoading(true);
 
-            if (citation.success) {
-                await navigator.clipboard.writeText(citation.citation);
-                this.showSuccess('引用をクリップボードにコピーしました');
-            } else {
-                this.showError('引用生成に失敗しました');
+            // メタデータを取得
+            const metadata = await this.extractPageMetadata();
+            
+            // 簡易的なAPA形式の引用を生成
+            const now = new Date();
+            const accessDate = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+            
+            let citation = '';
+            
+            // 著者がいれば表示
+            if (metadata.author) {
+                citation += `${metadata.author}. `;
             }
+            
+            // タイトル
+            citation += `${this.currentTab.title}. `;
+            
+            // 公開日
+            if (metadata.publishDate) {
+                const pubDate = new Date(metadata.publishDate);
+                citation += `(${pubDate.getFullYear()}). `;
+            }
+            
+            // URL
+            citation += `Retrieved ${accessDate}, from ${this.currentTab.url}`;
+
+            await navigator.clipboard.writeText(citation);
+            this.showSuccess('引用をクリップボードにコピーしました');
         } catch (error) {
             console.error('Citation generation error:', error);
-            this.showError('引用生成エラーが発生しました');
+            this.showError('引用生成エラーが発生しました: ' + error.message);
+        } finally {
+            this.showLoading(false);
         }
     }
 

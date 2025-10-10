@@ -33,7 +33,7 @@ ResearchVaultは、IB生を中心とした学生の研究活動を支援する�
 ## 📁 プロジェクト構造
 
 ```
-research-vault/
+ResearchVault/
 ├── extension/                 # Chrome拡張機能
 │   ├── manifest.json         # 拡張機能マニフェスト
 │   ├── popup/                # ポップアップUI
@@ -116,7 +116,7 @@ research-vault/
 
 ## 📞 サポート
 
-- **Issues**: [GitHub Issues](https://github.com/sohiko/research-vault/issues)
+- **Issues**: [GitHub Issues](https://github.com/sohiko/ResearchVault/issues)
 - **フィードバック**: アプリ内の機能リクエスト機能
 
 ---

@@ -59,7 +59,7 @@ export default function Citations() {
           updated_at: new Date().toISOString()
         })
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('設定を保存しました')
     } catch (error) {

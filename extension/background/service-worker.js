@@ -5,6 +5,7 @@ try {
     importScripts('../lib/errorHandler.js');
     importScripts('../lib/storage.js');
     importScripts('../lib/api.js');
+    importScripts('../lib/academicDetector.js');
     console.log('Dependencies loaded successfully');
 } catch (error) {
     console.error('Failed to load dependencies:', error);
@@ -282,6 +283,348 @@ class BackgroundManager {
         }
     }
 
+    async saveSelectedTextToAPI(data) {
+        try {
+            if (!this.api || !this.storage) {
+                return { success: false, error: 'システムが初期化されていません' };
+            }
+            
+            const authToken = await this.storage.getAuthToken();
+            if (!authToken) {
+                return { success: false, error: 'ログインが必要です' };
+            }
+
+            this.api.setAuthToken(authToken);
+
+            const supabaseUrl = 'https://pzplwtvnxikhykqsvcfs.supabase.co';
+            const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0';
+
+            const { userInfo } = await chrome.storage.sync.get(['userInfo']);
+            if (!userInfo) {
+                return { success: false, error: 'ユーザー情報がありません' };
+            }
+
+            let referenceId = null;
+            
+            // URLを正規化
+            const normalizedUrl = data.url.split('#')[0].split('?')[0].replace(/\/$/, '');
+            
+            // まずreferenceを作成または取得
+            const refResponse = await fetch(`${supabaseUrl}/rest/v1/references?url=eq.${encodeURIComponent(normalizedUrl)}&select=id`, {
+                headers: {
+                    'apikey': supabaseAnonKey,
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (refResponse.ok) {
+                const refs = await refResponse.json();
+                if (refs.length > 0) {
+                    referenceId = refs[0].id;
+                } else {
+                    // 新規作成
+                    const createRefResponse = await fetch(`${supabaseUrl}/rest/v1/references`, {
+                        method: 'POST',
+                        headers: {
+                            'apikey': supabaseAnonKey,
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=representation'
+                        },
+                        body: JSON.stringify({
+                            url: normalizedUrl,
+                            title: data.title,
+                            saved_by: userInfo.id
+                        })
+                    });
+
+                    if (createRefResponse.ok) {
+                        const newRefs = await createRefResponse.json();
+                        referenceId = newRefs[0].id;
+                    }
+                }
+            }
+
+            // selected_textsに保存
+            const response = await fetch(`${supabaseUrl}/rest/v1/selected_texts`, {
+                method: 'POST',
+                headers: {
+                    'apikey': supabaseAnonKey,
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify({
+                    reference_id: referenceId,
+                    text: data.text,
+                    xpath: data.context?.xpath,
+                    context_before: data.context?.before,
+                    context_after: data.context?.after,
+                    created_by: userInfo.id
+                })
+            });
+
+            if (response.ok) {
+                return { success: true };
+            } else {
+                const error = await response.text();
+                return { success: false, error };
+            }
+        } catch (error) {
+            console.error('Failed to save selected text to API:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async getBookmarksForUrl(url) {
+        try {
+            if (!this.api || !this.storage) {
+                console.debug('API or storage not available');
+                return [];
+            }
+            
+            const authToken = await chrome.storage.sync.get(['authToken']);
+            if (!authToken.authToken) {
+                console.debug('No auth token available');
+                return [];
+            }
+
+            const supabaseUrl = 'https://pzplwtvnxikhykqsvcfs.supabase.co';
+            const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0';
+
+            // URLを正規化（末尾のスラッシュや#を削除）
+            const normalizedUrl = url.split('#')[0].split('?')[0].replace(/\/$/, '');
+
+            // まずURLの完全一致を試す
+            let refResponse = await fetch(`${supabaseUrl}/rest/v1/references?url=eq.${encodeURIComponent(normalizedUrl)}&select=id`, {
+                headers: {
+                    'apikey': supabaseAnonKey,
+                    'Authorization': `Bearer ${authToken.authToken}`
+                }
+            });
+
+            let refs = [];
+            if (refResponse.ok) {
+                refs = await refResponse.json();
+            }
+
+            // 完全一致がない場合、部分一致を試す
+            if (refs.length === 0) {
+                refResponse = await fetch(`${supabaseUrl}/rest/v1/references?url=like.*${encodeURIComponent(normalizedUrl)}*&select=id`, {
+                    headers: {
+                        'apikey': supabaseAnonKey,
+                        'Authorization': `Bearer ${authToken.authToken}`
+                    }
+                });
+
+                if (refResponse.ok) {
+                    refs = await refResponse.json();
+                }
+            }
+
+            if (refs.length === 0) {
+                console.debug('No references found for URL:', normalizedUrl);
+                return [];
+            }
+
+            const referenceId = refs[0].id;
+
+            // selected_textsを取得
+            const response = await fetch(`${supabaseUrl}/rest/v1/selected_texts?reference_id=eq.${referenceId}&order=created_at.asc&select=*`, {
+                headers: {
+                    'apikey': supabaseAnonKey,
+                    'Authorization': `Bearer ${authToken.authToken}`
+                }
+            });
+
+            if (response.ok) {
+                const bookmarks = await response.json();
+                console.log('Bookmarks found:', bookmarks.length);
+                return bookmarks.map((b, i) => ({
+                    ...b,
+                    label: `${i + 1}. ${b.text.substring(0, 30)}...`
+                }));
+            }
+
+            return [];
+        } catch (error) {
+            console.error('Failed to get bookmarks:', error);
+            return [];
+        }
+    }
+
+    async analyzeHistoryForCandidates(options = {}) {
+        try {
+            console.log('Starting history analysis...');
+            
+            const { days = 30, limit = 50, threshold = 0.5, saveToDatabase = true } = options;
+            
+            // 認証情報とユーザー情報を取得
+            const authData = await chrome.storage.sync.get(['authToken', 'userInfo']);
+            if (!authData.authToken || !authData.userInfo) {
+                console.warn('User not authenticated, cannot save to database');
+                return {
+                    success: false,
+                    error: 'User not authenticated',
+                    candidates: []
+                };
+            }
+            
+            const userId = authData.userInfo.id;
+            const supabaseUrl = 'https://pzplwtvnxikhykqsvcfs.supabase.co';
+            const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0';
+            
+            // 履歴の取得
+            const microsecondsPerDay = 1000 * 1000 * 60 * 60 * 24;
+            const startTime = Date.now() * 1000 - (days * microsecondsPerDay);
+            
+            const historyItems = await new Promise((resolve) => {
+                chrome.history.search({
+                    text: '',
+                    startTime: startTime / 1000,
+                    maxResults: 10000
+                }, resolve);
+            });
+
+            console.log(`Found ${historyItems.length} history items`);
+
+            // 既存の参照を取得して除外
+            let existingReferenceUrls = new Set();
+            
+            const refResponse = await fetch(`${supabaseUrl}/rest/v1/references?select=url`, {
+                headers: {
+                    'apikey': supabaseAnonKey,
+                    'Authorization': `Bearer ${authData.authToken}`
+                }
+            });
+
+            if (refResponse.ok) {
+                const references = await refResponse.json();
+                existingReferenceUrls = new Set(references.map(r => this.normalizeUrl(r.url)));
+            }
+
+            // 既存の候補を取得して除外
+            let existingCandidateUrls = new Set();
+            
+            const candResponse = await fetch(`${supabaseUrl}/rest/v1/browsing_history_candidates?select=url&user_id=eq.${userId}`, {
+                headers: {
+                    'apikey': supabaseAnonKey,
+                    'Authorization': `Bearer ${authData.authToken}`
+                }
+            });
+
+            if (candResponse.ok) {
+                const existingCandidates = await candResponse.json();
+                existingCandidateUrls = new Set(existingCandidates.map(c => this.normalizeUrl(c.url)));
+            }
+
+            // 学術サイト検出器を使用して分析
+            const detector = new AcademicSiteDetector();
+            const candidates = [];
+
+            for (const item of historyItems) {
+                // 既に保存されているURLまたは既に候補として存在するURLはスキップ
+                const normalizedUrl = this.normalizeUrl(item.url);
+                if (existingReferenceUrls.has(normalizedUrl) || existingCandidateUrls.has(normalizedUrl)) {
+                    continue;
+                }
+
+                const score = detector.calculateAcademicScore(item);
+                
+                // デバッグ: 学術サイトのスコアをログ出力
+                if (item.url.includes('scholar.google') || item.url.includes('jstage.jst.go.jp')) {
+                    console.log('Academic site detected:', {
+                        url: item.url,
+                        title: item.title,
+                        score: score,
+                        threshold: threshold
+                    });
+                }
+                
+                if (score.total >= threshold) {
+                    const candidate = {
+                        url: item.url,
+                        title: item.title || 'タイトルなし',
+                        visitedAt: new Date(item.lastVisitTime).toISOString(),
+                        visitCount: item.visitCount || 1,
+                        confidence: score.total,
+                        reason: detector.getSuggestedReason(score, item),
+                        category: detector.categorize(score),
+                        isAcademic: score.domain >= 0.7,
+                        scores: score
+                    };
+                    
+                    candidates.push(candidate);
+                }
+            }
+
+            // スコア順にソートして上位を取得
+            const sortedCandidates = candidates
+                .sort((a, b) => b.confidence - a.confidence)
+                .slice(0, limit);
+
+            console.log(`Found ${sortedCandidates.length} candidates`);
+
+            // データベースに保存
+            if (saveToDatabase && sortedCandidates.length > 0) {
+                const candidatesToSave = sortedCandidates.map(c => ({
+                    user_id: userId,
+                    url: c.url,
+                    title: c.title,
+                    visited_at: c.visitedAt,
+                    visit_count: c.visitCount,
+                    confidence_score: Math.round(c.confidence * 100) / 100, // 小数点2桁に丸める
+                    suggested_reason: c.reason,
+                    is_academic: c.isAcademic,
+                    category: c.category,
+                    favicon: `https://www.google.com/s2/favicons?domain=${new URL(c.url).hostname}&sz=32`,
+                    dismissed: false
+                }));
+
+                const saveResponse = await fetch(`${supabaseUrl}/rest/v1/browsing_history_candidates`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': supabaseAnonKey,
+                        'Authorization': `Bearer ${authData.authToken}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify(candidatesToSave)
+                });
+
+                if (!saveResponse.ok) {
+                    const errorText = await saveResponse.text();
+                    console.error('Failed to save candidates to database:', errorText);
+                } else {
+                    console.log(`Saved ${candidatesToSave.length} candidates to database`);
+                }
+            }
+
+            return {
+                success: true,
+                candidates: sortedCandidates,
+                analyzed: historyItems.length,
+                saved: saveToDatabase ? sortedCandidates.length : 0
+            };
+        } catch (error) {
+            console.error('History analysis error:', error);
+            return {
+                success: false,
+                error: error.message,
+                candidates: []
+            };
+        }
+    }
+
+    normalizeUrl(url) {
+        try {
+            return url.split('#')[0].split('?')[0].replace(/\/$/, '');
+        } catch (error) {
+            return url;
+        }
+    }
+
     async createBookmark(tab) {
         try {
             if (!this.storage) {
@@ -382,8 +725,28 @@ class BackgroundManager {
                     
                 case 'syncAuthFromWebpage':
                     // WebページからのAuth同期
-                    await this.handleAuthSync(message.data);
-                    sendResponse({ success: true });
+                    try {
+                        await this.handleAuthSync(message.data);
+                        sendResponse({ success: true });
+                    } catch (error) {
+                        console.debug('Auth sync handled:', error);
+                        sendResponse({ success: false, error: error.message });
+                    }
+                    break;
+                    
+                case 'saveSelectedText':
+                    const textResult = await this.saveSelectedTextToAPI(message.data);
+                    sendResponse(textResult);
+                    break;
+                    
+                case 'getBookmarks':
+                    const bookmarks = await this.getBookmarksForUrl(message.data.url);
+                    sendResponse({ bookmarks });
+                    break;
+                    
+                case 'analyzeHistory':
+                    const analysisResult = await this.analyzeHistoryForCandidates(message.data);
+                    sendResponse(analysisResult);
                     break;
                     
                 default:
@@ -753,24 +1116,34 @@ class BackgroundManager {
     async handleAuthSync(authData) {
         try {
             if (!this.storage) {
-                console.warn('Storage not available for auth sync');
-                return;
+                console.debug('Storage not available for auth sync');
+                throw new Error('Storage not initialized');
+            }
+
+            if (!authData || !authData.authToken || !authData.userInfo) {
+                console.debug('Invalid auth data structure:', authData);
+                throw new Error('Invalid auth data');
             }
 
             // 認証トークンをChromeストレージに保存
-            await this.storage.setAuthToken(authData.token);
-            await this.storage.setUserInfo(authData.user);
+            await chrome.storage.sync.set({
+                authToken: authData.authToken,
+                userInfo: authData.userInfo,
+                sessionInfo: authData.sessionInfo,
+                lastLoginTime: new Date().toISOString()
+            });
 
             // APIクライアントに認証トークンを設定
             if (this.api) {
-                this.api.setAuthToken(authData.token);
+                await this.api.setAuthToken(authData.authToken);
             }
 
-            console.log('Auth synced from webpage:', authData.user.email);
-            this.showNotification('認証を同期しました', `${authData.user.email} としてログインしました`);
+            console.log('Auth synced from webpage:', authData.userInfo.email);
+            // 通知は表示しない（静かに同期）
         } catch (error) {
-            console.error('Auth sync failed:', error);
-            this.showNotification('認証同期に失敗しました', 'Webページでもう一度ログインしてください');
+            console.debug('Auth sync skipped:', error.message);
+            // エラー通知も表示しない
+            throw error; // エラーを上に投げる
         }
     }
 

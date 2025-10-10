@@ -56,6 +56,24 @@ class ContentScriptManager {
         // マウス選択イベント
         document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
         
+        // マウスダウンで選択開始 - ツールチップを隠す
+        document.addEventListener('mousedown', (e) => {
+            // ツールチップ自体がクリックされた場合は何もしない
+            if (e.target.closest('.researchvault-tooltip')) {
+                return;
+            }
+            // それ以外の場合は隠す
+            this.hideTooltip();
+        });
+        
+        // 選択解除イベント
+        document.addEventListener('selectionchange', () => {
+            const selection = window.getSelection();
+            if (!selection || selection.toString().trim().length === 0) {
+                this.hideTooltip();
+            }
+        });
+        
         // キーボードショートカット
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
         
@@ -115,14 +133,19 @@ class ContentScriptManager {
     }
 
     handleMouseUp(e) {
-        const selection = window.getSelection();
-        if (selection.toString().trim().length > 0) {
-            // 選択テキストがある場合、ツールチップを表示
-            this.showSelectionTooltip(e, selection);
-        } else {
-            // 選択がない場合、ツールチップを隠す
-            this.hideTooltip();
-        }
+        // 少し遅延させて、選択状態を確実にチェック
+        setTimeout(() => {
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+            
+            if (selectedText.length > 0) {
+                // 選択テキストがある場合、ツールチップを表示
+                this.showSelectionTooltip(e, selection);
+            } else {
+                // 選択がない場合、ツールチップを確実に隠す
+                this.hideTooltip();
+            }
+        }, 10);
     }
 
     handleKeyDown(e) {
@@ -291,69 +314,87 @@ class ContentScriptManager {
     createTooltip() {
         if (this.tooltipElement) return;
         
-        this.tooltipElement = document.createElement('div');
-        this.tooltipElement.className = 'researchvault-tooltip';
-        this.tooltipElement.style.cssText = `
-            position: absolute;
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10001;
-            display: none;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 14px;
-            max-width: 300px;
-        `;
-        
-        this.tooltipElement.innerHTML = `
-            <div class="tooltip-header" style="margin-bottom: 8px; font-weight: 600; color: #1f2937;">
-                選択されたテキスト
-            </div>
-            <div class="tooltip-content" style="margin-bottom: 12px; color: #6b7280; font-size: 12px; max-height: 60px; overflow-y: auto;">
-            </div>
-            <div class="tooltip-actions" style="display: flex; gap: 8px;">
-                <button class="highlight-btn" style="flex: 1; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                    ハイライト
+        // Material Iconsのフォントを先に読み込む
+        this.loadMaterialIcons().then(() => {
+            this.tooltipElement = document.createElement('div');
+            this.tooltipElement.className = 'researchvault-tooltip';
+            this.tooltipElement.style.cssText = `
+                position: absolute;
+                background: white;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                padding: 4px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                z-index: 10001;
+                display: none;
+                font-family: 'Material Icons', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            this.tooltipElement.innerHTML = `
+                <button class="save-btn" style="width: 32px; height: 32px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
+                    <span class="material-icons" style="font-size: 20px;">bookmark_add</span>
                 </button>
-                <button class="save-btn" style="flex: 1; padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                    保存
-                </button>
-            </div>
-        `;
-        
-        // ボタンイベント
-        this.tooltipElement.querySelector('.highlight-btn').addEventListener('click', () => {
-            this.highlightCurrentSelection();
+            `;
+            
+            const saveBtn = this.tooltipElement.querySelector('.save-btn');
+            saveBtn.addEventListener('mouseenter', () => {
+                saveBtn.style.background = '#059669';
+                saveBtn.style.transform = 'scale(1.05)';
+            });
+            saveBtn.addEventListener('mouseleave', () => {
+                saveBtn.style.background = '#10b981';
+                saveBtn.style.transform = 'scale(1)';
+            });
+            saveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.saveSelectedText();
+            });
+            
+            document.body.appendChild(this.tooltipElement);
         });
+    }
+
+    async loadMaterialIcons() {
+        if (document.getElementById('rv-material-icons-font')) {
+            return Promise.resolve();
+        }
         
-        this.tooltipElement.querySelector('.save-btn').addEventListener('click', () => {
-            this.saveSelectedText();
+        return new Promise((resolve) => {
+            const link = document.createElement('link');
+            link.id = 'rv-material-icons-font';
+            link.rel = 'stylesheet';
+            link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
+            link.onload = () => {
+                // フォント読み込み完了を待つ
+                document.fonts.ready.then(() => {
+                    resolve();
+                });
+            };
+            link.onerror = () => {
+                // フォールバック：エラー時も続行
+                resolve();
+            };
+            document.head.appendChild(link);
         });
-        
-        document.body.appendChild(this.tooltipElement);
     }
 
     showSelectionTooltip(e, selection) {
         if (!this.tooltipElement) return;
         
         const text = selection.toString().trim();
-        if (text.length === 0) return;
+        if (text.length === 0) {
+            this.hideTooltip();
+            return;
+        }
         
-        // ツールチップの内容を更新
-        const contentElement = this.tooltipElement.querySelector('.tooltip-content');
-        contentElement.textContent = text.length > 100 ? text.substring(0, 100) + '...' : text;
-        
-        // 位置を調整
         const x = e.pageX;
         const y = e.pageY;
         
         this.tooltipElement.style.left = `${x + 10}px`;
-        this.tooltipElement.style.top = `${y - 60}px`;
+        this.tooltipElement.style.top = `${y - 40}px`;
         this.tooltipElement.style.display = 'block';
+        this.tooltipElement.style.opacity = '1';
         
-        // 画面外に出る場合の調整
         setTimeout(() => {
             const rect = this.tooltipElement.getBoundingClientRect();
             if (rect.right > window.innerWidth) {
@@ -368,6 +409,12 @@ class ContentScriptManager {
     hideTooltip() {
         if (this.tooltipElement) {
             this.tooltipElement.style.display = 'none';
+            this.tooltipElement.style.opacity = '0';
+            // 確実に非表示にするためにDOMから削除して再追加
+            if (this.tooltipElement.parentNode) {
+                this.tooltipElement.parentNode.removeChild(this.tooltipElement);
+                document.body.appendChild(this.tooltipElement);
+            }
         }
     }
 
@@ -389,13 +436,17 @@ class ContentScriptManager {
                 }
             });
             
+            // ツールチップを即座に隠す
             this.hideTooltip();
+            
+            // 選択を解除
             selection.removeAllRanges();
             
             // 成功通知
             this.showNotification('選択テキストを保存しました');
         } catch (error) {
             console.error('Failed to save selected text:', error);
+            this.hideTooltip();
         }
     }
 
@@ -438,21 +489,249 @@ class ContentScriptManager {
     }
 
     async restoreBookmarks() {
-        try {
-            // バックグラウンドスクリプトから既存のブックマークを取得
-            chrome.runtime.sendMessage({
-                action: 'getBookmarks',
-                data: { url: window.location.href }
-            }, (response) => {
-                if (response && response.bookmarks) {
-                    response.bookmarks.forEach(bookmark => {
-                        this.restoreBookmark(bookmark);
-                    });
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        const attemptRestore = () => {
+            try {
+                chrome.runtime.sendMessage({
+                    action: 'getBookmarks',
+                    data: { url: window.location.href }
+                }, (response) => {
+                    // Chrome runtime エラーをチェック
+                    if (chrome.runtime.lastError) {
+                        console.debug('Chrome runtime error:', chrome.runtime.lastError);
+                        if (retryCount < maxRetries) {
+                            retryCount++;
+                            setTimeout(attemptRestore, 1000 * retryCount);
+                        }
+                        return;
+                    }
+                    
+                    if (response && response.bookmarks && response.bookmarks.length > 0) {
+                        this.showBookmarkNavigator(response.bookmarks);
+                        
+                        // Text Fragments APIでハイライトされたテキストをチェック
+                        this.checkTextFragmentHighlight();
+                    }
+                });
+            } catch (error) {
+                console.debug('Failed to restore bookmarks:', error);
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    setTimeout(attemptRestore, 1000 * retryCount);
                 }
+            }
+        };
+        
+        // 初回実行
+        attemptRestore();
+    }
+
+    checkTextFragmentHighlight() {
+        // Text Fragments APIでハイライトされた要素があるか確認
+        setTimeout(() => {
+            const highlighted = document.querySelector('[data-text-fragment]');
+            if (!highlighted) {
+                // CSS疑似要素 ::target-text を持つ要素を探す
+                const walker = document.createTreeWalker(
+                    document.body,
+                    NodeFilter.SHOW_ELEMENT,
+                    null,
+                    false
+                );
+                
+                let node;
+                while (node = walker.nextNode()) {
+                    const styles = window.getComputedStyle(node, '::target-text');
+                    if (styles.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+                        // Text Fragmentでハイライトされた要素を強調
+                        this.highlightTemporarily(node);
+                        break;
+                    }
+                }
+            }
+        }, 500);
+    }
+
+    showBookmarkNavigator(bookmarks) {
+        if (document.getElementById('rv-bookmark-navigator')) return;
+
+        const sortedBookmarks = bookmarks.sort((a, b) => 
+            (a.scroll_position || 0) - (b.scroll_position || 0)
+        );
+
+        const nav = document.createElement('div');
+        nav.id = 'rv-bookmark-navigator';
+        nav.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            max-width: 200px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        `;
+
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+        `;
+        header.innerHTML = `
+            <span>🔖 ブックマーク (${sortedBookmarks.length})</span>
+            <button id="rv-close-nav" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 0; color: #6b7280;">×</button>
+        `;
+        nav.appendChild(header);
+
+        const list = document.createElement('div');
+        list.style.cssText = `max-height: 300px; overflow-y: auto;`;
+        
+        sortedBookmarks.forEach((bookmark, index) => {
+            const item = document.createElement('button');
+            item.style.cssText = `
+                width: 100%;
+                text-align: left;
+                padding: 8px;
+                margin-bottom: 4px;
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                color: #374151;
+                transition: all 0.2s;
+            `;
+            item.textContent = `${index + 1}. ${bookmark.label || '保存テキスト'}`;
+            item.addEventListener('mouseenter', () => {
+                item.style.background = '#eff6ff';
+                item.style.borderColor = '#3b82f6';
             });
-        } catch (error) {
-            console.error('Failed to restore bookmarks:', error);
+            item.addEventListener('mouseleave', () => {
+                item.style.background = '#f9fafb';
+                item.style.borderColor = '#e5e7eb';
+            });
+            item.addEventListener('click', () => {
+                this.scrollToBookmark(bookmark);
+            });
+            list.appendChild(item);
+        });
+        nav.appendChild(list);
+
+        document.body.appendChild(nav);
+
+        document.getElementById('rv-close-nav').addEventListener('click', () => {
+            nav.remove();
+        });
+    }
+
+    scrollToBookmark(bookmark) {
+        if (bookmark.xpath) {
+            const element = this.getElementByXPath(bookmark.xpath);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                this.highlightTemporarily(element);
+                return;
+            }
         }
+        
+        // xpathが失敗した場合、テキスト検索でジャンプ
+        if (bookmark.text) {
+            const found = this.findAndScrollToText(bookmark.text);
+            if (found) return;
+        }
+        
+        if (bookmark.scroll_position !== undefined) {
+            window.scrollTo({
+                top: bookmark.scroll_position,
+                behavior: 'smooth'
+            });
+        }
+    }
+
+    findAndScrollToText(text) {
+        // 長いテキストの場合は最初の50文字で検索
+        const searchText = text.length > 50 ? text.substring(0, 50) : text;
+        
+        const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+        
+        let node;
+        while (node = walker.nextNode()) {
+            if (node.textContent.includes(searchText)) {
+                const element = node.parentElement;
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // 要素を少し大きく表示
+                const originalElement = element;
+                let targetElement = element;
+                
+                // 親要素で段落やdivなど意味のある要素を探す
+                while (targetElement && targetElement !== document.body) {
+                    const tagName = targetElement.tagName.toLowerCase();
+                    if (['p', 'div', 'article', 'section', 'li', 'td', 'span'].includes(tagName)) {
+                        break;
+                    }
+                    targetElement = targetElement.parentElement;
+                }
+                
+                this.highlightTemporarily(targetElement || originalElement);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    highlightTemporarily(element) {
+        const originalBg = element.style.backgroundColor;
+        const originalBorder = element.style.border;
+        const originalBoxShadow = element.style.boxShadow;
+        
+        element.style.backgroundColor = '#fef3c7';
+        element.style.border = '2px solid #f59e0b';
+        element.style.boxShadow = '0 0 20px rgba(245, 158, 11, 0.5)';
+        element.style.transition = 'all 0.3s ease';
+        element.style.borderRadius = '4px';
+        element.style.padding = '4px';
+        
+        // 3回点滅させる
+        let blinkCount = 0;
+        const blinkInterval = setInterval(() => {
+            if (blinkCount >= 6) {
+                clearInterval(blinkInterval);
+                // 元に戻す
+                setTimeout(() => {
+                    element.style.backgroundColor = originalBg;
+                    element.style.border = originalBorder;
+                    element.style.boxShadow = originalBoxShadow;
+                    element.style.padding = '';
+                    element.style.borderRadius = '';
+                }, 300);
+                return;
+            }
+            
+            if (blinkCount % 2 === 0) {
+                element.style.backgroundColor = '#fbbf24';
+                element.style.boxShadow = '0 0 30px rgba(251, 191, 36, 0.8)';
+            } else {
+                element.style.backgroundColor = '#fef3c7';
+                element.style.boxShadow = '0 0 20px rgba(245, 158, 11, 0.5)';
+            }
+            blinkCount++;
+        }, 300);
     }
 
     restoreHighlight(highlightData) {
@@ -656,13 +935,16 @@ class ContentScriptManager {
 
     async syncAuthFromWebpage(authData) {
         try {
-            await chrome.runtime.sendMessage({
+            const response = await chrome.runtime.sendMessage({
                 action: 'syncAuthFromWebpage',
                 data: authData
             });
-            console.log('Auth data synced from webpage to extension');
+            if (response && response.success) {
+                console.log('Auth data synced from webpage to extension');
+            }
         } catch (error) {
-            console.error('Failed to sync auth data:', error);
+            // エラーは静かに処理（通知しない）
+            console.debug('Auth sync skipped (extension context):', error);
         }
     }
 

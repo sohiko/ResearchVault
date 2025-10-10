@@ -20,7 +20,7 @@ export default function Settings() {
   const [success, setSuccess] = useState(false)
 
   const loadSettings = useCallback(async () => {
-    if (!user) return
+    if (!user) {return}
     try {
       setLoading(true)
       

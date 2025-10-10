@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useProjects } from '../hooks/useProjects';
+import toast from 'react-hot-toast';
 
 // Text Fragments APIの互換性チェック
 const supportsTextFragments = () => {
@@ -24,7 +25,7 @@ export default function SelectedTexts() {
     }, [sortOrder, session]);
 
     async function loadSelectedTexts() {
-        if (!session?.access_token) return;
+        if (!session?.access_token) {return;}
 
         try {
             setLoading(true);
@@ -44,12 +45,12 @@ export default function SelectedTexts() {
                 .eq('created_by', user.id)
                 .order('created_at', { ascending: sortOrder === 'asc' });
 
-            if (error) throw error;
+            if (error) {throw error;}
 
             const grouped = {};
             selectedTexts.forEach(item => {
                 const ref = item.references;
-                if (!ref) return;
+                if (!ref) {return;}
 
                 const url = ref.url;
                 if (!grouped[url]) {
@@ -83,7 +84,10 @@ export default function SelectedTexts() {
     }
 
     async function handleDelete(textId) {
-        if (!confirm('この選択テキストを削除しますか？')) return;
+        const confirmed = window.confirm('この選択テキストを削除しますか？');
+        if (!confirmed) {
+            return;
+        }
 
         try {
             const { error } = await supabase
@@ -92,12 +96,15 @@ export default function SelectedTexts() {
                 .eq('id', textId)
                 .eq('created_by', user.id);
 
-            if (error) throw error;
+            if (error) {
+                throw error;
+            }
 
+            toast.success('削除しました');
             loadSelectedTexts();
         } catch (error) {
             console.error('Error deleting text:', error);
-            alert('削除に失敗しました');
+            toast.error('削除に失敗しました');
         }
     }
 
@@ -144,7 +151,7 @@ export default function SelectedTexts() {
                     .select()
                     .single();
 
-                if (refError) throw refError;
+                if (refError) {throw refError;}
                 referenceId = newRef.id;
             }
 
@@ -157,14 +164,16 @@ export default function SelectedTexts() {
                 })
                 .eq('id', selectedTextId);
 
-            if (updateError) throw updateError;
+            if (updateError) {
+                throw updateError;
+            }
 
             setShowProjectModal(false);
             setSelectedTextId(null);
-            alert('プロジェクトに保存しました');
+            toast.success('プロジェクトに保存しました');
         } catch (error) {
             console.error('Error saving to project:', error);
-            alert('保存に失敗しました: ' + error.message);
+            toast.error('保存に失敗しました: ' + error.message);
         }
     }
 

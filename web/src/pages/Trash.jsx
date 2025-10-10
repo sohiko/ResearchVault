@@ -18,7 +18,7 @@ export default function Trash() {
   const [itemToDelete, setItemToDelete] = useState(null)
 
   const loadTrashedItems = useCallback(async () => {
-    if (!user) return
+    if (!user) {return}
     try {
       setLoading(true)
       setError(null)
@@ -31,7 +31,7 @@ export default function Trash() {
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false })
 
-      if (projectsError) throw projectsError
+      if (projectsError) {throw projectsError}
 
       // ゴミ箱の参照を取得（すべての削除された参照）
       const { data: references, error: referencesError } = await supabase
@@ -41,7 +41,7 @@ export default function Trash() {
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false })
 
-      if (referencesError) throw referencesError
+      if (referencesError) {throw referencesError}
 
       // データを統合して30日計算を追加
       const allItems = [
@@ -96,14 +96,14 @@ export default function Trash() {
           .update({ deleted_at: null, deleted_by: null })
           .eq('id', item.id)
         
-        if (error) throw error
+        if (error) {throw error}
       } else {
         const { error } = await supabase
           .from('references')
           .update({ deleted_at: null, deleted_by: null })
           .eq('id', item.id)
         
-        if (error) throw error
+        if (error) {throw error}
       }
 
       // UIから削除
@@ -134,14 +134,14 @@ export default function Trash() {
           .delete()
           .eq('id', itemToDelete.id)
         
-        if (error) throw error
+        if (error) {throw error}
       } else {
         const { error } = await supabase
           .from('references')
           .delete()
           .eq('id', itemToDelete.id)
         
-        if (error) throw error
+        if (error) {throw error}
       }
 
       // UIから削除
@@ -175,7 +175,7 @@ export default function Trash() {
           .delete()
           .in('id', projectIds)
         
-        if (projectError) throw projectError
+        if (projectError) {throw projectError}
       }
 
       // 参照を完全削除
@@ -186,7 +186,7 @@ export default function Trash() {
           .delete()
           .in('id', referenceIds)
         
-        if (referenceError) throw referenceError
+        if (referenceError) {throw referenceError}
       }
 
       setTrashedItems([])

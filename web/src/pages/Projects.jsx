@@ -126,7 +126,7 @@ export default function Projects() {
             .eq('owner_id', user.id)
             .order('updated_at', { ascending: false })
 
-          if (ownedError) throw ownedError
+          if (ownedError) {throw ownedError}
 
           const { data: memberProjects, error: memberError } = await supabase
             .from('project_members')
@@ -139,7 +139,7 @@ export default function Projects() {
             `)
             .eq('user_id', user.id)
 
-          if (memberError) throw memberError
+          if (memberError) {throw memberError}
 
           // データを統合
           const allProjects = [

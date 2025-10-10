@@ -183,7 +183,7 @@ export default function ProjectDetail() {
   }, [id, hasOpenModals])
 
   const loadCitationSettings = useCallback(async () => {
-    if (!user) return
+    if (!user) {return}
     
     try {
       const { data } = await supabase
@@ -337,7 +337,7 @@ export default function ProjectDetail() {
         })
         .eq('id', updatedReference.id)
 
-      if (error) throw error
+      if (error) {throw error}
 
       // ローカル状態を更新
       setReferences(prev => 
@@ -402,7 +402,7 @@ export default function ProjectDetail() {
         })
         .eq('id', id)
 
-      if (error) throw error
+      if (error) {throw error}
 
       toast.success('プロジェクトを削除しました')
       navigate('/projects')

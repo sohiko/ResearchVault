@@ -14,7 +14,7 @@ export default function Feedback() {
   const [error, setError] = useState(null)
 
   const loadFeedbacks = useCallback(async () => {
-    if (!user) return
+    if (!user) {return}
     try {
       setLoading(true)
       

@@ -9,14 +9,14 @@ export default function DatabaseTest() {
   const [loading, setLoading] = useState(false)
 
   const runTests = async () => {
-    if (!user) return
+    if (!user) {return}
     
     setLoading(true)
     const results = []
 
     // Test 1: Check if deleted_at column exists in projects table
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('projects')
         .select('id, name, deleted_at, deleted_by')
         .limit(1)
@@ -45,7 +45,7 @@ export default function DatabaseTest() {
 
     // Test 2: Check if deleted_at column exists in references table
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('references')
         .select('id, title, deleted_at, deleted_by')
         .limit(1)
@@ -81,7 +81,7 @@ export default function DatabaseTest() {
         .eq('owner_id', user.id)
         .limit(1)
 
-      if (fetchError) throw fetchError
+      if (fetchError) {throw fetchError}
 
       if (projects && projects.length > 0) {
         const testProjectId = projects[0].id

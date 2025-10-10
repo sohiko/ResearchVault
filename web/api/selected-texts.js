@@ -36,12 +36,12 @@ export default async function handler(req, res) {
                 .eq('created_by', user.id)
                 .order('created_at', { ascending: sortOrder === 'asc' });
 
-            if (error) throw error;
+            if (error) {throw error;}
 
             const grouped = {};
             selectedTexts.forEach(item => {
                 const ref = item.references;
-                if (!ref) return;
+                if (!ref) {return;}
 
                 const url = ref.url;
                 if (!grouped[url]) {
@@ -97,7 +97,7 @@ export default async function handler(req, res) {
                 .eq('id', id)
                 .eq('created_by', user.id);
 
-            if (error) throw error;
+            if (error) {throw error;}
 
             res.status(200).json({ success: true });
         } catch (error) {
@@ -162,7 +162,7 @@ export default async function handler(req, res) {
                     .select()
                     .single();
 
-                if (refError) throw refError;
+                if (refError) {throw refError;}
                 referenceId = newRef.id;
             }
 
@@ -174,7 +174,7 @@ export default async function handler(req, res) {
                 })
                 .eq('id', textId);
 
-            if (updateError) throw updateError;
+            if (updateError) {throw updateError;}
 
             res.status(200).json({ success: true, referenceId });
         } catch (error) {

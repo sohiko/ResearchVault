@@ -1,10 +1,10 @@
 /* eslint-disable no-undef */
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { toast } from 'react-hot-toast'
+import toast from 'react-hot-toast'
 import { usePageFocus } from '../hooks/usePageFocus'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import GeminiClient from '../lib/geminiClient'
@@ -95,6 +95,56 @@ export default function Candidates() {
   usePageFocus(loadData, [user?.id], {
     enableFocusReload: false // フォーカス時のリロードは無効
   })
+
+  // 初回ロード時に候補が空なら自動的に履歴を分析
+  useEffect(() => {
+    const autoAnalyzeHistory = async () => {
+      if (!user || loading || candidates.length > 0) {
+        return
+      }
+
+      // 拡張機能が利用可能かチェック
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+        return
+      }
+
+      try {
+        console.log('Auto-analyzing browsing history...')
+        
+        const response = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage(
+            { 
+              action: 'analyzeHistory',
+              data: {
+                days: 30,
+                limit: 50,
+                threshold: 0.5,
+                saveToDatabase: true
+              }
+            },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                reject(chrome.runtime.lastError)
+              } else {
+                resolve(response)
+              }
+            }
+          )
+          
+          setTimeout(() => reject(new Error('タイムアウト')), 30000)
+        })
+
+        if (response && response.success && response.saved > 0) {
+          console.log(`Auto-analyzed: ${response.saved} new candidates found`)
+          await loadData()
+        }
+      } catch (error) {
+        console.debug('Auto-analysis skipped:', error.message)
+      }
+    }
+
+    autoAnalyzeHistory()
+  }, [user, loading, candidates.length, loadData])
 
   const saveCandidate = async (candidate, projectId) => {
     try {
@@ -308,7 +358,7 @@ export default function Candidates() {
       // データベースに保存（拡張機能由来でないもののみ）
       let successCount = 0
       for (const result of results) {
-        if (!result.success || !result.classification) continue
+        if (!result.success || !result.classification) {continue}
 
         const { reference: candidate, classification } = result
 

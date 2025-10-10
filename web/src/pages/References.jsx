@@ -76,7 +76,7 @@ export default function References() {
   }, [user, filters])
 
   const loadCitationSettings = useCallback(async () => {
-    if (!user) return
+    if (!user) {return}
     
     try {
       const { data } = await supabase
@@ -217,7 +217,7 @@ export default function References() {
         })
         .eq('id', updatedReference.id)
 
-      if (error) throw error
+      if (error) {throw error}
 
       // ローカル状態を更新
       setReferences(prev => 

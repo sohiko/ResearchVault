@@ -139,11 +139,6 @@ const ExtensionBridge = () => {
     checkExtensionInstallation()
   }
 
-  // 環境を判定（レンダリング部分で使用）
-  const isLocalhost = window.location.hostname === 'localhost' || 
-                     window.location.hostname === '127.0.0.1' ||
-                     window.location.hostname.includes('localhost')
-
   // チェック中は何も表示しない
   if (connectionStatus === 'checking') {
     return null

@@ -34,10 +34,12 @@
 
                 <div class="form-section">
                     <div class="form-group">
-                        <label for="projectSelect">プロジェクト:</label>
-                        <select id="projectSelect" class="select-field">
-                            <option value="">プロジェクトを選択</option>
-                        </select>
+                        <label for="projectSearch">プロジェクト:</label>
+                        <div class="searchable-select">
+                            <input type="text" id="projectSearch" placeholder="プロジェクトを検索..." class="input-field">
+                            <div id="projectDropdown" class="select-dropdown hidden"></div>
+                            <input type="hidden" id="projectSelect" value="">
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -68,10 +70,6 @@
                         <button id="saveTextBtn" class="action-btn" title="選択テキストを保存">
                             <span class="action-icon">✂️</span>
                             選択テキスト
-                        </button>
-                        <button id="createBookmarkBtn" class="action-btn" title="ページ内ブックマーク作成">
-                            <span class="action-icon">🔖</span>
-                            ブックマーク
                         </button>
                         <button id="generateCitationBtn" class="action-btn" title="引用生成">
                             <span class="action-icon">📝</span>

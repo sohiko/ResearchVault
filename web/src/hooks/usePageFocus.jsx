@@ -28,7 +28,7 @@ export function usePageFocus(callback, deps = [], options = {}) {
   }, [callback])
 
   useEffect(() => {
-    if (!enableFocusReload) return
+    if (!enableFocusReload) {return}
 
     const handleFocus = () => {
       // モーダルが開いている場合はリロードを実行しない
