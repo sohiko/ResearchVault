@@ -1,8 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useProjects } from '../../hooks/useProjects'
 import { useNavigationBlock } from '../../hooks/useNavigationBlock'
 import { useModalContext } from '../../hooks/useModalContext'
+import { useAuth } from '../../hooks/useAuth'
+import { supabase } from '../../lib/supabase'
 import { renderProjectIcon } from '../../utils/iconRenderer'
 
 import { LayoutDashboard, FileText, FolderKanban, Quote, AlertTriangle, Trash2, Lightbulb, Download, Bookmark } from 'lucide-react'
@@ -35,33 +37,43 @@ const navigation = [
   }
 ]
 
-const quickActions = [
-  {
-    name: '記録漏れ候補',
-    href: '/candidates',
-    icon: <AlertTriangle className="w-5 h-5" />,
-    badge: '3'
-  },
-  {
-    name: 'ゴミ箱',
-    href: '/trash',
-    icon: <Trash2 className="w-5 h-5" />
-  },
-  {
-    name: '機能リクエスト',
-    href: '/feedback',
-    icon: <Lightbulb className="w-5 h-5" />
-  }
-]
-
 export default function Sidebar() {
   const location = useLocation()
+  const { user } = useAuth()
   const { projects, currentProject } = useProjects()
   const { hasOpenModals } = useModalContext()
   const [showAllProjects, setShowAllProjects] = useState(false)
+  const [academicCandidatesCount, setAcademicCandidatesCount] = useState(0)
   
   // モーダルが開いている時のナビゲーションをブロック
   const blockedNavigate = useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
+
+  // 学術サイト候補数を取得
+  useEffect(() => {
+    const loadAcademicCandidatesCount = async () => {
+      if (!user) return
+      
+      try {
+        const { count, error } = await supabase
+          .from('browsing_history')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_academic', true)
+          .is('saved_as_reference', false)
+        
+        if (error) throw error
+        setAcademicCandidatesCount(count || 0)
+      } catch (error) {
+        console.error('Failed to load academic candidates count:', error)
+      }
+    }
+    
+    loadAcademicCandidatesCount()
+    
+    // 定期的に更新
+    const interval = setInterval(loadAcademicCandidatesCount, 30000) // 30秒ごと
+    return () => clearInterval(interval)
+  }, [user])
 
   const isActiveLink = (href) => {
     if (href === '/dashboard') {
@@ -69,6 +81,25 @@ export default function Sidebar() {
     }
     return location.pathname.startsWith(href)
   }
+  
+  const quickActions = [
+    {
+      name: '記録漏れ候補',
+      href: '/candidates',
+      icon: <AlertTriangle className="w-5 h-5" />,
+      badge: academicCandidatesCount > 0 ? academicCandidatesCount.toString() : null
+    },
+    {
+      name: 'ゴミ箱',
+      href: '/trash',
+      icon: <Trash2 className="w-5 h-5" />
+    },
+    {
+      name: '機能リクエスト',
+      href: '/feedback',
+      icon: <Lightbulb className="w-5 h-5" />
+    }
+  ]
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-secondary-800 border-r border-secondary-200 dark:border-secondary-700">
@@ -79,7 +110,7 @@ export default function Sidebar() {
           className="flex items-center space-x-3 w-full text-left"
         >
           <img 
-            src="/favicon/android-chrome-192x192.png" 
+            src="/img/icon_circle.png" 
             alt="ResearchVault" 
             className="w-8 h-8"
           />
@@ -213,11 +244,11 @@ export default function Sidebar() {
                     {item.icon}
                     <span className="ml-3">{item.name}</span>
                   </div>
-                  {item.badge && (
-                    <span className="badge badge-primary">
-                      {item.badge}
-                    </span>
-                  )}
+                        {item.badge !== null && item.badge !== undefined && (
+                          <span className="badge badge-primary">
+                            {item.badge}
+                          </span>
+                        )}
                 </button>
               </li>
             ))}

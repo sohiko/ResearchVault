@@ -112,6 +112,16 @@ export default function ProjectDetail() {
       return
     }
 
+    // オーナーの場合は、project_membersに自分自身が含まれていないことを確認
+    if (isOwner) {
+      // オーナーがメンバーテーブルに誤って追加されている場合は削除
+      await supabase
+        .from('project_members')
+        .delete()
+        .eq('project_id', id)
+        .eq('user_id', user.id)
+    }
+
     setProject(projectData)
   }, [id, user, navigate, hasOpenModals])
 
@@ -161,7 +171,7 @@ export default function ProjectDetail() {
   }, [id, searchQuery, sortBy, sortOrder, hasOpenModals])
 
   const loadMembers = useCallback(async () => {
-    if (!id) {return}
+    if (!id || !user) {return}
     
     // モーダルが開いている場合はリロードをスキップ
     if (hasOpenModals) {
@@ -176,11 +186,12 @@ export default function ProjectDetail() {
         profiles (name, email)
       `)
       .eq('project_id', id)
+      .neq('user_id', user.id) // オーナー（現在のユーザー）を除外
 
     if (error) {throw error}
 
-    setMembers(data)
-  }, [id, hasOpenModals])
+    setMembers(data || [])
+  }, [id, user, hasOpenModals])
 
   const loadCitationSettings = useCallback(async () => {
     if (!user) {return}

@@ -1,12 +1,13 @@
 // 学術サイト検出クラス
 class AcademicSiteDetector {
     constructor() {
-        // 学術系ドメインのリスト
+        // 学術系ドメインのリスト（厳格な学術サイトのみ）
         this.academicDomains = new Set([
             // 学術データベース
             'scholar.google.com', 'pubmed.ncbi.nlm.nih.gov', 'jstor.org',
             'sciencedirect.com', 'springer.com', 'wiley.com', 'nature.com',
             'science.org', 'ieee.org', 'acm.org', 'arxiv.org', 'researchgate.net',
+            'semanticscholar.org', 'scielo.org', 'plos.org',
             
             // 日本の学術系
             'jstage.jst.go.jp', 'ci.nii.ac.jp', 'ndl.go.jp',
@@ -15,20 +16,34 @@ class AcademicSiteDetector {
             // 大学ドメイン
             '.ac.jp', '.edu', '.ac.uk', '.edu.au',
             
-            // ニュース・報道系
+            // 百科事典（学術的なもののみ）
+            'wikipedia.org', 'britannica.com',
+            
+            // 政府・公的機関（研究・統計関連）
+            '.gov', '.go.jp', '.gov.uk', 'who.int', 'un.org'
+        ]);
+        
+        // 非学術サイト（除外リスト）
+        this.nonAcademicDomains = new Set([
+            // 一般ニュースサイト
             'nytimes.com', 'washingtonpost.com', 'bbc.com', 'cnn.com',
             'reuters.com', 'apnews.com', 'nhk.or.jp', 'nikkei.com',
             'asahi.com', 'mainichi.jp', 'yomiuri.co.jp',
             
-            // 百科事典・辞書
-            'wikipedia.org', 'britannica.com', 'merriam-webster.com',
+            // 技術系ブログ・コミュニティ（学術的ではない）
+            'github.com', 'medium.com', 'qiita.com', 'zenn.dev',
+            'stackoverflow.com', 'note.com',
+            
+            // 一般辞書サイト
             'dictionary.com', 'kotobank.jp', 'weblio.jp',
+            'merriam-webster.com',
             
-            // 政府・公的機関
-            '.gov', '.go.jp', '.gov.uk', 'who.int', 'un.org',
+            // SNS・エンターテイメント
+            'twitter.com', 'facebook.com', 'instagram.com', 'youtube.com',
+            'tiktok.com', 'reddit.com',
             
-            // その他信頼できるソース
-            'stackoverflow.com', 'github.com', 'medium.com', 'qiita.com', 'zenn.dev'
+            // ショッピング
+            'amazon.com', 'rakuten.co.jp', 'yahoo.co.jp'
         ]);
         
         // 文献的なキーワード
@@ -122,12 +137,12 @@ class AcademicSiteDetector {
             console.error('Score calculation error:', error);
         }
         
-        // 重み付け合計
+        // 重み付け合計（ドメインの重要性を高める）
         const weights = {
-            domain: 0.4,
+            domain: 0.5,
             url: 0.25,
-            title: 0.25,
-            behavior: 0.1
+            title: 0.2,
+            behavior: 0.05
         };
         
         const total = Object.entries(scores).reduce((sum, [key, value]) => {
@@ -138,6 +153,19 @@ class AcademicSiteDetector {
     }
     
     isAcademicDomain(domain) {
+        // まず非学術サイトに該当するかチェック
+        const isNonAcademic = Array.from(this.nonAcademicDomains).some(nonAcademicDomain => {
+            if (nonAcademicDomain.startsWith('.')) {
+                return domain.endsWith(nonAcademicDomain);
+            }
+            return domain === nonAcademicDomain || domain.endsWith('.' + nonAcademicDomain);
+        });
+        
+        if (isNonAcademic) {
+            return false;
+        }
+        
+        // 学術サイトに該当するかチェック
         return Array.from(this.academicDomains).some(academicDomain => {
             if (academicDomain.startsWith('.')) {
                 return domain.endsWith(academicDomain);

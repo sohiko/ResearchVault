@@ -387,11 +387,23 @@ class ContentScriptManager {
             return;
         }
         
+        // input/textarea要素での選択の場合は表示しない
+        const activeElement = document.activeElement;
+        if (activeElement && (
+            activeElement.tagName === 'INPUT' ||
+            activeElement.tagName === 'TEXTAREA' ||
+            activeElement.isContentEditable
+        )) {
+            this.hideTooltip();
+            return;
+        }
+        
         const x = e.pageX;
         const y = e.pageY;
         
-        this.tooltipElement.style.left = `${x + 10}px`;
-        this.tooltipElement.style.top = `${y - 40}px`;
+        // 位置調整：より右上に配置
+        this.tooltipElement.style.left = `${x + 25}px`;
+        this.tooltipElement.style.top = `${y - 50}px`;
         this.tooltipElement.style.display = 'block';
         this.tooltipElement.style.opacity = '1';
         

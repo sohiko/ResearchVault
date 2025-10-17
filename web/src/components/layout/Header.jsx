@@ -5,7 +5,7 @@ import { useProjects } from '../../hooks/useProjects'
 import { ThemeToggle } from '../../hooks/useTheme'
 import { useNavigationBlock } from '../../hooks/useNavigationBlock'
 import { useModalContext } from '../../hooks/useModalContext'
-import { Menu, Search, Bell, ChevronDown, User, Settings, HelpCircle, LogOut } from 'lucide-react'
+import { Menu, Search, ChevronDown, User, Settings, HelpCircle, LogOut } from 'lucide-react'
 
 export default function Header({ onMenuClick }) {
   const { user, signOut } = useAuth()
@@ -109,14 +109,6 @@ export default function Header({ onMenuClick }) {
         <div className="flex items-center space-x-3">
           {/* テーマ切り替えボタン */}
           <ThemeToggle />
-
-          {/* 通知ボタン */}
-          <button className="p-2 rounded-lg text-secondary-600 hover:text-secondary-900 hover:bg-secondary-100 dark:text-secondary-400 dark:hover:text-secondary-100 dark:hover:bg-secondary-700 relative">
-            <span className="sr-only">通知</span>
-            <Bell className="h-6 w-6" />
-            {/* 通知バッジ（仮） */}
-            <span className="absolute top-1 right-1 h-2 w-2 bg-error-500 rounded-full"></span>
-          </button>
 
           {/* ユーザーメニュー */}
           <div className="relative" ref={userMenuRef}>

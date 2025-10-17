@@ -1,6 +1,6 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
--- This data is current as of 9:02 AM on October 10, 2025, and may have changed at the time of reading due to the addition of new tables or structures.
+-- This data is current as of 14:12 PM on October 17, 2025, and may have changed at the time of reading due to the addition of new tables or structures.
 
 
 CREATE TABLE public.activity_logs (
@@ -41,7 +41,18 @@ CREATE TABLE public.browsing_history_candidates (
   ai_classified boolean DEFAULT false,
   classification_result jsonb,
   classified_at timestamp with time zone,
-  CONSTRAINT browsing_history_candidates_pkey PRIMARY KEY (id)
+  user_id uuid NOT NULL,
+  visited_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  visit_count integer DEFAULT 1,
+  confidence_score numeric DEFAULT 0.5 CHECK (confidence_score >= 0::numeric AND confidence_score <= 1::numeric),
+  suggested_reason character varying,
+  is_academic boolean DEFAULT false,
+  category character varying,
+  dismissed boolean DEFAULT false,
+  dismissed_at timestamp with time zone,
+  favicon text,
+  CONSTRAINT browsing_history_candidates_pkey PRIMARY KEY (id),
+  CONSTRAINT browsing_history_candidates_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.citation_settings (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

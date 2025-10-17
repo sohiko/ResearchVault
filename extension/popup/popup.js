@@ -114,18 +114,9 @@ class PopupManager {
             }
         });
 
+        // 最初は全プロジェクトを表示（入力欄は空）
+        searchInput.value = '';
         this.filterProjects('');
-
-        // 最後に選択したプロジェクトを復元
-        chrome.storage.sync.get(['lastSelectedProject']).then(({ lastSelectedProject }) => {
-            if (lastSelectedProject) {
-                const project = this.projects.find(p => p.id === lastSelectedProject);
-                if (project) {
-                    hiddenSelect.value = project.id;
-                    searchInput.value = project.name;
-                }
-            }
-        });
     }
 
     filterProjects(query) {

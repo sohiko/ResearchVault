@@ -320,4 +320,9 @@
       @apply border-2;
     }
   }
+  
+  /* モーダル背景オーバーレイの修正 */
+  .fixed.inset-0 {
+    margin: 0 !important;
+  }
 }

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../hooks/useAuth'
 import ProtectedModal from './ProtectedModal'
 import { useModalContext } from '../../hooks/useModalContext'
 
 const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
   const { openModal } = useModalContext()
+  const { user } = useAuth()
   const modalId = 'edit-reference'
   
   const [formData, setFormData] = useState({
@@ -14,9 +17,34 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
     author: '',
     siteName: '',
     publishedDate: '',
-    accessedDate: ''
+    accessedDate: '',
+    projectId: ''
   })
   const [loading, setLoading] = useState(false)
+  const [projects, setProjects] = useState([])
+
+  // プロジェクト一覧を取得
+  useEffect(() => {
+    const loadProjects = async () => {
+      if (!user) return
+      
+      try {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('id, name, color, icon')
+          .eq('owner_id', user.id)
+          .is('deleted_at', null)
+          .order('name')
+        
+        if (error) throw error
+        setProjects(data || [])
+      } catch (error) {
+        console.error('Failed to load projects:', error)
+      }
+    }
+    
+    loadProjects()
+  }, [user])
 
   // モーダルを開いた状態として登録
   useEffect(() => {
@@ -35,7 +63,8 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
         publishedDate: reference.published_date ? reference.published_date.split('T')[0] : 
                       (metadata.publishedDate ? metadata.publishedDate.split('T')[0] : ''),
         accessedDate: reference.accessed_date ? reference.accessed_date.split('T')[0] : 
-                     (reference.saved_at ? reference.saved_at.split('T')[0] : '')
+                     (reference.saved_at ? reference.saved_at.split('T')[0] : ''),
+        projectId: reference.project_id || ''
       })
     }
   }, [reference])
@@ -85,6 +114,7 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
         author: formData.author.trim() || null,
         published_date: formData.publishedDate || null,
         accessed_date: formData.accessedDate || null,
+        project_id: formData.projectId || null,
         metadata: {
           ...reference.metadata,
           author: formData.author.trim(),
@@ -179,6 +209,26 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="参照の説明や要約を入力"
             />
+          </div>
+
+          {/* プロジェクト */}
+          <div>
+            <label htmlFor="projectId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              プロジェクト
+            </label>
+            <select
+              id="projectId"
+              value={formData.projectId}
+              onChange={(e) => handleChange('projectId', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="">プロジェクトを選択（任意）</option>
+              {projects.map(project => (
+                <option key={project.id} value={project.id}>
+                  {project.icon || '📁'} {project.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

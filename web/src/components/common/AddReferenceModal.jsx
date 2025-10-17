@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../hooks/useAuth'
 import ProtectedModal from './ProtectedModal'
 import { useModalContext } from '../../hooks/useModalContext'
 
 const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
   const { openModal } = useModalContext()
+  const { user } = useAuth()
   const modalId = 'add-reference'
   
   const [formData, setFormData] = useState({
@@ -15,12 +18,37 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
     memo: '',
     author: '',
     publishedDate: '',
-    accessedDate: new Date().toISOString().split('T')[0] // 今日の日付をデフォルト
+    accessedDate: new Date().toISOString().split('T')[0], // 今日の日付をデフォルト
+    projectId: _projectId || '' // プロジェクトIDを追加
   })
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const [isExtracting, setIsExtracting] = useState(false)
+  const [projects, setProjects] = useState([])
 
+  // プロジェクト一覧を取得
+  useEffect(() => {
+    const loadProjects = async () => {
+      if (!user) return
+      
+      try {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('id, name, color, icon')
+          .eq('owner_id', user.id)
+          .is('deleted_at', null)
+          .order('name')
+        
+        if (error) throw error
+        setProjects(data || [])
+      } catch (error) {
+        console.error('Failed to load projects:', error)
+      }
+    }
+    
+    loadProjects()
+  }, [user])
+  
   // モーダルを開いた状態として登録
   useEffect(() => {
     openModal(modalId)
@@ -91,6 +119,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
         author: formData.author.trim() || null,
         published_date: formData.publishedDate || null,
         accessed_date: formData.accessedDate || new Date().toISOString().split('T')[0],
+        project_id: formData.projectId || null,
         saved_at: new Date().toISOString()
       }
 
@@ -379,6 +408,29 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
             )}
             <p className="mt-1 text-xs text-gray-500">
               {formData.description.length}/1000文字
+            </p>
+          </div>
+
+          {/* プロジェクト */}
+          <div>
+            <label htmlFor="projectId" className="block text-sm font-medium text-gray-700 mb-1">
+              プロジェクト
+            </label>
+            <select
+              id="projectId"
+              value={formData.projectId}
+              onChange={(e) => handleChange('projectId', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">プロジェクトを選択（任意）</option>
+              {projects.map(project => (
+                <option key={project.id} value={project.id}>
+                  {project.icon || '📁'} {project.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              参照を追加するプロジェクトを選択できます
             </p>
           </div>
 

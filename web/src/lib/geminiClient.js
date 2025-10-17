@@ -4,8 +4,8 @@ class GeminiClient {
     constructor(apiKey) {
         this.apiKey = apiKey;
         this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
-        // 安価なflashモデルを使用（レート制限が緩く、無料枠が大きい）
-        this.model = 'gemini-1.5-flash';
+        // 最新のflashモデルを使用
+        this.model = 'gemini-2.0-flash-exp';
         this.cache = new Map();
     }
 

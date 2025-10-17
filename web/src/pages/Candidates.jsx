@@ -22,6 +22,7 @@ export default function Candidates() {
   const [subjectFilter, setSubjectFilter] = useState('')
   const [autoAnalyzing, setAutoAnalyzing] = useState(false)
   const [lastAnalyzedTime, setLastAnalyzedTime] = useState(null)
+  const [sortOrder, setSortOrder] = useState('newest') // 'newest', 'oldest', 'confidence'
 
   const loadData = useCallback(async () => {
     if (!user) {
@@ -511,10 +512,24 @@ export default function Candidates() {
     )
   }
 
-  // 教科フィルター適用
-  const filteredCandidates = subjectFilter 
+  // 教科フィルターとソート適用
+  let filteredCandidates = subjectFilter 
     ? candidates.filter(c => c.subject === subjectFilter)
     : candidates
+  
+  // ソート適用
+  filteredCandidates = [...filteredCandidates].sort((a, b) => {
+    switch (sortOrder) {
+      case 'oldest':
+        return new Date(a.visitedAt) - new Date(b.visitedAt)
+      case 'newest':
+        return new Date(b.visitedAt) - new Date(a.visitedAt)
+      case 'confidence':
+        return (b.confidence || 0) - (a.confidence || 0)
+      default:
+        return 0
+    }
+  })
 
   return (
     <div className="space-y-6">
@@ -649,37 +664,56 @@ export default function Candidates() {
           </div>
         </div>
 
-        {/* 教科フィルター */}
+        {/* フィルターとソート */}
         <div className="card p-4">
-          <div className="flex items-center space-x-4">
-            <label className="text-sm font-medium text-secondary-700 dark:text-secondary-300">
-              教科フィルター:
-            </label>
-            <select
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              value={subjectFilter}
-              onChange={(e) => setSubjectFilter(e.target.value)}
-            >
-              <option value="">すべて表示</option>
-              <option value="国語">国語</option>
-              <option value="数学">数学</option>
-              <option value="歴史">歴史</option>
-              <option value="物理">物理</option>
-              <option value="生物">生物</option>
-              <option value="化学">化学</option>
-              <option value="地理">地理</option>
-              <option value="英語">英語</option>
-              <option value="音楽">音楽</option>
-              <option value="美術">美術</option>
-              <option value="技術">技術</option>
-              <option value="家庭科">家庭科</option>
-              <option value="その他">その他</option>
-            </select>
-            {subjectFilter && (
-              <span className="text-sm text-secondary-600 dark:text-secondary-400">
-                {filteredCandidates.length}件の候補
-              </span>
-            )}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            {/* 教科フィルター */}
+            <div className="flex items-center space-x-2 flex-1">
+              <label className="text-sm font-medium text-secondary-700 dark:text-secondary-300 whitespace-nowrap">
+                教科:
+              </label>
+              <select
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                value={subjectFilter}
+                onChange={(e) => setSubjectFilter(e.target.value)}
+              >
+                <option value="">すべて表示</option>
+                <option value="国語">国語</option>
+                <option value="数学">数学</option>
+                <option value="歴史">歴史</option>
+                <option value="物理">物理</option>
+                <option value="生物">生物</option>
+                <option value="化学">化学</option>
+                <option value="地理">地理</option>
+                <option value="英語">英語</option>
+                <option value="音楽">音楽</option>
+                <option value="美術">美術</option>
+                <option value="技術">技術</option>
+                <option value="家庭科">家庭科</option>
+                <option value="その他">その他</option>
+              </select>
+            </div>
+            
+            {/* 並び順 */}
+            <div className="flex items-center space-x-2 flex-1">
+              <label className="text-sm font-medium text-secondary-700 dark:text-secondary-300 whitespace-nowrap">
+                並び順:
+              </label>
+              <select
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+              >
+                <option value="newest">新しい順</option>
+                <option value="oldest">古い順</option>
+                <option value="confidence">信頼度順</option>
+              </select>
+            </div>
+            
+            {/* 件数表示 */}
+            <div className="text-sm text-secondary-600 dark:text-secondary-400 whitespace-nowrap">
+              {filteredCandidates.length}件の候補
+            </div>
           </div>
         </div>
       </div>

@@ -9,6 +9,7 @@ export default function Settings() {
   const [settings, setSettings] = useState({
     notifications: true,
     autoSave: true,
+    academicSiteNotification: true, // 学術サイト検出通知
     citationFormat: 'APA',
     language: 'ja',
     dashboardLayout: 'grid',
@@ -70,6 +71,7 @@ export default function Settings() {
           settings: {
             notifications: settings.notifications,
             autoSave: settings.autoSave,
+            academicSiteNotification: settings.academicSiteNotification,
             language: settings.language,
             dashboardLayout: settings.dashboardLayout,
             itemsPerPage: settings.itemsPerPage
@@ -225,6 +227,40 @@ export default function Settings() {
               <option value={50}>50件</option>
               <option value={100}>100件</option>
             </select>
+          </div>
+        </div>
+      </div>
+
+      {/* 拡張機能設定 */}
+      <div className="card p-6">
+        <h2 className="text-xl font-semibold text-secondary-900 dark:text-secondary-100 mb-6">
+          拡張機能設定
+        </h2>
+
+        <div className="space-y-6">
+          {/* 学術サイト検出通知 */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-secondary-900 dark:text-secondary-100">
+                学術サイト検出通知
+              </h3>
+              <p className="text-sm text-secondary-500 dark:text-secondary-400">
+                学術サイトを訪問したときにブラウザ通知を表示します
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => updateSetting('academicSiteNotification', !settings.academicSiteNotification)}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                settings.academicSiteNotification ? 'bg-primary-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  settings.academicSiteNotification ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
         </div>
       </div>

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
-// import { supabase } from '../lib/supabase' // 未使用のためコメントアウト
+import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function Feedback() {
   const { user } = useAuth()
@@ -12,57 +13,62 @@ export default function Feedback() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [sortOrder, setSortOrder] = useState('newest') // 'newest', 'oldest'
+  const [typeFilter, setTypeFilter] = useState('') // '', 'feature', 'bug', 'improvement'
+  const [editingFeedback, setEditingFeedback] = useState(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [feedbackToDelete, setFeedbackToDelete] = useState(null)
 
   const loadFeedbacks = useCallback(async () => {
     if (!user) {return}
     try {
       setLoading(true)
+      setError(null)
       
-      // 模擬的なフィードバックデータ
-      const mockFeedbacks = [
-        {
-          id: 'feedback_1',
-          title: 'タグ機能の改善',
-          type: 'feature',
-          description: '参照にカラータグを付けられるようにしてほしい',
-          status: 'under_review',
-          votes: 12,
-          submittedBy: user.id,
-          submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          userVoted: true
-        },
-        {
-          id: 'feedback_2',
-          title: 'エクスポート機能',
-          type: 'feature',
-          description: '参照データをCSV形式でエクスポートできるようにしてほしい',
-          status: 'planned',
-          votes: 8,
-          submittedBy: 'other_user',
-          submittedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          userVoted: false
-        },
-        {
-          id: 'feedback_3',
-          title: 'ダークモードでの表示バグ',
-          type: 'bug',
-          description: 'ダークモードで一部のテキストが見えにくい',
-          status: 'completed',
-          votes: 15,
-          submittedBy: 'other_user',
-          submittedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          userVoted: true
-        }
-      ]
-
-      setFeedbacks(mockFeedbacks)
+      // ユーザーが管理者かチェック
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single()
+      
+      const userIsAdmin = profileData?.is_admin || false
+      setIsAdmin(userIsAdmin)
+      
+      // フィードバックを取得
+      let query = supabase
+        .from('feature_requests')
+        .select(`
+          *,
+          profiles (name, email)
+        `)
+        .is('deleted_at', null)
+      
+      // 管理者でない場合は自分の投稿のみ
+      if (!userIsAdmin) {
+        query = query.eq('user_id', user.id)
+      }
+      
+      // ソート
+      if (sortOrder === 'newest') {
+        query = query.order('created_at', { ascending: false })
+      } else {
+        query = query.order('created_at', { ascending: true })
+      }
+      
+      const { data, error: fetchError } = await query
+      
+      if (fetchError) throw fetchError
+      
+      setFeedbacks(data || [])
     } catch (error) {
       console.error('Failed to load feedbacks:', error)
       setError('フィードバックの読み込みに失敗しました')
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, sortOrder])
 
   useEffect(() => {
     if (user) {
@@ -75,38 +81,79 @@ export default function Feedback() {
       setSubmitting(true)
       setError(null)
 
-      // 実際のアプリケーションではフィードバックテーブルに保存
-      const newFeedback = {
-        id: `feedback_${Date.now()}`,
-        ...feedbackData,
-        submittedBy: user.id,
-        submittedAt: new Date().toISOString(),
-        status: 'pending',
-        votes: 0,
-        userVoted: false
+      if (editingFeedback) {
+        // 編集
+        const { error: updateError } = await supabase
+          .from('feature_requests')
+          .update({
+            title: feedbackData.title,
+            type: feedbackData.type,
+            description: feedbackData.description,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingFeedback.id)
+          .eq('user_id', user.id)
+        
+        if (updateError) throw updateError
+        toast.success('フィードバックを更新しました')
+      } else {
+        // 新規作成
+        const { error: insertError } = await supabase
+          .from('feature_requests')
+          .insert([{
+            user_id: user.id,
+            title: feedbackData.title,
+            type: feedbackData.type,
+            description: feedbackData.description
+          }])
+        
+        if (insertError) throw insertError
+        toast.success('フィードバックを送信しました。ご協力ありがとうございます！')
       }
 
-      setFeedbacks(prev => [newFeedback, ...prev])
       setShowSubmitForm(false)
-      
-      toast.success('フィードバックを送信しました。ご協力ありがとうございます！')
+      setEditingFeedback(null)
+      await loadFeedbacks()
     } catch (error) {
       console.error('Failed to submit feedback:', error)
       setError('フィードバックの送信に失敗しました')
+      toast.error('フィードバックの送信に失敗しました')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const toggleVote = (feedbackId) => {
-    setFeedbacks(prev => prev.map(feedback => {
-      if (feedback.id === feedbackId) {
-        const userVoted = !feedback.userVoted
-        const votes = userVoted ? feedback.votes + 1 : feedback.votes - 1
-        return { ...feedback, userVoted, votes }
-      }
-      return feedback
-    }))
+  const handleEdit = (feedback) => {
+    setEditingFeedback(feedback)
+    setShowSubmitForm(true)
+  }
+
+  const handleDelete = (feedback) => {
+    setFeedbackToDelete(feedback)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    try {
+      const { error } = await supabase
+        .from('feature_requests')
+        .update({
+          deleted_at: new Date().toISOString()
+        })
+        .eq('id', feedbackToDelete.id)
+        .eq('user_id', user.id)
+      
+      if (error) throw error
+      
+      toast.success('フィードバックを削除しました')
+      await loadFeedbacks()
+    } catch (error) {
+      console.error('Failed to delete feedback:', error)
+      toast.error('削除に失敗しました')
+    } finally {
+      setShowDeleteConfirm(false)
+      setFeedbackToDelete(null)
+    }
   }
 
   if (loading) {
@@ -132,6 +179,11 @@ export default function Feedback() {
     )
   }
 
+  // タイプフィルター適用
+  const filteredFeedbacks = typeFilter
+    ? feedbacks.filter(f => f.type === typeFilter)
+    : feedbacks
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -140,11 +192,14 @@ export default function Feedback() {
             機能リクエスト
           </h1>
           <p className="text-secondary-600 dark:text-secondary-400">
-            新機能の提案やバグ報告を行えます
+            {isAdmin ? '管理者表示中：全ユーザーのリクエストを表示しています' : '新機能の提案やバグ報告を行えます'}
           </p>
         </div>
         <button 
-          onClick={() => setShowSubmitForm(true)}
+          onClick={() => {
+            setEditingFeedback(null)
+            setShowSubmitForm(true)
+          }}
           className="btn-primary"
         >
           新しいリクエスト
@@ -157,38 +212,80 @@ export default function Feedback() {
         </div>
       )}
 
-      {/* フィルター */}
-      <div className="card p-4">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">
-              フィルター:
-            </span>
-            <button className="px-3 py-1 text-sm rounded-full bg-primary-100 text-primary-800">
-              すべて
-            </button>
-            <button className="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">
-              機能要望
-            </button>
-            <button className="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">
-              バグ報告
-            </button>
+      {/* フィルターとソート */}
+      {isAdmin && (
+        <div className="card p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            {/* タイプフィルター */}
+            <div className="flex items-center space-x-2 flex-1">
+              <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300 whitespace-nowrap">
+                タイプ:
+              </span>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setTypeFilter('')}
+                  className={`px-3 py-1 text-sm rounded-full ${typeFilter === '' ? 'bg-primary-100 text-primary-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  すべて
+                </button>
+                <button 
+                  onClick={() => setTypeFilter('feature')}
+                  className={`px-3 py-1 text-sm rounded-full ${typeFilter === 'feature' ? 'bg-primary-100 text-primary-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  機能要望
+                </button>
+                <button 
+                  onClick={() => setTypeFilter('bug')}
+                  className={`px-3 py-1 text-sm rounded-full ${typeFilter === 'bug' ? 'bg-primary-100 text-primary-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  バグ報告
+                </button>
+                <button 
+                  onClick={() => setTypeFilter('improvement')}
+                  className={`px-3 py-1 text-sm rounded-full ${typeFilter === 'improvement' ? 'bg-primary-100 text-primary-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  改善提案
+                </button>
+              </div>
+            </div>
+            
+            {/* 並び順 */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300 whitespace-nowrap">
+                並び順:
+              </span>
+              <select 
+                className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+              >
+                <option value="newest">新しい順</option>
+                <option value="oldest">古い順</option>
+              </select>
+            </div>
           </div>
-          
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">
-              並び順:
+        </div>
+      )}
+      
+      {!isAdmin && (
+        <div className="card p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-secondary-600 dark:text-secondary-400">
+              あなたの投稿履歴
             </span>
-            <select className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-              <option>人気順</option>
-              <option>新着順</option>
-              <option>古い順</option>
+            <select 
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+            >
+              <option value="newest">新しい順</option>
+              <option value="oldest">古い順</option>
             </select>
           </div>
         </div>
-      </div>
+      )}
 
-      {feedbacks.length === 0 ? (
+      {filteredFeedbacks.length === 0 ? (
         <div className="card p-6">
           <div className="text-center py-12">
             <svg className="mx-auto h-12 w-12 text-secondary-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -204,61 +301,45 @@ export default function Feedback() {
         </div>
       ) : (
         <div className="space-y-4">
-          {feedbacks.map((feedback) => (
+          {filteredFeedbacks.map((feedback) => (
             <FeedbackCard
               key={feedback.id}
               feedback={feedback}
-              onToggleVote={toggleVote}
+              currentUser={user}
+              isAdmin={isAdmin}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
             />
           ))}
         </div>
       )}
 
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="フィードバックを削除"
+        message="このフィードバックを削除しますか？この操作は取り消せません。"
+        confirmText="削除"
+        cancelText="キャンセル"
+      />
+
       {showSubmitForm && (
         <SubmitFeedbackModal
-          onClose={() => setShowSubmitForm(false)}
+          onClose={() => {
+            setShowSubmitForm(false)
+            setEditingFeedback(null)
+          }}
           onSubmit={submitFeedback}
           submitting={submitting}
+          editingFeedback={editingFeedback}
         />
       )}
     </div>
   )
 }
 
-function FeedbackCard({ feedback, onToggleVote }) {
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'under_review':
-        return 'bg-blue-100 text-blue-800'
-      case 'planned':
-        return 'bg-purple-100 text-purple-800'
-      case 'completed':
-        return 'bg-green-100 text-green-800'
-      case 'rejected':
-        return 'bg-red-100 text-red-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'pending':
-        return '審査中'
-      case 'under_review':
-        return '検討中'
-      case 'planned':
-        return '実装予定'
-      case 'completed':
-        return '完了'
-      case 'rejected':
-        return '却下'
-      default:
-        return status
-    }
-  }
+function FeedbackCard({ feedback, currentUser, isAdmin, onEdit, onDelete }) {
 
   const getTypeIcon = (type) => {
     switch (type) {
@@ -283,52 +364,64 @@ function FeedbackCard({ feedback, onToggleVote }) {
     }
   }
 
+  const canEdit = feedback.user_id === currentUser?.id
+  const showAuthor = isAdmin
+
   return (
     <div className="card hover:shadow-lg transition-shadow duration-200">
       <div className="p-6">
         <div className="flex items-start space-x-4">
-          <button
-            onClick={() => onToggleVote(feedback.id)}
-            className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
-              feedback.userVoted 
-                ? 'bg-primary-50 text-primary-600' 
-                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <svg className="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-            <span className="text-sm font-medium">{feedback.votes}</span>
-          </button>
+          <div className="text-secondary-600 mt-1">
+            {getTypeIcon(feedback.type)}
+          </div>
           
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-2">
-                  <div className="text-secondary-600">
-                    {getTypeIcon(feedback.type)}
-                  </div>
-                  <h3 className="text-lg font-medium text-secondary-900 dark:text-secondary-100">
-                    {feedback.title}
-                  </h3>
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(feedback.status)}`}>
-                    {getStatusText(feedback.status)}
-                  </span>
-                </div>
+                <h3 className="text-lg font-medium text-secondary-900 dark:text-secondary-100 mb-2">
+                  {feedback.title}
+                </h3>
                 
-                <p className="text-sm text-secondary-600 dark:text-secondary-400 mb-3">
+                <p className="text-sm text-secondary-600 dark:text-secondary-400 mb-3 whitespace-pre-wrap">
                   {feedback.description}
                 </p>
                 
                 <div className="flex items-center space-x-4 text-xs text-secondary-500">
-                  <span>
-                    {format(new Date(feedback.submittedAt), 'yyyy/MM/dd', { locale: ja })} に投稿
+                  <span className={`px-2 py-1 rounded-full ${
+                    feedback.type === 'feature' ? 'bg-blue-100 text-blue-800' :
+                    feedback.type === 'bug' ? 'bg-red-100 text-red-800' :
+                    'bg-purple-100 text-purple-800'
+                  }`}>
+                    {feedback.type === 'feature' ? '機能要望' :
+                     feedback.type === 'bug' ? 'バグ報告' : '改善提案'}
                   </span>
-                  {feedback.submittedBy === feedback.submittedBy && (
-                    <span className="text-primary-600">自分の投稿</span>
+                  <span>
+                    {format(new Date(feedback.created_at), 'yyyy/MM/dd HH:mm', { locale: ja })}
+                  </span>
+                  {showAuthor && feedback.profiles && (
+                    <span className="text-primary-600">
+                      投稿者: {feedback.profiles.name || feedback.profiles.email}
+                    </span>
                   )}
                 </div>
               </div>
+              
+              {canEdit && (
+                <div className="flex items-center gap-2 ml-4">
+                  <button
+                    onClick={() => onEdit(feedback)}
+                    className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
+                  >
+                    編集
+                  </button>
+                  <button
+                    onClick={() => onDelete(feedback)}
+                    className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
+                  >
+                    削除
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -337,11 +430,11 @@ function FeedbackCard({ feedback, onToggleVote }) {
   )
 }
 
-function SubmitFeedbackModal({ onClose, onSubmit, submitting }) {
+function SubmitFeedbackModal({ onClose, onSubmit, submitting, editingFeedback }) {
   const [formData, setFormData] = useState({
-    title: '',
-    type: 'feature',
-    description: ''
+    title: editingFeedback?.title || '',
+    type: editingFeedback?.type || 'feature',
+    description: editingFeedback?.description || ''
   })
 
   const handleSubmit = (e) => {
@@ -361,7 +454,7 @@ function SubmitFeedbackModal({ onClose, onSubmit, submitting }) {
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-secondary-900 dark:text-secondary-100">
-                新しいリクエスト
+                {editingFeedback ? 'リクエストを編集' : '新しいリクエスト'}
               </h3>
               <button
                 type="button"

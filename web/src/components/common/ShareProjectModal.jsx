@@ -91,8 +91,8 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
     }
   }
 
-  const handleRemoveMember = (memberId) => {
-    setMemberToDelete(memberId)
+  const handleRemoveMember = (member) => {
+    setMemberToDelete(member)
     setShowConfirmDelete(true)
   }
 
@@ -101,7 +101,8 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
       const { error } = await supabase
         .from('project_members')
         .delete()
-        .eq('id', memberToDelete)
+        .eq('project_id', memberToDelete.project_id)
+        .eq('user_id', memberToDelete.user_id)
 
       if (error) {throw error}
 
@@ -116,12 +117,13 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
     }
   }
 
-  const handleUpdateMemberRole = async (memberId, newRole) => {
+  const handleUpdateMemberRole = async (member, newRole) => {
     try {
       const { error } = await supabase
         .from('project_members')
         .update({ role: newRole })
-        .eq('id', memberId)
+        .eq('project_id', member.project_id)
+        .eq('user_id', member.user_id)
 
       if (error) {throw error}
 
@@ -266,7 +268,7 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
 
               {/* メンバー */}
               {members.map((member) => (
-                <div key={member.id} className="flex items-center justify-between py-2">
+                <div key={`${member.project_id}-${member.user_id}`} className="flex items-center justify-between py-2">
                   <div className="flex items-center">
                     <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3">
                       <span className="text-gray-600 font-medium text-sm">
@@ -285,14 +287,14 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
                   <div className="flex items-center gap-2">
                     <select
                       value={member.role}
-                      onChange={(e) => handleUpdateMemberRole(member.id, e.target.value)}
+                      onChange={(e) => handleUpdateMemberRole(member, e.target.value)}
                       className="px-2 py-1 border border-gray-300 rounded text-xs"
                     >
                       <option value="viewer">閲覧者</option>
                       <option value="editor">編集者</option>
                     </select>
                     <button
-                      onClick={() => handleRemoveMember(member.id)}
+                      onClick={() => handleRemoveMember(member)}
                       className="text-red-600 hover:text-red-700 text-sm"
                       title="削除"
                     >
