@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "ResearchVault Web Dashboard - 研究資料管理システム",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",
@@ -59,7 +60,7 @@
     ]
   },
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=22.21.0",
     "npm": ">=8.0.0"
   },
   "keywords": [
