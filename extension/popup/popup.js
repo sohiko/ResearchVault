@@ -454,7 +454,7 @@ class PopupManager {
     }
 
     /**
-     * GeminiでPDFから情報を抽出（ポップアップ版）
+     * GeminiでPDFから情報を抽出（ポップアップ版 - コスト最適化）
      */
     async extractPDFInfoWithGemini(url) {
         try {
@@ -472,17 +472,116 @@ class PopupManager {
             }
             
             const arrayBuffer = await response.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
             
-            // Base64エンコード
+            // 1. 部分読み取りを試行（最初5ページ+最後5ページ）
+            console.log('Attempting partial PDF extraction (first 5 + last 5 pages)...');
+            let result = await this.extractWithGeminiPartial(arrayBuffer, geminiApiKey);
+            
+            if (result && result.title && result.title.trim() !== '') {
+                console.log('Successfully extracted with partial method');
+                return result;
+            }
+            
+            // 2. 部分読み取りで不十分な場合、全文読み取り
+            console.log('Partial extraction insufficient, attempting full PDF extraction...');
+            result = await this.extractWithGeminiFull(arrayBuffer, geminiApiKey);
+            
+            if (result && result.title && result.title.trim() !== '') {
+                console.log('Successfully extracted with full method');
+                return result;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Gemini PDF extraction failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Geminiで部分PDF読み取り（最初5ページ+最後5ページ）
+     */
+    async extractWithGeminiPartial(arrayBuffer, apiKey) {
+        try {
+            // pdf.jsでページ数を取得
+            const pdfjsLib = await import('pdfjs-dist');
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+            
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const totalPages = pdf.numPages;
+            
+            // 最初の5ページと最後の5ページを抽出
+            const pagesToExtract = [];
+            for (let i = 1; i <= Math.min(5, totalPages); i++) {
+                pagesToExtract.push(i);
+            }
+            for (let i = Math.max(1, totalPages - 4); i <= totalPages; i++) {
+                if (!pagesToExtract.includes(i)) {
+                    pagesToExtract.push(i);
+                }
+            }
+            
+            console.log(`PDF部分読み取り: 全${totalPages}ページ中、${pagesToExtract.length}ページを抽出 (ページ: ${pagesToExtract.join(', ')})`);
+            
+            // 最初のページのみを画像として抽出（簡略化）
+            const page = await pdf.getPage(1);
+            const viewport = page.getViewport({ scale: 1.0 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            await page.render({ canvasContext: context, viewport }).promise;
+            
+            // CanvasをBase64エンコード
+            const base64Image = canvas.toDataURL('image/png').split(',')[1];
+            
+            return await this.callGeminiAPI(base64Image, apiKey, true);
+        } catch (error) {
+            console.error('Partial PDF extraction failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Geminiで全文PDF読み取り
+     */
+    async extractWithGeminiFull(arrayBuffer, apiKey) {
+        try {
+            const uint8Array = new Uint8Array(arrayBuffer);
             const base64Pdf = btoa(
                 Array.from(uint8Array)
                     .map(byte => String.fromCharCode(byte))
                     .join('')
             );
+            
+            return await this.callGeminiAPI(base64Pdf, apiKey, false);
+        } catch (error) {
+            console.error('Full PDF extraction failed:', error);
+            return null;
+        }
+    }
 
-            console.log('Analyzing PDF with Gemini...');
-            const prompt = `この学術PDF文書から以下の情報を抽出してJSON形式で返してください：
+    /**
+     * Gemini API呼び出し
+     */
+    async callGeminiAPI(base64Data, apiKey, isPartial) {
+        try {
+            const prompt = isPartial 
+                ? `以下のPDF文書（最初の5ページと最後の5ページのみ）から学術的な参照情報を抽出してください。以下の情報をJSON形式で返してください：`
+                : `以下のPDF文書から学術的な参照情報を抽出してください。以下の情報をJSON形式で返してください：`;
+
+            const geminiResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: prompt + `
 
 必須項目:
 - referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
@@ -520,23 +619,11 @@ class PopupManager {
   "issue": "1",
   "language": "ja",
   "description": "要約"
-}`;
-
-            const geminiResponse = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiApiKey}`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { text: prompt },
+}` },
                                 {
                                     inline_data: {
-                                        mime_type: 'application/pdf',
-                                        data: base64Pdf
+                                        mime_type: isPartial ? 'image/png' : 'application/pdf',
+                                        data: base64Data
                                     }
                                 }
                             ]
@@ -600,7 +687,7 @@ class PopupManager {
             console.log('Successfully extracted PDF info with Gemini');
             return extractedInfo;
         } catch (error) {
-            console.error('Gemini PDF extraction failed:', error);
+            console.error('Gemini API call failed:', error);
             return null;
         }
     }

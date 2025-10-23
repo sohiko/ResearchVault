@@ -497,9 +497,10 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
     }
 
     try {
-      // 1. Microlink.io APIを使用（メタデータ取得）
-      const microlinkResponse = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&meta=true`)
-      const microlinkData = await microlinkResponse.json()
+      // 1. Microlink.io APIを使用（メタデータ取得）- CORS対応プロキシ経由
+      const microlinkResponse = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.microlink.io/?url=${encodeURIComponent(url)}&meta=true`)}`)
+      const microlinkProxyData = await microlinkResponse.json()
+      const microlinkData = JSON.parse(microlinkProxyData.contents)
 
       if (microlinkData.status === 'success' && microlinkData.data) {
         const data = microlinkData.data
@@ -519,8 +520,9 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
 
       // 2. JSONLDデータの抽出を試行
       try {
-        const jsonldResponse = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&data.jsonld=true`)
-        const jsonldData = await jsonldResponse.json()
+        const jsonldResponse = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.microlink.io/?url=${encodeURIComponent(url)}&data.jsonld=true`)}`)
+        const jsonldProxyData = await jsonldResponse.json()
+        const jsonldData = JSON.parse(jsonldProxyData.contents)
         
         if (jsonldData.status === 'success' && jsonldData.data?.jsonld) {
           const jsonld = Array.isArray(jsonldData.data.jsonld) 
@@ -555,8 +557,9 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
 
       // 3. Open Graph / Twitter Cardデータの抽出
       try {
-        const ogResponse = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&data.og=true`)
-        const ogData = await ogResponse.json()
+        const ogResponse = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.microlink.io/?url=${encodeURIComponent(url)}&data.og=true`)}`)
+        const ogProxyData = await ogResponse.json()
+        const ogData = JSON.parse(ogProxyData.contents)
         
         if (ogData.status === 'success' && ogData.data?.og) {
           const og = ogData.data.og
@@ -578,8 +581,9 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
       
       // フォールバック: 基本的なメタデータのみ取得
       try {
-        const fallbackResponse = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`)
-        const fallbackData = await fallbackResponse.json()
+        const fallbackResponse = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.microlink.io/?url=${encodeURIComponent(url)}`)}`)
+        const fallbackProxyData = await fallbackResponse.json()
+        const fallbackData = JSON.parse(fallbackProxyData.contents)
         
         if (fallbackData.status === 'success' && fallbackData.data) {
           results.title = fallbackData.data.title || ''
