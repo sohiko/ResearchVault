@@ -7,18 +7,32 @@ export const ModalProvider = ({ children }) => {
   const [modalData, setModalData] = useState(new Map())
 
   const openModal = useCallback((modalId, data = null) => {
-    setOpenModals(prev => new Set([...prev, modalId]))
+    setOpenModals(prev => {
+      const newSet = new Set(prev)
+      newSet.add(modalId)
+      return newSet
+    })
     if (data) {
-      setModalData(prev => new Map([...prev, [modalId, data]]))
+      setModalData(prev => {
+        const newMap = new Map(prev)
+        newMap.set(modalId, data)
+        return newMap
+      })
     }
   }, [])
 
   const closeModal = useCallback((modalId) => {
+    // 即座に状態を更新してモーダルを閉じる
     setOpenModals(prev => {
       const newSet = new Set(prev)
-      newSet.delete(modalId)
+      const deleted = newSet.delete(modalId)
+      if (deleted) {
+        console.log(`Modal closed: ${modalId}`)
+      }
       return newSet
     })
+    
+    // モーダルデータもクリア
     setModalData(prev => {
       const newMap = new Map(prev)
       newMap.delete(modalId)

@@ -27,19 +27,30 @@ const ProtectedModal = ({
 
   // モーダルを閉じる処理
   const handleClose = useCallback(() => {
+    const performClose = () => {
+      try {
+        // 1. 先に未保存フラグをクリア
+        setUnsavedChanges(modalId, false)
+        
+        // 2. モーダルを閉じる（useModalContextから削除）
+        closeModal(modalId)
+        
+        // 3. 親コンポーネントのonCloseを呼び出す（これによりコンポーネントがアンマウントされる）
+        if (onClose) {
+          onClose()
+        }
+      } catch (error) {
+        console.error('Failed to close modal:', error)
+      }
+    }
+
     if (hasUnsavedChanges) {
       // eslint-disable-next-line no-alert
       if (window.confirm(confirmMessage)) {
-        // 未保存の変更状態をクリア
-        setUnsavedChanges(modalId, false)
-        closeModal(modalId)
-        onClose?.()
+        performClose()
       }
     } else {
-      // 未保存の変更状態をクリア
-      setUnsavedChanges(modalId, false)
-      closeModal(modalId)
-      onClose?.()
+      performClose()
     }
   }, [hasUnsavedChanges, confirmMessage, closeModal, modalId, onClose, setUnsavedChanges])
 

@@ -82,6 +82,22 @@ export default function Settings() {
         throw error
       }
 
+      // Chrome拡張機能のストレージにも同期（拡張機能で使用）
+      // eslint-disable-next-line no-undef
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        try {
+          // eslint-disable-next-line no-undef
+          await chrome.storage.sync.set({
+            academicSiteNotification: settings.academicSiteNotification,
+            notifications: settings.notifications,
+            autoSave: settings.autoSave
+          })
+        } catch (chromeError) {
+          console.warn('Failed to sync settings to Chrome storage:', chromeError)
+          // Chrome拡張機能がない環境でもエラーにしない
+        }
+      }
+
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
     } catch (error) {

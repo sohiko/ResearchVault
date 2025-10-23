@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useModalContext } from '../hooks/useModalContext'
 import { usePageFocus } from '../hooks/usePageFocus'
+import { useDebounce } from '../hooks/useDebounce'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -61,6 +62,9 @@ export default function ProjectDetail() {
   const [sortBy, setSortBy] = useState('saved_at')
   const [sortOrder, setSortOrder] = useState('desc')
   const [searchQuery, setSearchQuery] = useState('')
+  
+  // デバウンスされた検索クエリ（500ms遅延）
+  const debouncedSearchQuery = useDebounce(searchQuery, 500)
 
   const loadProject = useCallback(async () => {
     if (!id || !user) {return}
@@ -147,12 +151,7 @@ export default function ProjectDetail() {
       .eq('project_id', id)
       .is('deleted_at', null) // 削除されていないアイテムのみ取得
 
-    // 検索フィルター
-    if (searchQuery) {
-      query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`)
-    }
-
-    // ソート
+    // ソート（検索はローカルで実行）
     query = query.order(sortBy, { ascending: sortOrder === 'asc' })
 
     const { data, error } = await query
@@ -168,7 +167,7 @@ export default function ProjectDetail() {
     }))
 
     setReferences(formattedReferences)
-  }, [id, searchQuery, sortBy, sortOrder, hasOpenModals])
+  }, [id, sortBy, sortOrder, hasOpenModals])
 
   const loadMembers = useCallback(async () => {
     if (!id || !user) {return}
@@ -266,7 +265,7 @@ export default function ProjectDetail() {
         .insert([{
           ...referenceData,
           project_id: id,
-          user_id: user.id
+          saved_by: user.id
         }])
         .select()
         .single()
@@ -337,16 +336,14 @@ export default function ProjectDetail() {
 
   const handleUpdateReference = async (updatedReference) => {
     try {
+      // descriptionはmetadataに含まれるため、個別に送信しない
+      const { id, ...updateData } = updatedReference
+      delete updateData.description // descriptionカラムは存在しないため削除
+      
       const { error } = await supabase
         .from('references')
-        .update({
-          title: updatedReference.title,
-          url: updatedReference.url,
-          description: updatedReference.description,
-          metadata: updatedReference.metadata,
-          updated_at: updatedReference.updated_at
-        })
-        .eq('id', updatedReference.id)
+        .update(updateData)
+        .eq('id', id)
 
       if (error) {throw error}
 
@@ -430,6 +427,20 @@ export default function ProjectDetail() {
   const canEdit = isOwner || userRole === 'editor'
   const canShare = isOwner || userRole === 'editor'
 
+  // ローカルフィルタリング（検索クエリによるフィルタリング）
+  const filteredReferences = useMemo(() => {
+    if (!debouncedSearchQuery) {
+      return references
+    }
+    
+    const query = debouncedSearchQuery.toLowerCase()
+    return references.filter(ref => 
+      ref.title?.toLowerCase().includes(query) ||
+      ref.description?.toLowerCase().includes(query) ||
+      ref.url?.toLowerCase().includes(query)
+    )
+  }, [references, debouncedSearchQuery])
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -472,11 +483,6 @@ export default function ProjectDetail() {
     )
   }
 
-  const filteredReferences = references.filter(ref => 
-    ref.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    ref.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
   return (
     <div className="space-y-6">
       {/* ヘッダー */}
@@ -507,7 +513,7 @@ export default function ProjectDetail() {
           <button
             onClick={handleGenerateCitations}
             disabled={generating || references.length === 0}
-            className="btn btn-secondary flex items-center gap-2"
+            className="btn btn-secondary flex items-center gap-2 btn-project-edit"
           >
             <FileText className="w-4 h-4" />
             {generating ? '生成中...' : '引用作成'}
@@ -516,7 +522,7 @@ export default function ProjectDetail() {
           {canEdit && (
             <button
               onClick={() => setShowAddReference(true)}
-              className="btn btn-primary flex items-center gap-2"
+              className="btn btn-primary flex items-center gap-2 btn-project-edit"
             >
               <Plus className="w-4 h-4" />
               参照追加

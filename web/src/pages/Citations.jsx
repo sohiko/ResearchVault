@@ -57,6 +57,8 @@ export default function Citations() {
           user_id: user.id,
           default_style: citationFormat,
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
         })
 
       if (error) {throw error}

@@ -51,7 +51,9 @@ export default function Sidebar() {
   // 学術サイト候補数を取得
   useEffect(() => {
     const loadAcademicCandidatesCount = async () => {
-      if (!user) return
+      if (!user) {
+        return
+      }
       
       try {
         const { count, error } = await supabase
@@ -61,7 +63,9 @@ export default function Sidebar() {
           .eq('is_academic', true)
           .is('saved_as_reference', false)
         
-        if (error) throw error
+        if (error) {
+          throw error
+        }
         setAcademicCandidatesCount(count || 0)
       } catch (error) {
         console.error('Failed to load academic candidates count:', error)
@@ -112,7 +116,7 @@ export default function Sidebar() {
           <img 
             src="/img/icon_circle.png" 
             alt="ResearchVault" 
-            className="w-8 h-8"
+            className="w-10 h-10"
           />
           <span className="text-xl font-bold text-secondary-900 dark:text-secondary-100">
             ResearchVault

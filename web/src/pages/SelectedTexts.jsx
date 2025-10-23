@@ -84,6 +84,7 @@ export default function SelectedTexts() {
     }, [loadSelectedTexts]);
 
     async function handleDelete(textId) {
+        // eslint-disable-next-line no-alert
         const confirmed = window.confirm('この選択テキストを削除しますか？');
         if (!confirmed) {
             return;

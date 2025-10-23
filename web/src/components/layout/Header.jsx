@@ -1,22 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useProjects } from '../../hooks/useProjects'
 import { ThemeToggle } from '../../hooks/useTheme'
-import { useNavigationBlock } from '../../hooks/useNavigationBlock'
-import { useModalContext } from '../../hooks/useModalContext'
-import { Menu, Search, ChevronDown, User, Settings, HelpCircle, LogOut } from 'lucide-react'
+import { Menu, ChevronDown, User, Settings, HelpCircle, LogOut } from 'lucide-react'
 
 export default function Header({ onMenuClick }) {
   const { user, signOut } = useAuth()
   const { currentProject } = useProjects()
-  const { hasOpenModals } = useModalContext()
+  const navigate = useNavigate()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const userMenuRef = useRef(null)
-  
-  // モーダルが開いている時のナビゲーションをブロック
-  const blockedNavigate = useNavigationBlock(hasOpenModals, '入力内容が失われる可能性があります。ページを離れますか？')
 
   // ユーザーメニューの外側クリックで閉じる
   useEffect(() => {
@@ -35,17 +29,9 @@ export default function Header({ onMenuClick }) {
   const handleLogout = async () => {
     try {
       await signOut()
-      blockedNavigate('/auth/login')
+      navigate('/auth/login')
     } catch (error) {
       console.error('Logout error:', error)
-    }
-  }
-
-  const handleSearch = (e) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      blockedNavigate(`/references?search=${encodeURIComponent(searchQuery.trim())}`)
-      setSearchQuery('')
     }
   }
 
@@ -87,23 +73,8 @@ export default function Header({ onMenuClick }) {
           )}
         </div>
 
-        {/* 中央：検索バー */}
-        <div className="flex-1 max-w-md mx-4">
-          <form onSubmit={handleSearch} className="relative">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-secondary-400" />
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-secondary-300 rounded-lg bg-white dark:bg-secondary-700 text-secondary-900 dark:text-secondary-100 placeholder-secondary-500 dark:placeholder-secondary-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:border-secondary-600 text-sm"
-                placeholder="参照を検索..."
-              />
-            </div>
-          </form>
-        </div>
+        {/* 中央：スペーサー */}
+        <div className="flex-1"></div>
 
         {/* 右側：テーマ切り替えとユーザーメニュー */}
         <div className="flex items-center space-x-3">

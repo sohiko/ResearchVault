@@ -10,7 +10,7 @@ export default function AuthLayout({ children }) {
         <div className="max-w-md text-center text-white">
           <div className="mb-8">
             <img 
-              src="/android-chrome-192x192.png" 
+              src="/img/icon_circle.png" 
               alt="ResearchVault Logo" 
               className="w-24 h-24 mx-auto mb-6"
             />
@@ -57,7 +57,7 @@ export default function AuthLayout({ children }) {
           <div className="lg:hidden text-center">
             <Link to="/" className="inline-flex items-center space-x-3">
               <img 
-                src="/android-chrome-192x192.png" 
+                src="/img/icon_circle.png" 
                 alt="ResearchVault" 
                 className="w-12 h-12"
               />

@@ -4,7 +4,7 @@ import ProtectedModal from './ProtectedModal'
 import { useModalContext } from '../../hooks/useModalContext'
 
 const EditProjectModal = ({ project, onClose, onUpdate }) => {
-  const { openModal } = useModalContext()
+  const { openModal, closeModal } = useModalContext()
   const modalId = 'edit-project'
   
   const [formData, setFormData] = useState({
@@ -18,14 +18,15 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
 
   // モーダルを開いた状態として登録
   useEffect(() => {
+    // マウント時にモーダルを登録
     openModal(modalId)
     
-    // クリーンアップ関数でモーダル状態をクリア
+    // アンマウント時にクリーンアップ（重要！）
     return () => {
-      // モーダルが閉じられる時は既にProtectedModalでクリアされるため、
-      // ここでは何もしない（重複クリアを避ける）
+      console.log(`EditProjectModal unmounting: ${modalId}`)
+      closeModal(modalId)
     }
-  }, [openModal, modalId])
+  }, [openModal, closeModal, modalId])
 
   // 未保存の変更があるかチェック
   const hasUnsavedChanges = formData.name !== (project.name || '') ||

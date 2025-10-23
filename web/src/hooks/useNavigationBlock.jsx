@@ -29,29 +29,40 @@ export const useNavigationBlock = (shouldBlock, message = '変更内容が失わ
 
   // ブラウザの戻る/進むボタンの制御
   useEffect(() => {
+    if (!shouldBlock) {
+      // shouldBlockがfalseの場合は何もしない（履歴操作も行わない）
+      return
+    }
+
+    // handlePopStateをuseRefで保持し、常に最新のshouldBlockを参照できるようにする
+    let isActive = true
+
     const handlePopState = () => {
-      if (shouldBlock) {
-        // 現在の位置に戻す
-        window.history.pushState(null, '', location.pathname + location.search)
-        
-        // 確認ダイアログを表示
-        // eslint-disable-next-line no-alert
-        if (window.confirm(message)) {
-          // ユーザーが離脱を選択した場合
-          window.removeEventListener('popstate', handlePopState)
-          window.history.back()
-        }
+      // コンポーネントがまだアクティブで、かつshouldBlockがtrueの場合のみ処理
+      if (!isActive || !shouldBlock) {
+        return
+      }
+
+      // 現在の位置に戻す
+      window.history.pushState(null, '', location.pathname + location.search)
+      
+      // 確認ダイアログを表示
+      // eslint-disable-next-line no-alert
+      if (window.confirm(message)) {
+        // ユーザーが離脱を選択した場合
+        isActive = false
+        window.removeEventListener('popstate', handlePopState)
+        setTimeout(() => window.history.back(), 0)
       }
     }
 
-    if (shouldBlock) {
-      // 現在の位置をスタックにプッシュ（shouldBlockがtrueの時のみ）
-      window.history.pushState(null, '', location.pathname + location.search)
-    }
-    
+    // 現在の位置をスタックにプッシュ
+    window.history.pushState(null, '', location.pathname + location.search)
     window.addEventListener('popstate', handlePopState)
 
     return () => {
+      // クリーンアップ時に確実にフラグをfalseにしてリスナーを削除
+      isActive = false
       window.removeEventListener('popstate', handlePopState)
     }
   }, [shouldBlock, message, location])

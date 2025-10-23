@@ -3,6 +3,7 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
 import { generateCitation } from '../../utils/citationGenerator'
+import { generateInTextCitation } from '../../lib/citationUtils'
 import EditReferenceModal from './EditReferenceModal'
 
 const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }) => {
@@ -52,6 +53,17 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
     }
   }
 
+  const handleCopyInTextCitation = async () => {
+    try {
+      const inTextCitation = generateInTextCitation(reference, citationFormat)
+      await navigator.clipboard.writeText(inTextCitation)
+      toast.success('本文中引用をコピーしました')
+    } catch (error) {
+      console.error('Failed to copy in-text citation:', error)
+      toast.error('本文中引用のコピーに失敗しました')
+    }
+  }
+
   const handleOpenUrl = () => {
     window.open(reference.url, '_blank', 'noopener,noreferrer')
   }
@@ -88,7 +100,7 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
                 {getDomainFromUrl(reference.url)}
               </span>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-1 line-clamp-2">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1 line-clamp-2">
               {reference.title}
             </h3>
           </div>
@@ -104,11 +116,11 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
             </button>
             
             {showActions && (
-              <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10">
+              <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10">
                 <div className="py-1">
                   <button
                     onClick={handleOpenUrl}
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -117,37 +129,20 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
                   </button>
                   <button
                     onClick={handleCopyUrl}
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                     URLをコピー
                   </button>
-                  <button
-                    onClick={handleCopyCitation}
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    引用をコピー ({citationFormat})
-                  </button>
-                  {onUpdate && (
-                    <button
-                      onClick={handleEdit}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      編集
-                    </button>
-                  )}
                   {onDelete && (
                     <button
-                      onClick={() => onDelete(reference.id)}
-                      className="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-red-50 w-full text-left"
+                      onClick={() => {
+                        setShowActions(false)
+                        onDelete(reference.id)
+                      }}
+                      className="flex items-center px-4 py-2 text-sm text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left"
                     >
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -162,14 +157,14 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
         </div>
 
         {/* 説明文 */}
-        {reference.description && (
+        {(reference.metadata?.description || reference.description) && (
           <div className="mb-3">
-            <p className="text-gray-600 text-sm">
-              {isExpanded ? reference.description : truncateText(reference.description)}
-              {reference.description.length > 150 && (
+            <p className="text-gray-600 dark:text-gray-300 text-sm">
+              {isExpanded ? (reference.metadata?.description || reference.description) : truncateText(reference.metadata?.description || reference.description)}
+              {(reference.metadata?.description || reference.description).length > 150 && (
                 <button
                   onClick={() => setIsExpanded(!isExpanded)}
-                  className="ml-1 text-primary-600 hover:text-primary-700 text-sm font-medium"
+                  className="ml-1 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 text-sm font-medium"
                 >
                   {isExpanded ? '折りたたむ' : '続きを読む'}
                 </button>
@@ -179,10 +174,10 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
         )}
 
         {/* タグ */}
-        {reference.tags && reference.tags.length > 0 && (
+        {(reference.metadata?.tags || reference.tags) && (reference.metadata?.tags || reference.tags).length > 0 && (
           <div className="mb-3">
             <div className="flex flex-wrap gap-1">
-              {reference.tags.slice(0, 5).map((tag, index) => (
+              {(reference.metadata?.tags || reference.tags).slice(0, 5).map((tag, index) => (
                 <span
                   key={index}
                   className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
@@ -194,9 +189,9 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
                   {tag.name}
                 </span>
               ))}
-              {reference.tags.length > 5 && (
+              {(reference.metadata?.tags || reference.tags).length > 5 && (
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                  +{reference.tags.length - 5}
+                  +{(reference.metadata?.tags || reference.tags).length - 5}
                 </span>
               )}
             </div>
@@ -207,21 +202,21 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
         <div className="mb-3 space-y-1">
           {/* 新しいフィールド: 著者 */}
           {reference.author && (
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 dark:text-gray-300">
               <span className="font-medium">著者:</span> {reference.author}
             </div>
           )}
           
           {/* 新しいフィールド: 公開日 */}
           {reference.published_date && (
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 dark:text-gray-300">
               <span className="font-medium">公開日:</span> {formatDate(reference.published_date)}
             </div>
           )}
           
           {/* 新しいフィールド: アクセス日 */}
           {reference.accessed_date && (
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 dark:text-gray-300">
               <span className="font-medium">アクセス日:</span> {formatDate(reference.accessed_date)}
             </div>
           )}
@@ -230,17 +225,17 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
           {reference.metadata && (
             <>
               {reference.metadata.author && !reference.author && (
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-300">
                   <span className="font-medium">著者:</span> {reference.metadata.author}
                 </div>
               )}
               {reference.metadata.publishedDate && !reference.published_date && (
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-300">
                   <span className="font-medium">公開日:</span> {formatDate(reference.metadata.publishedDate)}
                 </div>
               )}
               {reference.metadata.siteName && (
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-300">
                   <span className="font-medium">サイト:</span> {reference.metadata.siteName}
                 </div>
               )}
@@ -249,24 +244,59 @@ const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }
         </div>
 
         {/* フッター */}
-        <div className="flex items-center gap-4 text-sm text-gray-500 pt-3 border-t border-gray-100">
-          <span>保存: {formatDate(reference.saved_at)}</span>
-          {reference.textCount > 0 && (
-            <span className="flex items-center gap-1">
+        <div className="pt-3 border-t border-gray-100 dark:border-gray-700 space-y-3">
+          <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+            <span>保存: {formatDate(reference.saved_at)}</span>
+            {reference.textCount > 0 && (
+              <span className="flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {reference.textCount}
+              </span>
+            )}
+            {reference.bookmarkCount > 0 && (
+              <span className="flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+                {reference.bookmarkCount}
+              </span>
+            )}
+          </div>
+
+          {/* アクションボタン */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleCopyCitation}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              引用をコピー
+            </button>
+            <button
+              onClick={handleCopyInTextCitation}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              {reference.textCount}
-            </span>
-          )}
-          {reference.bookmarkCount > 0 && (
-            <span className="flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-              </svg>
-              {reference.bookmarkCount}
-            </span>
-          )}
+              本文中引用
+            </button>
+            {onUpdate && (
+              <button
+                onClick={handleEdit}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                編集
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

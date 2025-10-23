@@ -1,0 +1,467 @@
+/**
+ * PDF抽出ユーティリティ
+ * Gemini API、pdf.js、Tesseract.jsを使用してPDFから参照情報を抽出
+ */
+
+/**
+ * PDFをダウンロード
+ * @param {string} url - PDFのURL
+ * @returns {Promise<ArrayBuffer>} PDFデータ
+ */
+async function downloadPDF(url) {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to download PDF: ${response.status}`)
+  }
+  return await response.arrayBuffer()
+}
+
+/**
+ * pdf.jsを使用してテキストを抽出
+ * @param {ArrayBuffer} pdfData - PDFデータ
+ * @returns {Promise<string>} 抽出されたテキスト
+ */
+async function extractTextWithPdfJs(pdfData) {
+  try {
+    // pdf.jsライブラリを動的に読み込み
+    const pdfjsLib = await import('pdfjs-dist')
+    
+    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise
+    let fullText = ''
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const textContent = await page.getTextContent()
+      const pageText = textContent.items.map(item => item.str).join(' ')
+      fullText += pageText + '\n'
+    }
+    
+    return fullText
+  } catch (error) {
+    console.error('pdf.js extraction failed:', error)
+    return ''
+  }
+}
+
+/**
+ * Tesseract.jsを使用してOCRを実行
+ * @param {ArrayBuffer} pdfData - PDFデータ
+ * @returns {Promise<string>} OCRで抽出されたテキスト
+ */
+async function extractTextWithOCR(pdfData) {
+  try {
+    // Tesseract.jsライブラリを動的に読み込み
+    const Tesseract = await import('tesseract.js')
+    
+    // PDFを画像に変換（簡略化のため、最初のページのみ）
+    const pdfjsLib = await import('pdfjs-dist')
+    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise
+    const page = await pdf.getPage(1)
+    
+    const viewport = page.getViewport({ scale: 2.0 })
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    canvas.height = viewport.height
+    canvas.width = viewport.width
+    
+    await page.render({ canvasContext: context, viewport }).promise
+    
+    // OCRを実行
+    const { data: { text } } = await Tesseract.recognize(canvas, 'jpn+eng')
+    return text
+  } catch (error) {
+    console.error('OCR extraction failed:', error)
+    return ''
+  }
+}
+
+/**
+ * GeminiでPDFを直接読み取り
+ * @param {ArrayBuffer} pdfData - PDFデータ
+ * @param {string} apiKey - Gemini APIキー
+ * @returns {Promise<Object>} 抽出された情報
+ */
+async function extractWithGemini(pdfData, apiKey) {
+  try {
+    // PDFをbase64にエンコード
+    const uint8Array = new Uint8Array(pdfData)
+    const base64 = btoa(String.fromCharCode(...uint8Array))
+    
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `以下のPDF文書から学術的な参照情報を抽出してください。以下の情報をJSON形式で返してください：
+
+必須項目:
+- referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
+- title: 論文・書籍のタイトル
+- authors: 著者のリスト（配列形式、各要素は{"name": "著者名", "order": 順番}）。著者が見つからない場合は空配列[]
+- publishedDate: 発行日（YYYY-MM-DD形式、年のみの場合はYYYY-01-01）
+- publisher: 出版社または論文誌名
+- pages: ページ数または範囲
+- doi: DOI（あれば）
+- isbn: ISBN（書籍の場合）
+- journalName: 論文誌名（論文の場合）
+- volume: 巻（論文の場合）
+- issue: 号（論文の場合）
+- description: 要約または説明
+
+注意事項:
+- 著者情報が見つからない場合は空配列[]を返してください
+- 日付は正確に抽出し、不明な場合は空文字列を返してください
+- すべてのフィールドは文字列または配列として返してください
+- JSONのみを返し、他の説明文は含めないでください`
+          }, {
+            inline_data: {
+              mime_type: 'application/pdf',
+              data: base64
+            }
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2048
+        }
+      })
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    const text = data.candidates[0]?.content?.parts[0]?.text
+    
+    if (!text) {
+      throw new Error('No response from Gemini')
+    }
+    
+    // JSONを抽出
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      throw new Error('No JSON found in response')
+    }
+    
+    return JSON.parse(jsonMatch[0])
+  } catch (error) {
+    console.error('Gemini extraction failed:', error)
+    return null
+  }
+}
+
+/**
+ * Geminiでテキストから情報を構造化
+ */
+async function structureTextWithGemini(text, apiKey) {
+  try {
+    const prompt = `以下のテキストは学術PDF文書から抽出したものです。以下の情報を抽出してJSON形式で返してください：
+
+テキスト:
+${text.substring(0, 4000)}
+
+必須項目:
+- referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
+- title: 論文・書籍のタイトル
+- authors: 著者のリスト（配列形式、各要素は{"name": "著者名", "order": 順番}）。著者が見つからない場合は空配列[]
+- publishedDate: 発行日（YYYY-MM-DD形式、年のみの場合はYYYY-01-01）
+- publisher: 出版社または論文誌名
+- pages: ページ数または範囲
+- doi: DOI（あれば）
+- isbn: ISBN（書籍の場合）
+- journalName: 論文誌名（論文の場合）
+- volume: 巻（論文の場合）
+- issue: 号（論文の場合）
+- description: 要約または説明
+
+注意事項:
+- 著者情報が見つからない場合は空配列[]を返してください
+- 日付は正確に抽出し、不明な場合は空文字列を返してください
+- すべてのフィールドは文字列または配列として返してください
+- JSONのみを返し、他の説明文は含めないでください`
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2048
+        }
+      })
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    const responseText = data.candidates[0]?.content?.parts[0]?.text
+    
+    if (!responseText) {
+      throw new Error('No response from Gemini')
+    }
+    
+    // JSONを抽出
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      throw new Error('No JSON found in response')
+    }
+    
+    return JSON.parse(jsonMatch[0])
+  } catch (error) {
+    console.error('Gemini text structuring failed:', error)
+    return null
+  }
+}
+
+/**
+ * URLからサイト名を抽出（著者情報がない場合のフォールバック）
+ */
+function extractSiteNameFromUrl(url) {
+  try {
+    const urlObj = new URL(url)
+    const domain = urlObj.hostname.toLowerCase()
+    
+    // 既知のサイト名マッピング
+    const siteNameMap = {
+      'y-history.net': '世界史の窓',
+      'www.y-history.net': '世界史の窓',
+      'ibo.org': 'IBO',
+      'www.ibo.org': 'IBO',
+      'wikipedia.org': 'Wikipedia',
+      'ja.wikipedia.org': 'Wikipedia',
+      'en.wikipedia.org': 'Wikipedia',
+      'github.com': 'GitHub',
+      'stackoverflow.com': 'Stack Overflow',
+      'qiita.com': 'Qiita',
+      'zenn.dev': 'Zenn',
+      'note.com': 'note',
+      'hatenablog.com': 'はてなブログ',
+      'ameblo.jp': 'アメブロ',
+      'fc2.com': 'FC2ブログ',
+      'livedoor.com': 'livedoor',
+      'goo.ne.jp': 'goo',
+      'yahoo.co.jp': 'Yahoo!',
+      'google.com': 'Google',
+      'microsoft.com': 'Microsoft',
+      'apple.com': 'Apple',
+      'amazon.co.jp': 'Amazon',
+      'amazon.com': 'Amazon',
+      'rakuten.co.jp': '楽天',
+      'mercari.com': 'メルカリ',
+      'paypay.ne.jp': 'PayPay',
+      'line.me': 'LINE',
+      'twitter.com': 'Twitter',
+      'facebook.com': 'Facebook',
+      'instagram.com': 'Instagram',
+      'youtube.com': 'YouTube',
+      'tiktok.com': 'TikTok',
+      'linkedin.com': 'LinkedIn',
+      'reddit.com': 'Reddit',
+      'medium.com': 'Medium',
+      'dev.to': 'DEV Community',
+      'codepen.io': 'CodePen',
+      'jsfiddle.net': 'JSFiddle',
+      'repl.it': 'Replit',
+      'codesandbox.io': 'CodeSandbox',
+      'npmjs.com': 'npm',
+      'pypi.org': 'PyPI',
+      'rubygems.org': 'RubyGems',
+      'packagist.org': 'Packagist',
+      'crates.io': 'Crates.io',
+      'nuget.org': 'NuGet',
+      'maven.org': 'Maven Central',
+      'gradle.org': 'Gradle',
+      'docker.com': 'Docker Hub',
+      'kubernetes.io': 'Kubernetes',
+      'terraform.io': 'Terraform',
+      'ansible.com': 'Ansible',
+      'jenkins.io': 'Jenkins',
+      'gitlab.com': 'GitLab',
+      'bitbucket.org': 'Bitbucket',
+      'atlassian.com': 'Atlassian',
+      'slack.com': 'Slack',
+      'discord.com': 'Discord',
+      'zoom.us': 'Zoom',
+      'teams.microsoft.com': 'Microsoft Teams',
+      'meet.google.com': 'Google Meet',
+      'webex.com': 'Webex',
+      'dropbox.com': 'Dropbox',
+      'drive.google.com': 'Google Drive',
+      'onedrive.live.com': 'OneDrive',
+      'icloud.com': 'iCloud',
+      'box.com': 'Box',
+      'mega.nz': 'MEGA',
+      'wetransfer.com': 'WeTransfer',
+      'sendspace.com': 'SendSpace',
+      'mediafire.com': 'MediaFire',
+      '4shared.com': '4shared',
+      'rapidshare.com': 'RapidShare'
+    }
+    
+    // 完全一致をチェック
+    if (siteNameMap[domain]) {
+      return siteNameMap[domain]
+    }
+    
+    // 部分一致をチェック
+    for (const [key, value] of Object.entries(siteNameMap)) {
+      if (domain.includes(key)) {
+        return value
+      }
+    }
+    
+    // ドメインから推測
+    const parts = domain.split('.')
+    if (parts.length >= 2) {
+      const mainDomain = parts[parts.length - 2]
+      
+      // 一般的なTLDを除外
+      const commonTlds = ['com', 'org', 'net', 'edu', 'gov', 'co', 'jp', 'uk', 'de', 'fr', 'it', 'es', 'ca', 'au', 'nz']
+      if (!commonTlds.includes(mainDomain)) {
+        return mainDomain.charAt(0).toUpperCase() + mainDomain.slice(1)
+      }
+      
+      // サブドメインがある場合はそれを使用
+      if (parts.length >= 3) {
+        const subdomain = parts[parts.length - 3]
+        return subdomain.charAt(0).toUpperCase() + subdomain.slice(1)
+      }
+    }
+    
+    // 最後の手段：ドメイン名をそのまま使用
+    return domain.charAt(0).toUpperCase() + domain.slice(1)
+  } catch {
+    return 'Unknown Site'
+  }
+}
+
+/**
+ * PDFから参照情報を自動抽出（メイン関数）
+ * @param {string} url - PDFのURL
+ * @param {string} apiKey - Gemini APIキー
+ * @param {function} onProgress - 進捗コールバック
+ */
+export async function extractReferenceFromPDF(url, apiKey, onProgress = null) {
+  if (!apiKey) {
+    throw new Error('Gemini APIキーが設定されていません')
+  }
+  
+  try {
+    if (onProgress) {
+      onProgress({ status: 'downloading', progress: 0 })
+    }
+    
+    // PDFをダウンロード
+    const pdfData = await downloadPDF(url)
+    
+    if (onProgress) {
+      onProgress({ status: 'processing', progress: 0.2 })
+    }
+    
+    // 1. Geminiで直接PDF読み取り試行
+    console.log('Attempting direct Gemini PDF extraction...')
+    let result = await extractWithGemini(pdfData, apiKey)
+    
+    if (result && result.title) {
+      // 著者情報がない場合はサイト名を使用
+      if (!result.authors || result.authors.length === 0) {
+        const siteName = extractSiteNameFromUrl(url)
+        console.log(`No authors found, using site name: ${siteName}`)
+        result.authors = [{ name: siteName, order: 1 }]
+        result.isSiteAuthor = true
+      }
+      
+      console.log('Successfully extracted with Gemini direct method')
+      if (onProgress) {
+        onProgress({ status: 'complete', progress: 1 })
+      }
+      return { ...result, extractionMethod: 'gemini-direct' }
+    }
+    
+    if (onProgress) {
+      onProgress({ status: 'processing', progress: 0.4 })
+    }
+    
+    // 2. pdf.jsでテキスト抽出 → Geminiで構造化
+    console.log('Attempting pdf.js text extraction...')
+    const text = await extractTextWithPdfJs(pdfData)
+    
+    if (text && text.length > 100) {
+      if (onProgress) {
+        onProgress({ status: 'processing', progress: 0.6 })
+      }
+      
+      console.log('Structuring extracted text with Gemini...')
+      result = await structureTextWithGemini(text, apiKey)
+      
+      if (result && result.title) {
+        // 著者情報がない場合はサイト名を使用
+        if (!result.authors || result.authors.length === 0) {
+          const siteName = extractSiteNameFromUrl(url)
+          console.log(`No authors found, using site name: ${siteName}`)
+          result.authors = [{ name: siteName, order: 1 }]
+          result.isSiteAuthor = true
+        }
+        
+        console.log('Successfully extracted with pdf.js + Gemini method')
+        if (onProgress) {
+          onProgress({ status: 'complete', progress: 1 })
+        }
+        return { ...result, extractionMethod: 'pdfjs-gemini' }
+      }
+    }
+    
+    if (onProgress) {
+      onProgress({ status: 'ocr', progress: 0.7 })
+    }
+    
+    // 3. OCRでテキスト抽出 → Geminiで構造化
+    console.log('Attempting OCR text extraction...')
+    const ocrText = await extractTextWithOCR(pdfData)
+    
+    if (ocrText && ocrText.length > 100) {
+      if (onProgress) {
+        onProgress({ status: 'processing', progress: 0.9 })
+      }
+      
+      console.log('Structuring OCR text with Gemini...')
+      result = await structureTextWithGemini(ocrText, apiKey)
+      
+      if (result && result.title) {
+        // 著者情報がない場合はサイト名を使用
+        if (!result.authors || result.authors.length === 0) {
+          const siteName = extractSiteNameFromUrl(url)
+          console.log(`No authors found, using site name: ${siteName}`)
+          result.authors = [{ name: siteName, order: 1 }]
+          result.isSiteAuthor = true
+        }
+        
+        console.log('Successfully extracted with OCR + Gemini method')
+        if (onProgress) {
+          onProgress({ status: 'complete', progress: 1 })
+        }
+        return { ...result, extractionMethod: 'ocr-gemini' }
+      }
+    }
+    
+    // すべての方法で失敗
+    throw new Error('すべての抽出方法が失敗しました')
+  } catch (error) {
+    console.error('PDF extraction failed:', error)
+    if (onProgress) {
+      onProgress({ status: 'error', error: error.message })
+    }
+    throw error
+  }
+}

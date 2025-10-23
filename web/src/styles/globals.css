@@ -110,6 +110,52 @@
     @apply bg-secondary-800 border-secondary-600 text-secondary-100 placeholder-secondary-500 focus:border-primary-400 focus:ring-primary-400;
   }
 
+  /* グローバルinput, textarea, select スタイル（ダークモード対応） */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="url"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  textarea,
+  select {
+    @apply bg-white text-secondary-900 border-secondary-300;
+  }
+
+  .dark input[type="text"],
+  .dark input[type="email"],
+  .dark input[type="password"],
+  .dark input[type="url"],
+  .dark input[type="search"],
+  .dark input[type="tel"],
+  .dark input[type="number"],
+  .dark input[type="date"],
+  .dark input[type="time"],
+  .dark input[type="datetime-local"],
+  .dark textarea,
+  .dark select {
+    @apply bg-secondary-800 text-secondary-100 border-secondary-600 placeholder-secondary-500;
+  }
+
+  .dark input[type="text"]:focus,
+  .dark input[type="email"]:focus,
+  .dark input[type="password"]:focus,
+  .dark input[type="url"]:focus,
+  .dark input[type="search"]:focus,
+  .dark input[type="tel"]:focus,
+  .dark input[type="number"]:focus,
+  .dark input[type="date"]:focus,
+  .dark input[type="time"]:focus,
+  .dark input[type="datetime-local"]:focus,
+  .dark textarea:focus,
+  .dark select:focus {
+    @apply border-primary-400 ring-primary-400;
+  }
+
   /* カードスタイル */
   .card {
     @apply bg-white rounded-xl border border-secondary-200 shadow-soft;
@@ -325,4 +371,8 @@
   .fixed.inset-0 {
     margin: 0 !important;
   }
+}
+
+.btn-project-edit {
+  min-width: 120px;
 }

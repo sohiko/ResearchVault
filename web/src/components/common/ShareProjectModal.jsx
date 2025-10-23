@@ -6,7 +6,7 @@ import ProtectedModal from './ProtectedModal'
 import { useModalContext } from '../../hooks/useModalContext'
 
 const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
-  const { openModal } = useModalContext()
+  const { openModal, closeModal } = useModalContext()
   const modalId = 'share-project'
   
   const [loading, setLoading] = useState(false)
@@ -18,14 +18,15 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
 
   // モーダルを開いた状態として登録
   useEffect(() => {
+    // マウント時にモーダルを登録
     openModal(modalId)
     
-    // クリーンアップ関数でモーダル状態をクリア
+    // アンマウント時にクリーンアップ（重要！）
     return () => {
-      // モーダルが閉じられる時は既にProtectedModalでクリアされるため、
-      // ここでは何もしない（重複クリアを避ける）
+      console.log(`ShareProjectModal unmounting: ${modalId}`)
+      closeModal(modalId)
     }
-  }, [openModal, modalId])
+  }, [openModal, closeModal, modalId])
 
   // 未保存の変更があるかチェック（招待フォームに入力がある場合）
   const hasUnsavedChanges = inviteEmail.trim() !== ''

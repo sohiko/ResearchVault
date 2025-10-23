@@ -59,7 +59,9 @@ export default function Feedback() {
       
       const { data, error: fetchError } = await query
       
-      if (fetchError) throw fetchError
+      if (fetchError) {
+        throw fetchError
+      }
       
       setFeedbacks(data || [])
     } catch (error) {
@@ -94,7 +96,9 @@ export default function Feedback() {
           .eq('id', editingFeedback.id)
           .eq('user_id', user.id)
         
-        if (updateError) throw updateError
+        if (updateError) {
+          throw updateError
+        }
         toast.success('フィードバックを更新しました')
       } else {
         // 新規作成
@@ -107,7 +111,9 @@ export default function Feedback() {
             description: feedbackData.description
           }])
         
-        if (insertError) throw insertError
+        if (insertError) {
+          throw insertError
+        }
         toast.success('フィードバックを送信しました。ご協力ありがとうございます！')
       }
 
@@ -143,7 +149,9 @@ export default function Feedback() {
         .eq('id', feedbackToDelete.id)
         .eq('user_id', user.id)
       
-      if (error) throw error
+      if (error) {
+        throw error
+      }
       
       toast.success('フィードバックを削除しました')
       await loadFeedbacks()

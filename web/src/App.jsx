@@ -32,6 +32,8 @@ import Feedback from './pages/Feedback'
 import Test from './pages/Test'
 import DatabaseTest from './pages/DatabaseTest'
 import SelectedTexts from './pages/SelectedTexts'
+import Terms from './pages/legal/Terms'
+import Privacy from './pages/legal/Privacy'
 
 // プロテクトされたルートコンポーネント
 function ProtectedRoute({ children }) {
@@ -99,7 +101,7 @@ class ErrorBoundary extends React.Component {
           <div className="text-center max-w-md mx-auto p-6">
             <div className="mb-6">
               <img 
-                src="/favicon/android-chrome-192x192.png" 
+                src="/img/icon_circle.png" 
                 alt="ResearchVault" 
                 className="w-16 h-16 mx-auto"
               />
@@ -160,7 +162,7 @@ function App() {
         <div className="text-center">
           <div className="mb-6">
             <img 
-              src="../favicon/android-chrome-192x192.png" 
+              src="/img/icon_circle.png" 
               alt="ResearchVault" 
               className="w-16 h-16 mx-auto"
             />
@@ -227,6 +229,10 @@ function App() {
               }
             />
             <Route path="/auth/callback" element={<AuthCallback />} />
+
+            {/* 利用規約・プライバシーポリシー（パブリック） */}
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
 
             {/* メインアプリケーションのルート */}
             <Route

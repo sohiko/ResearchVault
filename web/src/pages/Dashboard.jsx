@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { dbHelpers } from '../lib/supabase'
+import { dbHelpers, supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import ExtensionBridge from '../components/common/ExtensionBridge'
@@ -11,9 +11,33 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ projects: 0, references: 0, texts: 0 })
   const [recentReferences, setRecentReferences] = useState([])
   const [loading, setLoading] = useState(true)
+  const [dashboardLayout, setDashboardLayout] = useState('grid') // 'grid', 'list', 'compact'
+
+  // 設定を読み込み
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!user) { return }
+      
+      try {
+        const { data } = await supabase
+          .from('settings')
+          .select('dashboard_layout')
+          .eq('user_id', user.id)
+          .single()
+        
+        if (data && data.dashboard_layout) {
+          setDashboardLayout(data.dashboard_layout)
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error)
+      }
+    }
+    
+    loadSettings()
+  }, [user])
 
   const loadDashboardData = useCallback(async () => {
-    if (!user) {return}
+    if (!user) { return }
     
     try {
       setLoading(true)
@@ -75,9 +99,14 @@ export default function Dashboard() {
       {/* Chrome拡張機能連携 */}
       <ExtensionBridge />
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className={`grid gap-6 ${
+        dashboardLayout === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' :
+        dashboardLayout === 'list' ? 'grid-cols-1' :
+        'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+      }`}>
         <StatCard
           title="総参照数"
+          layout={dashboardLayout}
           value={stats.references}
           icon={ReferenceIcon}
           color="primary"

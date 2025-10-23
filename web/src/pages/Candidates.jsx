@@ -22,7 +22,7 @@ export default function Candidates() {
   const [subjectFilter, setSubjectFilter] = useState('')
   const [autoAnalyzing, setAutoAnalyzing] = useState(false)
   const [lastAnalyzedTime, setLastAnalyzedTime] = useState(null)
-  const [sortOrder, setSortOrder] = useState('newest') // 'newest', 'oldest', 'confidence'
+  const [sortOrder, setSortOrder] = useState('subject') // 'subject', 'newest', 'oldest', 'confidence'
 
   const loadData = useCallback(async () => {
     if (!user) {
@@ -517,19 +517,52 @@ export default function Candidates() {
     ? candidates.filter(c => c.subject === subjectFilter)
     : candidates
   
-  // ソート適用
-  filteredCandidates = [...filteredCandidates].sort((a, b) => {
-    switch (sortOrder) {
-      case 'oldest':
-        return new Date(a.visitedAt) - new Date(b.visitedAt)
-      case 'newest':
-        return new Date(b.visitedAt) - new Date(a.visitedAt)
-      case 'confidence':
-        return (b.confidence || 0) - (a.confidence || 0)
-      default:
-        return 0
-    }
-  })
+  // ソート適用（教科別グループ化の場合は特別処理）
+  if (sortOrder === 'subject') {
+    // 教科別にグループ化
+    const grouped = {}
+    filteredCandidates.forEach(candidate => {
+      const subject = candidate.subject || 'その他'
+      if (!grouped[subject]) {
+        grouped[subject] = []
+      }
+      grouped[subject].push(candidate)
+    })
+    
+    // 各グループ内で新しい順にソート
+    Object.keys(grouped).forEach(subject => {
+      grouped[subject].sort((a, b) => new Date(b.visitedAt) - new Date(a.visitedAt))
+    })
+    
+    // 教科の順序（指定順）
+    const subjectOrder = ['国語', '数学', '歴史', '物理', '生物', '化学', '地理', '英語', '音楽', '美術', '技術', '家庭科', 'その他']
+    
+    // グループ化された候補を配列に変換
+    filteredCandidates = subjectOrder.flatMap(subject => 
+      grouped[subject] ? [{ isGroupHeader: true, subject }, ...grouped[subject]] : []
+    )
+    
+    // 残りの教科（指定外）も追加
+    Object.keys(grouped).forEach(subject => {
+      if (!subjectOrder.includes(subject)) {
+        filteredCandidates.push({ isGroupHeader: true, subject }, ...grouped[subject])
+      }
+    })
+  } else {
+    // 通常のソート
+    filteredCandidates = [...filteredCandidates].sort((a, b) => {
+      switch (sortOrder) {
+        case 'oldest':
+          return new Date(a.visitedAt) - new Date(b.visitedAt)
+        case 'newest':
+          return new Date(b.visitedAt) - new Date(a.visitedAt)
+        case 'confidence':
+          return (b.confidence || 0) - (a.confidence || 0)
+        default:
+          return 0
+      }
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -704,6 +737,7 @@ export default function Candidates() {
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value)}
               >
+                <option value="subject">教科別</option>
                 <option value="newest">新しい順</option>
                 <option value="oldest">古い順</option>
                 <option value="confidence">信頼度順</option>
@@ -740,16 +774,33 @@ export default function Candidates() {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredCandidates.map((candidate) => (
-            <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              projects={projects}
-              onSave={saveCandidate}
-              onDismiss={dismissCandidate}
-              saving={saving}
-            />
-          ))}
+          {filteredCandidates.map((item, index) => {
+            // グループヘッダーの場合
+            if (item.isGroupHeader) {
+              return (
+                <div key={`header-${item.subject}`} className="pt-6 pb-2">
+                  <div className="flex items-center space-x-3">
+                    <h2 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">
+                      {item.subject}
+                    </h2>
+                    <div className="flex-1 h-px bg-secondary-200 dark:bg-secondary-700"></div>
+                  </div>
+                </div>
+              )
+            }
+            
+            // 通常の候補カード
+            return (
+              <CandidateCard
+                key={item.id || `candidate-${index}`}
+                candidate={item}
+                projects={projects}
+                onSave={saveCandidate}
+                onDismiss={dismissCandidate}
+                saving={saving}
+              />
+            )
+          })}
         </div>
       )}
 

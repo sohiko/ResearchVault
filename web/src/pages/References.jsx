@@ -2,15 +2,18 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
+import { useSearchParams } from 'react-router-dom'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import ReferenceCard from '../components/common/ReferenceCard'
 import AddReferenceModal from '../components/common/AddReferenceModal'
 import { usePageFocus } from '../hooks/usePageFocus'
 import { useModalContext } from '../hooks/useModalContext'
+import { useDebounce } from '../hooks/useDebounce'
 
 export default function References() {
   const { user } = useAuth()
   const { hasOpenModals } = useModalContext()
+  const [searchParams] = useSearchParams()
   const [references, setReferences] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -19,12 +22,19 @@ export default function References() {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [referenceToDelete, setReferenceToDelete] = useState(null)
   const [citationFormat, setCitationFormat] = useState('APA')
+  
+  // URLパラメータから検索キーワードを取得
+  const searchFromUrl = searchParams.get('search') || ''
+  
   const [filters, setFilters] = useState({
     project: '',
-    search: '',
+    search: searchFromUrl,
     sortBy: 'saved_at',
     sortOrder: 'desc'
   })
+
+  // デバウンスされた検索クエリ（500ms遅延）
+  const debouncedSearch = useDebounce(filters.search, 500)
 
   const loadReferences = useCallback(async () => {
     if (!user) {return []}
@@ -47,8 +57,8 @@ export default function References() {
         query = query.eq('project_id', filters.project)
       }
 
-      if (filters.search) {
-        query = query.or(`title.ilike.%${filters.search}%,url.ilike.%${filters.search}%,memo.ilike.%${filters.search}%`)
+      if (debouncedSearch) {
+        query = query.or(`title.ilike.%${debouncedSearch}%,url.ilike.%${debouncedSearch}%,memo.ilike.%${debouncedSearch}%`)
       }
 
       // ソート
@@ -73,7 +83,7 @@ export default function References() {
       console.error('Failed to load references:', error)
       return []
     }
-  }, [user, filters])
+  }, [user, filters.project, filters.sortBy, filters.sortOrder, debouncedSearch])
 
   const loadCitationSettings = useCallback(async () => {
     if (!user) {return}
@@ -140,6 +150,13 @@ export default function References() {
     }
   }, [user, hasOpenModals, loadData])
 
+  // debouncedSearchが変更されたときのリロード（検索実行）
+  useEffect(() => {
+    if (user && !hasOpenModals && !loading) {
+      loadData()
+    }
+  }, [debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ページフォーカス時の自動リロードを無効化（モーダルがあるページなので完全に無効）
   usePageFocus(() => {}, [], {
     enableFocusReload: false
@@ -150,12 +167,8 @@ export default function References() {
       const { error } = await supabase
         .from('references')
         .insert({
-          title: referenceData.title.trim(),
-          url: referenceData.url.trim(),
-          memo: referenceData.memo?.trim() || '',
-          project_id: referenceData.projectId || null,
-          saved_by: user.id,
-          metadata: {}
+          ...referenceData,
+          saved_by: user.id
         })
         .select()
         .single()
@@ -206,16 +219,14 @@ export default function References() {
 
   const handleUpdateReference = async (updatedReference) => {
     try {
+      // descriptionはmetadataに含まれるため、個別に送信しない
+      const { id, ...updateData } = updatedReference
+      delete updateData.description // descriptionカラムは存在しないため削除
+      
       const { error } = await supabase
         .from('references')
-        .update({
-          title: updatedReference.title,
-          url: updatedReference.url,
-          description: updatedReference.description,
-          metadata: updatedReference.metadata,
-          updated_at: updatedReference.updated_at
-        })
-        .eq('id', updatedReference.id)
+        .update(updateData)
+        .eq('id', id)
 
       if (error) {throw error}
 
