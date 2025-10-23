@@ -1,7 +1,6 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
--- This data is current as of 14:12 PM on October 17, 2025, and may have changed at the time of reading due to the addition of new tables or structures.
-
+-- This data is current as of 16:30 PM on October 22, 2025, and may have changed at the time of reading due to the addition of new tables or structures.
 
 CREATE TABLE public.activity_logs (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -64,6 +63,18 @@ CREATE TABLE public.citation_settings (
   CONSTRAINT citation_settings_pkey PRIMARY KEY (id),
   CONSTRAINT citation_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.feature_requests (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  title character varying NOT NULL,
+  description text NOT NULL,
+  type character varying DEFAULT 'feature'::character varying CHECK (type::text = ANY (ARRAY['feature'::character varying, 'bug'::character varying, 'improvement'::character varying]::text[])),
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  deleted_at timestamp with time zone,
+  CONSTRAINT feature_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT feature_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
   email text NOT NULL UNIQUE,
@@ -71,6 +82,7 @@ CREATE TABLE public.profiles (
   avatar_url text,
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  is_admin boolean NOT NULL DEFAULT false,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
@@ -94,6 +106,7 @@ CREATE TABLE public.projects (
   updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   deleted_at timestamp with time zone,
   deleted_by uuid,
+  is_public boolean NOT NULL DEFAULT false,
   CONSTRAINT projects_pkey PRIMARY KEY (id),
   CONSTRAINT projects_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id),
   CONSTRAINT projects_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES auth.users(id)
@@ -119,6 +132,21 @@ CREATE TABLE public.references (
   updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   deleted_at timestamp with time zone,
   deleted_by uuid,
+  published_date date,
+  accessed_date date,
+  reference_type text CHECK (reference_type = ANY (ARRAY['website'::text, 'article'::text, 'journal'::text, 'book'::text, 'report'::text])),
+  authors jsonb DEFAULT '[]'::jsonb,
+  publisher text,
+  pages text,
+  isbn text,
+  doi text,
+  online_link text,
+  journal_name text,
+  volume text,
+  issue text,
+  edition text,
+  is_online boolean DEFAULT false,
+  language text DEFAULT 'ja'::text,
   CONSTRAINT references_pkey PRIMARY KEY (id),
   CONSTRAINT references_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
   CONSTRAINT references_saved_by_fkey FOREIGN KEY (saved_by) REFERENCES public.profiles(id),

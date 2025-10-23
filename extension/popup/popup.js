@@ -87,7 +87,7 @@ class PopupManager {
         }
     }
 
-    updateProjectSelect() {
+    async updateProjectSelect() {
         const searchInput = document.getElementById('projectSearch');
         const dropdown = document.getElementById('projectDropdown');
         const hiddenSelect = document.getElementById('projectSelect');
@@ -97,15 +97,44 @@ class PopupManager {
             return;
         }
 
+        // 前回選択したプロジェクトを取得
+        const { lastSelectedProject } = await chrome.storage.sync.get(['lastSelectedProject']);
+        let defaultProject = null;
+        
+        if (lastSelectedProject) {
+            defaultProject = this.projects.find(p => p.id === lastSelectedProject);
+        }
+
+        // デフォルトプロジェクトを設定
+        if (defaultProject) {
+            searchInput.value = `${defaultProject.icon || '📁'} ${defaultProject.name}`;
+            hiddenSelect.value = defaultProject.id;
+        } else {
+            searchInput.value = '';
+            hiddenSelect.value = '';
+        }
+
         // 検索機能を追加
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase();
             this.filterProjects(query);
         });
 
+        // フォーカス時の動作
         searchInput.addEventListener('focus', () => {
             dropdown.classList.remove('hidden');
             this.filterProjects(searchInput.value.toLowerCase());
+        });
+
+        // クリック時の動作（空欄にする）
+        searchInput.addEventListener('click', () => {
+            if (searchInput.value && !searchInput.value.includes('📁') && !searchInput.value.includes('📂')) {
+                // プロジェクト名が表示されている場合のみ空欄にする
+                searchInput.value = '';
+                hiddenSelect.value = '';
+                dropdown.classList.remove('hidden');
+                this.filterProjects('');
+            }
         });
 
         document.addEventListener('click', (e) => {
@@ -114,8 +143,7 @@ class PopupManager {
             }
         });
 
-        // 最初は全プロジェクトを表示（入力欄は空）
-        searchInput.value = '';
+        // 初期表示
         this.filterProjects('');
     }
 
@@ -123,9 +151,16 @@ class PopupManager {
         const dropdown = document.getElementById('projectDropdown');
         dropdown.innerHTML = '';
 
-        const filtered = query 
-            ? this.projects.filter(p => p.name.toLowerCase().includes(query))
-            : this.projects;
+        // クエリが空の場合は全プロジェクトを表示
+        let filtered = this.projects;
+        
+        if (query) {
+            // アイコン記号を除外して検索
+            const cleanQuery = query.replace(/[📁📂]/g, '').trim().toLowerCase();
+            filtered = this.projects.filter(p => 
+                p.name.toLowerCase().includes(cleanQuery)
+            );
+        }
 
         if (filtered.length === 0) {
             dropdown.innerHTML = '<div class="dropdown-item">プロジェクトが見つかりません</div>';
@@ -137,9 +172,14 @@ class PopupManager {
             item.className = 'dropdown-item';
             item.textContent = `${project.icon || '📁'} ${project.name}`;
             item.addEventListener('click', () => {
-                document.getElementById('projectSearch').value = project.name;
-                document.getElementById('projectSelect').value = project.id;
+                const searchInput = document.getElementById('projectSearch');
+                const hiddenSelect = document.getElementById('projectSelect');
+                
+                searchInput.value = `${project.icon || '📁'} ${project.name}`;
+                hiddenSelect.value = project.id;
                 dropdown.classList.add('hidden');
+                
+                // 選択したプロジェクトを保存
                 chrome.storage.sync.set({ lastSelectedProject: project.id });
             });
             dropdown.appendChild(item);
@@ -287,15 +327,42 @@ class PopupManager {
             
             console.log('Saving reference with token:', this.api.authToken);
             
+            // PDF判定
+            const isPdf = await this.checkIfPDF(currentUrl);
+            let pdfInfo = null;
+            
+            if (isPdf) {
+                console.log('Detected PDF, attempting Gemini analysis...');
+                pdfInfo = await this.extractPDFInfoWithGemini(currentUrl);
+            }
+            
             const referenceData = {
                 url: currentUrl,
-                title: this.currentTab.title,
+                title: pdfInfo?.title || this.currentTab.title,
                 favicon: this.currentTab.favIconUrl,
                 projectId: projectId || null,
-                tags: tags,
                 memo: memo,
-                metadata: await this.extractPageMetadata()
+                metadata: {
+                    ...(await this.extractPageMetadata()),
+                    tags: tags
+                }
             };
+
+            // PDF情報があれば追加
+            if (pdfInfo) {
+                referenceData.reference_type = pdfInfo.referenceType;
+                referenceData.authors = pdfInfo.authors;
+                referenceData.published_date = pdfInfo.publishedDate;
+                referenceData.publisher = pdfInfo.publisher;
+                referenceData.pages = pdfInfo.pages;
+                referenceData.doi = pdfInfo.doi;
+                referenceData.isbn = pdfInfo.isbn;
+                referenceData.journal_name = pdfInfo.journalName;
+                referenceData.volume = pdfInfo.volume;
+                referenceData.issue = pdfInfo.issue;
+                referenceData.edition = pdfInfo.edition;
+                referenceData.metadata.description = pdfInfo.description;
+            }
 
             console.log('Reference data to save:', referenceData);
             const result = await this.api.saveReference(referenceData);
@@ -364,6 +431,303 @@ class PopupManager {
         } catch (error) {
             console.log('Extract metadata error:', error.message || error);
             return {};
+        }
+    }
+
+    /**
+     * PDF判定（拡張子 + Content-Type）
+     */
+    async checkIfPDF(url) {
+        // 拡張子で判定
+        if (url.toLowerCase().endsWith('.pdf')) {
+            return true;
+        }
+        
+        // Content-Typeで判定
+        try {
+            const response = await fetch(url, { method: 'HEAD' });
+            const contentType = response.headers.get('content-type');
+            return contentType?.includes('application/pdf') || false;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * GeminiでPDFから情報を抽出（ポップアップ版）
+     */
+    async extractPDFInfoWithGemini(url) {
+        try {
+            // Gemini APIキーを取得（設定から）
+            const { geminiApiKey } = await chrome.storage.sync.get(['geminiApiKey']);
+            if (!geminiApiKey) {
+                console.log('Gemini API key not found, skipping PDF analysis');
+                return null;
+            }
+
+            console.log('Downloading PDF for analysis...');
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to download PDF: ${response.status}`);
+            }
+            
+            const arrayBuffer = await response.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            // Base64エンコード
+            const base64Pdf = btoa(
+                Array.from(uint8Array)
+                    .map(byte => String.fromCharCode(byte))
+                    .join('')
+            );
+
+            console.log('Analyzing PDF with Gemini...');
+            const prompt = `この学術PDF文書から以下の情報を抽出してJSON形式で返してください：
+
+必須項目:
+- referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
+- title: 論文・書籍のタイトル
+- authors: 著者のリスト（配列形式、各要素は{"name": "著者名", "order": 順番}）。著者が見つからない場合は空配列[]
+- publishedDate: 発行日（YYYY-MM-DD形式、年のみの場合はYYYY-01-01）
+- publisher: 出版社または論文誌名
+- pages: ページ数または範囲
+- doi: DOI（あれば）
+- isbn: ISBN（書籍の場合）
+- journalName: 論文誌名（論文の場合）
+- volume: 巻（論文の場合）
+- issue: 号（論文の場合）
+- language: 言語コード（ja または en）
+- description: 文書の要約（200文字以内）
+
+判定基準:
+- 査読付き学術論文（IEEE, ACM, Springer等）→ "article"
+- 雑誌や一般誌の論文 → "journal"
+- 書籍（ISBNあり）→ "book"
+- 技術レポート、白書、調査報告書 → "report"
+
+回答は以下のJSON形式のみで返してください（説明文は不要）：
+{
+  "referenceType": "article",
+  "title": "タイトル",
+  "authors": [{"name": "著者名", "order": 1}],
+  "publishedDate": "YYYY-MM-DD",
+  "publisher": "出版社",
+  "pages": "1-10",
+  "doi": "10.xxxx/xxxx",
+  "isbn": null,
+  "journalName": "論文誌名",
+  "volume": "1",
+  "issue": "1",
+  "language": "ja",
+  "description": "要約"
+}`;
+
+            const geminiResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiApiKey}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: prompt },
+                                {
+                                    inline_data: {
+                                        mime_type: 'application/pdf',
+                                        data: base64Pdf
+                                    }
+                                }
+                            ]
+                        }],
+                        generationConfig: {
+                            temperature: 0.1,
+                            topK: 1,
+                            topP: 1,
+                            maxOutputTokens: 2048
+                        }
+                    })
+                }
+            );
+
+            if (!geminiResponse.ok) {
+                const errorText = await geminiResponse.text();
+                console.error('Gemini API error:', errorText);
+                throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
+            }
+
+            const geminiData = await geminiResponse.json();
+            
+            // エラーチェック
+            if (geminiData.error) {
+                console.error('Gemini API error:', geminiData.error);
+                throw new Error(`Gemini API error: ${geminiData.error.message}`);
+            }
+            
+            const text = geminiData.candidates[0]?.content?.parts[0]?.text;
+
+            if (!text) {
+                console.error('No response text from Gemini:', geminiData);
+                throw new Error('No response from Gemini');
+            }
+
+            console.log('Gemini response text:', text);
+
+            // JSONを抽出（より柔軟なパターンマッチング）
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                console.error('No JSON found in response:', text);
+                throw new Error('No JSON found in response');
+            }
+
+            let extractedInfo;
+            try {
+                extractedInfo = JSON.parse(jsonMatch[0]);
+            } catch (parseError) {
+                console.error('JSON parse error:', parseError, 'Raw text:', jsonMatch[0]);
+                throw new Error('Failed to parse JSON response');
+            }
+            
+            // 著者情報がない場合はサイト名を使用
+            if (!extractedInfo.authors || extractedInfo.authors.length === 0) {
+                const siteName = this.extractSiteNameFromUrl(url);
+                console.log(`No authors found, using site name: ${siteName}`);
+                extractedInfo.authors = [{ name: siteName, order: 1 }];
+                extractedInfo.isSiteAuthor = true;
+            }
+
+            console.log('Successfully extracted PDF info with Gemini');
+            return extractedInfo;
+        } catch (error) {
+            console.error('Gemini PDF extraction failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * URLからサイト名を抽出（著者情報がない場合のフォールバック）
+     */
+    extractSiteNameFromUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            const domain = urlObj.hostname.toLowerCase();
+            
+            // 既知のサイト名マッピング（service-worker.jsと同じ）
+            const siteNameMap = {
+                'y-history.net': '世界史の窓',
+                'www.y-history.net': '世界史の窓',
+                'ibo.org': 'IBO',
+                'www.ibo.org': 'IBO',
+                'wikipedia.org': 'Wikipedia',
+                'ja.wikipedia.org': 'Wikipedia',
+                'en.wikipedia.org': 'Wikipedia',
+                'github.com': 'GitHub',
+                'stackoverflow.com': 'Stack Overflow',
+                'qiita.com': 'Qiita',
+                'zenn.dev': 'Zenn',
+                'note.com': 'note',
+                'hatenablog.com': 'はてなブログ',
+                'ameblo.jp': 'アメブロ',
+                'boj.or.jp': '日本銀行',
+                'mof.go.jp': '財務省',
+                'mext.go.jp': '文部科学省',
+                'mhlw.go.jp': '厚生労働省',
+                'meti.go.jp': '経済産業省',
+                'mlit.go.jp': '国土交通省',
+                'env.go.jp': '環境省',
+                'soumu.go.jp': '総務省',
+                'cao.go.jp': '内閣府',
+                'mofa.go.jp': '外務省',
+                'mod.go.jp': '防衛省',
+                'moj.go.jp': '法務省',
+                'maff.go.jp': '農林水産省',
+                'treasury.gov': '米国財務省',
+                'state.gov': '米国国務省',
+                'whitehouse.gov': 'ホワイトハウス',
+                'congress.gov': '米国議会',
+                'usgs.gov': '米国地質調査所',
+                'epa.gov': '米国環境保護庁',
+                'fda.gov': 'FDA',
+                'ed.gov': '米国教育省',
+                'un.org': 'United Nations',
+                'who.int': 'World Health Organization',
+                'worldbank.org': 'World Bank',
+                'imf.org': 'International Monetary Fund',
+                'wto.org': 'World Trade Organization',
+                'oecd.org': 'OECD',
+                'unesco.org': 'UNESCO',
+                'unicef.org': 'UNICEF',
+                'europa.eu': 'European Union',
+                'ecb.europa.eu': 'European Central Bank',
+                'nih.gov': 'National Institutes of Health',
+                'cdc.gov': 'Centers for Disease Control and Prevention',
+                'nasa.gov': 'NASA',
+                'nist.gov': 'NIST',
+                'riken.jp': '理化学研究所',
+                'aist.go.jp': '産業技術総合研究所',
+                'jaxa.jp': 'JAXA',
+                'nii.ac.jp': '国立情報学研究所',
+                'nies.go.jp': '国立環境研究所',
+                'nims.go.jp': '物質・材料研究機構',
+                'jst.go.jp': '科学技術振興機構',
+                'jsps.go.jp': '日本学術振興会',
+                'ieee.org': 'IEEE',
+                'acm.org': 'ACM',
+                'springer.com': 'Springer',
+                'elsevier.com': 'Elsevier',
+                'wiley.com': 'Wiley',
+                'nature.com': 'Nature',
+                'science.org': 'Science',
+                'oup.com': 'Oxford University Press',
+                'cambridge.org': 'Cambridge University Press',
+                'jstor.org': 'JSTOR',
+                'researchgate.net': 'ResearchGate',
+                'academia.edu': 'Academia.edu',
+                'pubmed.ncbi.nlm.nih.gov': 'PubMed',
+                'scholar.google.com': 'Google Scholar',
+                'semanticscholar.org': 'Semantic Scholar',
+                'mdpi.com': 'MDPI',
+                'plos.org': 'PLOS',
+                'frontiersin.org': 'Frontiers',
+                'jstage.jst.go.jp': 'J-STAGE',
+                'ci.nii.ac.jp': 'CiNii'
+            };
+            
+            // 完全一致をチェック
+            if (siteNameMap[domain]) {
+                return siteNameMap[domain];
+            }
+            
+            // 部分一致をチェック
+            for (const [key, value] of Object.entries(siteNameMap)) {
+                if (domain.includes(key)) {
+                    return value;
+                }
+            }
+            
+            // ドメインから推測
+            const parts = domain.split('.');
+            if (parts.length >= 2) {
+                const mainDomain = parts[parts.length - 2];
+                
+                // 一般的なTLDを除外
+                const commonTlds = ['com', 'org', 'net', 'edu', 'gov', 'co', 'jp', 'uk', 'de', 'fr', 'it', 'es', 'ca', 'au', 'nz'];
+                if (!commonTlds.includes(mainDomain)) {
+                    return mainDomain.charAt(0).toUpperCase() + mainDomain.slice(1);
+                }
+                
+                // サブドメインがある場合はそれを使用
+                if (parts.length >= 3) {
+                    const subdomain = parts[parts.length - 3];
+                    return subdomain.charAt(0).toUpperCase() + subdomain.slice(1);
+                }
+            }
+            
+            // 最後の手段：ドメイン名をそのまま使用
+            return domain.charAt(0).toUpperCase() + domain.slice(1);
+        } catch {
+            return 'Unknown Site';
         }
     }
 
@@ -605,6 +969,7 @@ class PopupManager {
     }
 
     clearForm() {
+        // タグとメモのみクリア、プロジェクト選択は保持
         document.getElementById('tagsInput').value = '';
         document.getElementById('memoInput').value = '';
     }
