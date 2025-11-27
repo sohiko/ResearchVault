@@ -4,6 +4,7 @@ import Sidebar from './Sidebar'
 import { useTheme } from '../../hooks/useTheme'
 import { useNavigationBlock } from '../../hooks/useNavigationBlock'
 import { useModalContext } from '../../hooks/useModalContext'
+import ReferenceFetchStatusPanel from '../common/ReferenceFetchStatusPanel'
 
 export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -55,6 +56,7 @@ export default function Layout({ children }) {
             {children}
           </div>
         </main>
+        <ReferenceFetchStatusPanel />
       </div>
     </div>
   )

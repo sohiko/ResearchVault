@@ -9,10 +9,12 @@ import AddReferenceModal from '../components/common/AddReferenceModal'
 import { usePageFocus } from '../hooks/usePageFocus'
 import { useModalContext } from '../hooks/useModalContext'
 import { useDebounce } from '../hooks/useDebounce'
+import { useReferenceAction } from '../context/ReferenceActionContext'
 
 export default function References() {
   const { user } = useAuth()
   const { hasOpenModals } = useModalContext()
+  const { pendingAction, clearPendingAction } = useReferenceAction()
   const [searchParams] = useSearchParams()
   const [references, setReferences] = useState([])
   const [projects, setProjects] = useState([])
@@ -22,6 +24,7 @@ export default function References() {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [referenceToDelete, setReferenceToDelete] = useState(null)
   const [citationFormat, setCitationFormat] = useState('APA')
+  const [referenceToAutoEdit, setReferenceToAutoEdit] = useState(null)
   
   // URLパラメータから検索キーワードを取得
   const searchFromUrl = searchParams.get('search') || ''
@@ -156,6 +159,26 @@ export default function References() {
       loadData()
     }
   }, [debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+  
+  useEffect(() => {
+    const handleReferenceCreated = () => {
+      if (!hasOpenModals) {
+        loadData()
+      }
+    }
+    
+    window.addEventListener('reference:created', handleReferenceCreated)
+    return () => {
+      window.removeEventListener('reference:created', handleReferenceCreated)
+    }
+  }, [hasOpenModals, loadData])
+  
+  useEffect(() => {
+    if (pendingAction?.type === 'edit' && !pendingAction.projectId) {
+      setReferenceToAutoEdit(pendingAction.referenceId)
+      clearPendingAction()
+    }
+  }, [pendingAction, clearPendingAction])
 
   // ページフォーカス時の自動リロードを無効化（モーダルがあるページなので完全に無効）
   usePageFocus(() => {}, [], {
@@ -397,6 +420,8 @@ export default function References() {
               onDelete={handleDeleteReference}
               onUpdate={handleUpdateReference}
               citationFormat={citationFormat}
+              autoOpenEdit={reference.id === referenceToAutoEdit}
+              onAutoEditHandled={() => setReferenceToAutoEdit(null)}
             />
           ))}
         </div>

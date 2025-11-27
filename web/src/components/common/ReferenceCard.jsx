@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { toast } from 'react-hot-toast'
@@ -6,10 +6,17 @@ import { generateCitation } from '../../utils/citationGenerator'
 import { generateInTextCitation } from '../../lib/citationUtils'
 import EditReferenceModal from './EditReferenceModal'
 
-const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA' }) => {
+const ReferenceCard = ({ reference, onDelete, onUpdate, citationFormat = 'APA', autoOpenEdit = false, onAutoEditHandled = () => {} }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showActions, setShowActions] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+
+  useEffect(() => {
+    if (autoOpenEdit && !showEditModal) {
+      setShowEditModal(true)
+      onAutoEditHandled()
+    }
+  }, [autoOpenEdit, onAutoEditHandled, showEditModal])
 
   const truncateText = (text, maxLength = 150) => {
     if (!text || text.length <= maxLength) {return text}

@@ -26,6 +26,7 @@ import AddReferenceModal from '../components/common/AddReferenceModal'
 import ShareProjectModal from '../components/common/ShareProjectModal'
 import EditProjectModal from '../components/common/EditProjectModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import { useReferenceAction } from '../context/ReferenceActionContext'
 
 // ユーティリティ
 import { generateProjectCitations } from '../utils/citationGenerator'
@@ -35,6 +36,7 @@ export default function ProjectDetail() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { hasOpenModals } = useModalContext()
+  const { pendingAction, clearPendingAction } = useReferenceAction()
   
   // 状態管理
   const [project, setProject] = useState(null)
@@ -57,6 +59,7 @@ export default function ProjectDetail() {
   const [citationFormat, setCitationFormat] = useState('APA')
   const [generatedCitations, setGeneratedCitations] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [referenceToAutoEdit, setReferenceToAutoEdit] = useState(null)
   
   // フィルター・ソート状態
   const [sortBy, setSortBy] = useState('saved_at')
@@ -243,6 +246,27 @@ export default function ProjectDetail() {
       loadProjectData()
     }
   }, [user, id, hasOpenModals, loadProjectData])
+
+  useEffect(() => {
+    const handleReferenceCreated = (event) => {
+      const createdReference = event.detail?.reference
+      if (createdReference?.project_id === id && !hasOpenModals) {
+        loadReferences()
+      }
+    }
+
+    window.addEventListener('reference:created', handleReferenceCreated)
+    return () => {
+      window.removeEventListener('reference:created', handleReferenceCreated)
+    }
+  }, [hasOpenModals, id, loadReferences])
+
+  useEffect(() => {
+    if (pendingAction?.type === 'edit' && pendingAction.projectId === id) {
+      setReferenceToAutoEdit(pendingAction.referenceId)
+      clearPendingAction()
+    }
+  }, [pendingAction, id, clearPendingAction])
 
   // ドロップダウンメニューの外側クリックで閉じる
   useEffect(() => {
@@ -643,6 +667,8 @@ export default function ProjectDetail() {
                   onDelete={canEdit ? handleDeleteReference : null}
                   onUpdate={canEdit ? handleUpdateReference : null}
                   citationFormat={citationFormat}
+                autoOpenEdit={reference.id === referenceToAutoEdit}
+                onAutoEditHandled={() => setReferenceToAutoEdit(null)}
                 />
               ))}
             </div>

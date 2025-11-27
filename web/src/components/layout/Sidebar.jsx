@@ -57,7 +57,7 @@ export default function Sidebar() {
       
       try {
         const { count, error } = await supabase
-          .from('browsing_history')
+          .from('browsing_history_candidates')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
           .eq('is_academic', true)

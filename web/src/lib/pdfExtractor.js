@@ -23,13 +23,16 @@ async function downloadPDF(url) {
  */
 async function extractTextWithPdfJs(pdfData) {
   try {
+    // ArrayBufferのdetached問題を回避するため、データをコピー
+    const pdfDataCopy = pdfData.slice()
+    
     // pdf.jsライブラリを動的に読み込み
     const pdfjsLib = await import('pdfjs-dist')
     
     // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
     
-    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise
+    const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     let fullText = ''
     
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -53,6 +56,9 @@ async function extractTextWithPdfJs(pdfData) {
  */
 async function extractTextWithOCR(pdfData) {
   try {
+    // ArrayBufferのdetached問題を回避するため、データをコピー
+    const pdfDataCopy = pdfData.slice()
+    
     // Tesseract.jsライブラリを動的に読み込み
     const Tesseract = await import('tesseract.js')
     
@@ -60,9 +66,9 @@ async function extractTextWithOCR(pdfData) {
     const pdfjsLib = await import('pdfjs-dist')
     
     // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
     
-    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise
+    const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     const page = await pdf.getPage(1)
     
     const viewport = page.getViewport({ scale: 2.0 })
@@ -90,12 +96,15 @@ async function extractTextWithOCR(pdfData) {
  */
 async function extractPagesFromPDF(pdfData, pageNumbers) {
   try {
+    // ArrayBufferのdetached問題を回避するため、データをコピー
+    const pdfDataCopy = pdfData.slice()
+    
     const pdfjsLib = await import('pdfjs-dist')
     
     // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
     
-    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise
+    const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     const totalPages = pdf.numPages
     
     // ページ番号を有効な範囲に調整
@@ -141,12 +150,15 @@ async function extractPagesFromPDF(pdfData, pageNumbers) {
  */
 async function extractWithGemini(pdfData, apiKey, usePartialRead = true) {
   try {
+    // ArrayBufferのdetached問題を回避するため、データをコピー
+    const pdfDataCopy = pdfData.slice()
+    
     if (usePartialRead) {
       // 部分読み取り: 最初の5ページと最後の5ページ
       const pdfjsLib = await import('pdfjs-dist')
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
       
-      const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise
+      const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
       const totalPages = pdf.numPages
       
       // 最初の5ページと最後の5ページを抽出
@@ -163,7 +175,7 @@ async function extractWithGemini(pdfData, apiKey, usePartialRead = true) {
       console.log(`PDF部分読み取り: 全${totalPages}ページ中、${pagesToExtract.length}ページを抽出 (ページ: ${pagesToExtract.join(', ')})`)
       
       // 部分的なテキストを抽出してGeminiに送信
-      const textBase64 = await extractPagesFromPDF(pdfData, pagesToExtract)
+      const textBase64 = await extractPagesFromPDF(pdfDataCopy, pagesToExtract)
       
       // テキストベースの分析用プロンプト
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
@@ -231,7 +243,7 @@ ${atob(textBase64)}`
     }
     
     // 全文読み取り: PDF全体をBase64エンコード
-    const uint8Array = new Uint8Array(pdfData)
+    const uint8Array = new Uint8Array(pdfDataCopy)
     const base64 = btoa(
       Array.from(uint8Array)
         .map(byte => String.fromCharCode(byte))

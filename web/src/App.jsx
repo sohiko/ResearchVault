@@ -5,11 +5,15 @@ import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ThemeProvider } from './hooks/useTheme'
 import { ProjectProvider } from './hooks/useProjects'
 import { ModalProvider } from './hooks/useModalContext'
+import { ReferenceActionProvider } from './context/ReferenceActionContext'
+import { ReferenceFetchQueueProvider } from './context/ReferenceFetchQueueContext'
 import { handleComponentError } from './utils/errorHandler'
+import { cleanupTrash } from './lib/trashCleanup'
 
 // レイアウトコンポーネント
 import Layout from './components/layout/Layout'
 import AuthLayout from './components/layout/AuthLayout'
+import ReferenceFetchStatus from './components/common/ReferenceFetchStatus'
 
 // ページコンポーネント
 import Dashboard from './pages/Dashboard'
@@ -35,6 +39,20 @@ import SelectedTexts from './pages/SelectedTexts'
 import Terms from './pages/legal/Terms'
 import Privacy from './pages/legal/Privacy'
 
+// ゴミ箱の自動クリーンアップを実行するコンポーネント
+function TrashCleanupEffect() {
+  const { user } = useAuth()
+
+  useEffect(() => {
+    if (user) {
+      // アプリ起動時に一度だけ実行
+      cleanupTrash(user.id)
+    }
+  }, [user])
+
+  return null
+}
+
 // プロテクトされたルートコンポーネント
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -54,7 +72,12 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/auth/login" replace />
   }
 
-  return children
+  return (
+    <>
+      <TrashCleanupEffect />
+      {children}
+    </>
+  )
 }
 
 // パブリックルート（認証済みユーザーはダッシュボードにリダイレクト）
@@ -100,9 +123,9 @@ class ErrorBoundary extends React.Component {
         <div className="min-h-screen flex items-center justify-center bg-red-50">
           <div className="text-center max-w-md mx-auto p-6">
             <div className="mb-6">
-              <img 
-                src="/img/icon_circle.png" 
-                alt="ResearchVault" 
+              <img
+                src="/img/icon_circle.png"
+                alt="ResearchVault"
                 className="w-16 h-16 mx-auto"
               />
             </div>
@@ -137,7 +160,7 @@ function App() {
       try {
         // 必要な初期化処理があればここに記述
         console.log('ResearchVault initializing...')
-        
+
         // テーマの初期設定
         const savedTheme = localStorage.getItem('researchvault-theme')
         if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -161,9 +184,9 @@ function App() {
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
           <div className="mb-6">
-            <img 
-              src="/img/icon_circle.png" 
-              alt="ResearchVault" 
+            <img
+              src="/img/icon_circle.png"
+              alt="ResearchVault"
               className="w-16 h-16 mx-auto"
             />
           </div>
@@ -184,103 +207,108 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <ModalProvider>
-            <div className="App">
-            <SpeedInsights />
-            <Routes>
-            {/* 認証関連のルート */}
-            <Route
-              path="/auth/login"
-              element={
-                <PublicRoute>
-                  <AuthLayout>
-                    <Login />
-                  </AuthLayout>
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/auth/signup"
-              element={
-                <PublicRoute>
-                  <AuthLayout>
-                    <Signup />
-                  </AuthLayout>
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/auth/forgot-password"
-              element={
-                <PublicRoute>
-                  <AuthLayout>
-                    <ForgotPassword />
-                  </AuthLayout>
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/auth/reset-password"
-              element={
-                <PublicRoute>
-                  <AuthLayout>
-                    <ResetPassword />
-                  </AuthLayout>
-                </PublicRoute>
-              }
-            />
-            <Route path="/auth/callback" element={<AuthCallback />} />
+            <ReferenceActionProvider>
+              <ReferenceFetchQueueProvider>
+                <div className="App">
+                  <SpeedInsights />
+                  <ReferenceFetchStatus />
+                  <Routes>
+                    {/* 認証関連のルート */}
+                    <Route
+                      path="/auth/login"
+                      element={
+                        <PublicRoute>
+                          <AuthLayout>
+                            <Login />
+                          </AuthLayout>
+                        </PublicRoute>
+                      }
+                    />
+                    <Route
+                      path="/auth/signup"
+                      element={
+                        <PublicRoute>
+                          <AuthLayout>
+                            <Signup />
+                          </AuthLayout>
+                        </PublicRoute>
+                      }
+                    />
+                    <Route
+                      path="/auth/forgot-password"
+                      element={
+                        <PublicRoute>
+                          <AuthLayout>
+                            <ForgotPassword />
+                          </AuthLayout>
+                        </PublicRoute>
+                      }
+                    />
+                    <Route
+                      path="/auth/reset-password"
+                      element={
+                        <PublicRoute>
+                          <AuthLayout>
+                            <ResetPassword />
+                          </AuthLayout>
+                        </PublicRoute>
+                      }
+                    />
+                    <Route path="/auth/callback" element={<AuthCallback />} />
 
-            {/* 利用規約・プライバシーポリシー（パブリック） */}
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
+                    {/* 利用規約・プライバシーポリシー（パブリック） */}
+                    <Route path="/terms" element={<Terms />} />
+                    <Route path="/privacy" element={<Privacy />} />
 
-            {/* メインアプリケーションのルート */}
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <ProjectProvider>
-                    <Layout>
-                      <Routes>
-                        {/* ダッシュボード */}
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        
-                        {/* 参照管理 */}
-                        <Route path="/references" element={<References />} />
-                        <Route path="/references/:id" element={<ReferenceDetail />} />
-                        
-                        {/* プロジェクト管理 */}
-                        <Route path="/projects" element={<Projects />} />
-                        <Route path="/projects/:id" element={<ProjectDetail />} />
-                        
-                        {/* 引用生成 */}
-                        <Route path="/citations" element={<Citations />} />
-                        
-                        {/* 設定 */}
-                        <Route path="/settings" element={<Settings />} />
-                        <Route path="/account" element={<Account />} />
-                        
-                        {/* その他の機能 */}
-                        <Route path="/candidates" element={<Candidates />} />
-                        <Route path="/trash" element={<Trash />} />
-                        <Route path="/feedback" element={<Feedback />} />
-                        <Route path="/test" element={<Test />} />
-                        <Route path="/database-test" element={<DatabaseTest />} />
-                        <Route path="/selected-texts" element={<SelectedTexts />} />
-                        
-                        {/* ルートパスはダッシュボードにリダイレクト */}
-                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                        
-                        {/* 404ページ */}
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </Layout>
-                  </ProjectProvider>
-                </ProtectedRoute>
-              }
-            />
-            </Routes>
-            </div>
+                    {/* メインアプリケーションのルート */}
+                    <Route
+                      path="/*"
+                      element={
+                        <ProtectedRoute>
+                          <ProjectProvider>
+                            <Layout>
+                              <Routes>
+                                {/* ダッシュボード */}
+                                <Route path="/dashboard" element={<Dashboard />} />
+
+                                {/* 参照管理 */}
+                                <Route path="/references" element={<References />} />
+                                <Route path="/references/:id" element={<ReferenceDetail />} />
+
+                                {/* プロジェクト管理 */}
+                                <Route path="/projects" element={<Projects />} />
+                                <Route path="/projects/:id" element={<ProjectDetail />} />
+
+                                {/* 引用生成 */}
+                                <Route path="/citations" element={<Citations />} />
+
+                                {/* 設定 */}
+                                <Route path="/settings" element={<Settings />} />
+                                <Route path="/account" element={<Account />} />
+
+                                {/* その他の機能 */}
+                                <Route path="/candidates" element={<Candidates />} />
+                                <Route path="/trash" element={<Trash />} />
+                                <Route path="/feedback" element={<Feedback />} />
+                                <Route path="/test" element={<Test />} />
+                                <Route path="/database-test" element={<DatabaseTest />} />
+                                <Route path="/selected-texts" element={<SelectedTexts />} />
+
+                                {/* ルートパスはダッシュボードにリダイレクト */}
+                                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+                                {/* 404ページ */}
+                                <Route path="*" element={<NotFound />} />
+                              </Routes>
+                            </Layout>
+                          </ProjectProvider>
+                        </ProtectedRoute>
+                      }
+                    />
+                  </Routes>
+                </div>
+              </ReferenceFetchQueueProvider>
+            </ReferenceActionProvider>
           </ModalProvider>
         </AuthProvider>
       </ThemeProvider>

@@ -6,7 +6,7 @@ import App from './App.jsx'
 import './styles/globals.css'
 import { handleComponentError, ErrorHandler } from './utils/errorHandler.js'
 
-// 高度なエラーバウンダリーコンポーネント
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
@@ -19,7 +19,7 @@ class ErrorBoundary extends React.Component {
     }
     this.errorHandler = new ErrorHandler({
       enableReporting: import.meta.env.PROD,
-      enableToasts: false // ErrorBoundaryでは独自UI表示
+      enableToasts: false
     })
   }
 
@@ -36,10 +36,8 @@ class ErrorBoundary extends React.Component {
       errorInfo
     })
     
-    // 統一エラーハンドリングシステムを使用
     await handleComponentError(error, errorInfo)
     
-    // ユーザー行動の記録（分析用）
     this.recordUserAction('error_boundary_triggered', {
       errorMessage: error.message,
       componentStack: errorInfo.componentStack,
