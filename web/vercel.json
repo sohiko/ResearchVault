@@ -4,17 +4,11 @@
   "installCommand": "npm install",
   "framework": "vite",
   "functions": {
-    "api/auth/login.js": {
+    "api/auth.js": {
       "maxDuration": 30
     },
-    "api/auth/signup.js": {
+    "api/extension.js": {
       "maxDuration": 30
-    },
-    "api/extension/auth.js": {
-      "maxDuration": 30
-    },
-    "api/extension/health.js": {
-      "maxDuration": 10
     },
     "api/projects.js": {
       "maxDuration": 30
@@ -69,6 +63,26 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/auth/login",
+      "destination": "/api/auth.js?action=login"
+    },
+    {
+      "source": "/api/auth/signup",
+      "destination": "/api/auth.js?action=signup"
+    },
+    {
+      "source": "/api/extension/auth",
+      "destination": "/api/extension.js?action=auth"
+    },
+    {
+      "source": "/api/extension/health",
+      "destination": "/api/extension.js?action=health"
+    },
+    {
+      "source": "/api/extension/refresh",
+      "destination": "/api/extension.js?action=refresh"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
