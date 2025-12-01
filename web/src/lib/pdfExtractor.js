@@ -2,39 +2,19 @@
  * PDF抽出ユーティリティ
  * Gemini API、pdf.js、Tesseract.jsを使用してPDFから参照情報を抽出
  */
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 let pdfjsLibPromise = null
-let pdfWorkerSrc = null
-let pdfWorkerSrcPromise = null
-
-async function resolvePdfWorkerSrc() {
-  if (pdfWorkerSrc) {
-    return pdfWorkerSrc
-  }
-
-  if (!pdfWorkerSrcPromise) {
-    pdfWorkerSrcPromise = import('pdfjs-dist/build/pdf.worker.min.js?url')
-      .then((module) => {
-        pdfWorkerSrc = module?.default || module
-        return pdfWorkerSrc
-      })
-      .catch((error) => {
-        console.error('Failed to resolve pdf.js worker source:', error)
-        pdfWorkerSrcPromise = null
-        return null
-      })
-  }
-
-  return pdfWorkerSrcPromise
-}
+const CDN_WORKER_FALLBACK =
+  'https://unpkg.com/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs'
 
 async function loadPdfJs() {
   if (!pdfjsLibPromise) {
     pdfjsLibPromise = import('pdfjs-dist/build/pdf')
-      .then(async (pdfjsLib) => {
-        const workerSrc = await resolvePdfWorkerSrc()
-        if (workerSrc && pdfjsLib.GlobalWorkerOptions) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
+      .then((pdfjsLib) => {
+        if (pdfjsLib.GlobalWorkerOptions) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            pdfWorkerUrl || pdfjsLib.GlobalWorkerOptions.workerSrc || CDN_WORKER_FALLBACK
         }
         return pdfjsLib
       })
