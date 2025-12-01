@@ -3,6 +3,24 @@
  * Gemini API、pdf.js、Tesseract.jsを使用してPDFから参照情報を抽出
  */
 
+// pdf.js workerのURL（pdfjs-dist v5.x用）
+const PDF_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs'
+
+/**
+ * pdf.jsを初期化
+ * @returns {Promise<Object>} pdfjsLib
+ */
+async function initPdfJs() {
+  const pdfjsLib = await import('pdfjs-dist')
+  
+  // ワーカーの設定（一度だけ設定）
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL
+  }
+  
+  return pdfjsLib
+}
+
 /**
  * PDFをダウンロード
  * @param {string} url - PDFのURL
@@ -26,11 +44,8 @@ async function extractTextWithPdfJs(pdfData) {
     // ArrayBufferのdetached問題を回避するため、データをコピー
     const pdfDataCopy = pdfData.slice()
     
-    // pdf.jsライブラリを動的に読み込み
-    const pdfjsLib = await import('pdfjs-dist')
-    
-    // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+    // pdf.jsを初期化
+    const pdfjsLib = await initPdfJs()
     
     const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     let fullText = ''
@@ -62,11 +77,8 @@ async function extractTextWithOCR(pdfData) {
     // Tesseract.jsライブラリを動的に読み込み
     const Tesseract = await import('tesseract.js')
     
-    // PDFを画像に変換（簡略化のため、最初のページのみ）
-    const pdfjsLib = await import('pdfjs-dist')
-    
-    // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+    // pdf.jsを初期化
+    const pdfjsLib = await initPdfJs()
     
     const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     const page = await pdf.getPage(1)
@@ -99,10 +111,8 @@ async function extractPagesFromPDF(pdfData, pageNumbers) {
     // ArrayBufferのdetached問題を回避するため、データをコピー
     const pdfDataCopy = pdfData.slice()
     
-    const pdfjsLib = await import('pdfjs-dist')
-    
-    // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+    // pdf.jsを初期化
+    const pdfjsLib = await initPdfJs()
     
     const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     const totalPages = pdf.numPages
@@ -155,8 +165,8 @@ async function extractWithGemini(pdfData, apiKey, usePartialRead = true) {
     
     if (usePartialRead) {
       // 部分読み取り: 最初の5ページと最後の5ページ
-      const pdfjsLib = await import('pdfjs-dist')
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+      // pdf.jsを初期化
+      const pdfjsLib = await initPdfJs()
       
       const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
       const totalPages = pdf.numPages
@@ -223,14 +233,28 @@ ${atob(textBase64)}`
       })
       
       if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status}`)
+        const errorBody = await response.text().catch(() => '')
+        throw new Error(`Gemini API error: ${response.status} ${errorBody}`)
       }
       
       const data = await response.json()
-      const text = data.candidates[0]?.content?.parts[0]?.text
+      
+      // レスポンス検証
+      if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+        console.error('Gemini API response has no candidates:', data)
+        throw new Error('Gemini API returned no candidates')
+      }
+      
+      const candidate = data.candidates[0]
+      if (!candidate || !candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+        console.error('Gemini API response has invalid structure:', candidate)
+        throw new Error('Gemini API returned invalid response structure')
+      }
+      
+      const text = candidate.content.parts[0]?.text
       
       if (!text) {
-        throw new Error('No response from Gemini')
+        throw new Error('No text in Gemini response')
       }
       
       // JSONを抽出
@@ -296,14 +320,28 @@ ${atob(textBase64)}`
     })
     
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`)
+      const errorBody = await response.text().catch(() => '')
+      throw new Error(`Gemini API error: ${response.status} ${errorBody}`)
     }
     
     const data = await response.json()
-    const text = data.candidates[0]?.content?.parts[0]?.text
+    
+    // レスポンス検証
+    if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+      console.error('Gemini API response has no candidates:', data)
+      throw new Error('Gemini API returned no candidates')
+    }
+    
+    const candidate = data.candidates[0]
+    if (!candidate || !candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+      console.error('Gemini API response has invalid structure:', candidate)
+      throw new Error('Gemini API returned invalid response structure')
+    }
+    
+    const text = candidate.content.parts[0]?.text
     
     if (!text) {
-      throw new Error('No response from Gemini')
+      throw new Error('No text in Gemini response')
     }
     
     // JSONを抽出
@@ -366,14 +404,28 @@ ${text.substring(0, 4000)}
     })
     
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`)
+      const errorBody = await response.text().catch(() => '')
+      throw new Error(`Gemini API error: ${response.status} ${errorBody}`)
     }
     
     const data = await response.json()
-    const responseText = data.candidates[0]?.content?.parts[0]?.text
+    
+    // レスポンス検証
+    if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+      console.error('Gemini API response has no candidates:', data)
+      throw new Error('Gemini API returned no candidates')
+    }
+    
+    const candidate = data.candidates[0]
+    if (!candidate || !candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+      console.error('Gemini API response has invalid structure:', candidate)
+      throw new Error('Gemini API returned invalid response structure')
+    }
+    
+    const responseText = candidate.content.parts[0]?.text
     
     if (!responseText) {
-      throw new Error('No response from Gemini')
+      throw new Error('No text in Gemini response')
     }
     
     // JSONを抽出
