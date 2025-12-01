@@ -4,39 +4,58 @@
  */
 
 // pdf.js workerのCDN URL（pdfjs-dist v5.x用）
-// unpkgとjsdelivrの両方をフォールバックとして用意
-const WORKER_CDN_URLS = [
-  'https://unpkg.com/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs',
-  'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs'
-]
+const WORKER_CDN_URL = 'https://unpkg.com/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs'
 
 let pdfjsLibInstance = null
-let workerConfigured = false
 
 /**
  * pdf.jsを読み込んでworkerを設定
  */
 async function loadPdfJs() {
-  if (pdfjsLibInstance && workerConfigured) {
+  if (pdfjsLibInstance) {
     return pdfjsLibInstance
   }
 
   try {
-    // pdf.jsをインポート
-    const pdfjsLib = await import('pdfjs-dist')
+    // pdf.jsをインポート（build/pdfを直接インポート）
+    const pdfjsLib = await import('pdfjs-dist/build/pdf.mjs')
     
     // workerを明示的にCDNから設定（インポート直後に設定）
-    if (pdfjsLib.GlobalWorkerOptions && !workerConfigured) {
-      // CDN URLを使用（Viteのインポートに依存しない）
-      pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_CDN_URLS[0]
-      workerConfigured = true
-      console.log('pdf.js worker configured:', pdfjsLib.GlobalWorkerOptions.workerSrc)
+    // GlobalWorkerOptionsが存在する場合のみ設定
+    if (pdfjsLib.GlobalWorkerOptions) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_CDN_URL
+      console.log('pdf.js worker configured:', WORKER_CDN_URL)
     }
     
     pdfjsLibInstance = pdfjsLib
     return pdfjsLib
   } catch (error) {
     console.error('Failed to load pdf.js:', error)
+    throw error
+  }
+}
+
+/**
+ * PDFドキュメントを読み込む（workerエラー対策付き）
+ * @param {Object} pdfjsLib - pdf.jsライブラリ
+ * @param {ArrayBuffer} data - PDFデータ
+ * @returns {Promise<Object>} PDFドキュメント
+ */
+async function getDocumentSafe(pdfjsLib, data) {
+  try {
+    // まず通常の方法で試行
+    return await pdfjsLib.getDocument({ data }).promise
+  } catch (error) {
+    // workerエラーの場合、workerを無効化して再試行
+    if (error.message && error.message.includes('worker')) {
+      console.warn('Worker failed, retrying without worker...')
+      // workerを無効化（isEvalSupportedをfalseに設定）
+      return await pdfjsLib.getDocument({ 
+        data,
+        isEvalSupported: false,
+        useSystemFonts: true
+      }).promise
+    }
     throw error
   }
 }
@@ -67,7 +86,7 @@ async function extractTextWithPdfJs(pdfData) {
     // pdf.jsライブラリを動的に読み込み
     const pdfjsLib = await loadPdfJs()
     
-    const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
+    const pdf = await getDocumentSafe(pdfjsLib, pdfDataCopy)
     let fullText = ''
     
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -100,7 +119,7 @@ async function extractTextWithOCR(pdfData) {
     // PDFを画像に変換（簡略化のため、最初のページのみ）
     const pdfjsLib = await loadPdfJs()
     
-    const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
+    const pdf = await getDocumentSafe(pdfjsLib, pdfDataCopy)
     const page = await pdf.getPage(1)
     
     const viewport = page.getViewport({ scale: 2.0 })
@@ -133,7 +152,7 @@ async function extractPagesFromPDF(pdfData, pageNumbers) {
     
     const pdfjsLib = await loadPdfJs()
     
-    const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
+    const pdf = await getDocumentSafe(pdfjsLib, pdfDataCopy)
     const totalPages = pdf.numPages
     
     // ページ番号を有効な範囲に調整
@@ -206,7 +225,7 @@ async function extractWithGemini(pdfData, apiKey, usePartialRead = true) {
       // 部分読み取り: 最初の5ページと最後の5ページ
       const pdfjsLib = await loadPdfJs()
       
-      const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
+      const pdf = await getDocumentSafe(pdfjsLib, pdfDataCopy)
       const totalPages = pdf.numPages
       
       // 最初の5ページと最後の5ページを抽出
