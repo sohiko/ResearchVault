@@ -2,29 +2,43 @@
  * PDF抽出ユーティリティ
  * Gemini API、pdf.js、Tesseract.jsを使用してPDFから参照情報を抽出
  */
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-let pdfjsLibPromise = null
-const CDN_WORKER_FALLBACK =
-  'https://unpkg.com/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs'
+// pdf.js workerのCDN URL（pdfjs-dist v5.x用）
+// unpkgとjsdelivrの両方をフォールバックとして用意
+const WORKER_CDN_URLS = [
+  'https://unpkg.com/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs',
+  'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs'
+]
 
+let pdfjsLibInstance = null
+let workerConfigured = false
+
+/**
+ * pdf.jsを読み込んでworkerを設定
+ */
 async function loadPdfJs() {
-  if (!pdfjsLibPromise) {
-    pdfjsLibPromise = import('pdfjs-dist/build/pdf')
-      .then((pdfjsLib) => {
-        if (pdfjsLib.GlobalWorkerOptions) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc =
-            pdfWorkerUrl || pdfjsLib.GlobalWorkerOptions.workerSrc || CDN_WORKER_FALLBACK
-        }
-        return pdfjsLib
-      })
-      .catch((error) => {
-        pdfjsLibPromise = null
-        throw error
-      })
+  if (pdfjsLibInstance && workerConfigured) {
+    return pdfjsLibInstance
   }
 
-  return pdfjsLibPromise
+  try {
+    // pdf.jsをインポート
+    const pdfjsLib = await import('pdfjs-dist')
+    
+    // workerを明示的にCDNから設定（インポート直後に設定）
+    if (pdfjsLib.GlobalWorkerOptions && !workerConfigured) {
+      // CDN URLを使用（Viteのインポートに依存しない）
+      pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_CDN_URLS[0]
+      workerConfigured = true
+      console.log('pdf.js worker configured:', pdfjsLib.GlobalWorkerOptions.workerSrc)
+    }
+    
+    pdfjsLibInstance = pdfjsLib
+    return pdfjsLib
+  } catch (error) {
+    console.error('Failed to load pdf.js:', error)
+    throw error
+  }
 }
 
 /**
