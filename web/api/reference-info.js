@@ -9,12 +9,26 @@ const PDF_MIME_TYPES = [
   'text/x-pdf'
 ]
 
+const BROWSER_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+
 const DEFAULT_HEADERS = {
-  'User-Agent': 'ResearchVaultBot/1.0 (+https://researchvault.app)',
-  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+  'User-Agent': BROWSER_USER_AGENT,
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
 }
 
 const RESPONSE_CACHE_CONTROL = 'private, max-age=300'
+const REQUEST_TIMEOUT_MS = 15000
+const FALLBACK_STATUS_CODES = new Set([403, 410, 429, 451])
+
+class FetchHtmlError extends Error {
+  constructor(message, status = null) {
+    super(message)
+    this.name = 'FetchHtmlError'
+    this.status = status
+  }
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -56,7 +70,8 @@ export default async function handler(req, res) {
         isPdf: true,
         url: normalizedUrl,
         reason: 'body',
-        contentType: htmlResult.contentType
+        contentType: htmlResult.contentType,
+        fetchSource: htmlResult.fetchSource || 'direct'
       })
     }
 
@@ -66,7 +81,8 @@ export default async function handler(req, res) {
       isPdf: false,
       url: normalizedUrl,
       contentType: htmlResult.contentType,
-      metadata
+      metadata,
+      fetchSource: htmlResult.fetchSource || 'direct'
     })
   } catch (error) {
     console.error('reference-info api error:', error)
@@ -79,11 +95,15 @@ export default async function handler(req, res) {
 
 async function fetchHead(url) {
   try {
-    const response = await fetch(url, {
-      method: 'HEAD',
-      redirect: 'follow',
-      headers: DEFAULT_HEADERS
-    })
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'HEAD',
+        redirect: 'follow',
+        headers: DEFAULT_HEADERS
+      },
+      REQUEST_TIMEOUT_MS / 2
+    )
 
     const contentType = response.headers.get('content-type') || ''
     const isPdf = isPdfContentType(contentType) || isPdfUrl(url)
@@ -108,32 +128,128 @@ async function fetchHead(url) {
 }
 
 async function fetchHtml(url, headResult) {
-  const response = await fetch(url, {
-    method: 'GET',
-    redirect: 'follow',
-    headers: DEFAULT_HEADERS
-  })
+  try {
+    return await fetchHtmlDirect(url, headResult)
+  } catch (error) {
+    const status = error instanceof FetchHtmlError ? error.status : null
+
+    if (shouldUseFallback(status)) {
+      console.warn('reference-info: falling back to proxy fetch', {
+        url,
+        status: status ?? 'unknown',
+        message: error.message
+      })
+      return fetchHtmlViaFallback(url, headResult, status)
+    }
+
+    throw error
+  }
+}
+
+async function fetchHtmlDirect(url, headResult) {
+  try {
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'GET',
+        redirect: 'follow',
+        headers: DEFAULT_HEADERS
+      },
+      REQUEST_TIMEOUT_MS
+    )
+
+    if (!response.ok) {
+      throw new FetchHtmlError(`Failed to fetch HTML (${response.status})`, response.status)
+    }
+
+    const contentType = response.headers.get('content-type') || headResult.contentType || ''
+
+    if (isPdfContentType(contentType)) {
+      return {
+        html: '',
+        contentType,
+        isPdf: true,
+        fetchSource: 'direct'
+      }
+    }
+
+    const html = await response.text()
+
+    return {
+      html,
+      contentType,
+      isPdf: false,
+      fetchSource: 'direct'
+    }
+  } catch (error) {
+    if (error instanceof FetchHtmlError) {
+      throw error
+    }
+
+    throw new FetchHtmlError(error.message || 'Failed to fetch HTML (network-error)')
+  }
+}
+
+async function fetchHtmlViaFallback(url, headResult, originalStatus) {
+  const fallbackUrl = buildFallbackUrl(url)
+  const response = await fetchWithTimeout(
+    fallbackUrl,
+    {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        ...DEFAULT_HEADERS,
+        // 一部のプロキシでは標準のユーザーエージェントが必要
+        'User-Agent': BROWSER_USER_AGENT
+      }
+    },
+    REQUEST_TIMEOUT_MS
+  )
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch HTML (${response.status})`)
+    throw new FetchHtmlError(
+      `Failed to fetch HTML (${originalStatus ?? 'network'}) [fallback ${response.status}]`,
+      originalStatus ?? response.status
+    )
   }
 
-  const contentType = response.headers.get('content-type') || headResult.contentType || ''
-
-  if (isPdfContentType(contentType)) {
-    return {
-      html: '',
-      contentType,
-      isPdf: true
-    }
-  }
-
+  const contentType =
+    response.headers.get('content-type') || headResult.contentType || 'text/html; charset=utf-8'
   const html = await response.text()
 
   return {
     html,
     contentType,
-    isPdf: false
+    isPdf: false,
+    fetchSource: 'proxy'
+  }
+}
+
+function shouldUseFallback(status) {
+  if (status === null || typeof status === 'undefined') {
+    return true
+  }
+  return FALLBACK_STATUS_CODES.has(status)
+}
+
+function buildFallbackUrl(url) {
+  if (/^https?:\/\//i.test(url)) {
+    return `https://r.jina.ai/${url}`
+  }
+  return `https://r.jina.ai/https://${url}`
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    })
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
