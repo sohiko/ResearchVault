@@ -3,6 +3,50 @@
  * Gemini API、pdf.js、Tesseract.jsを使用してPDFから参照情報を抽出
  */
 
+let pdfjsLibPromise = null
+let pdfWorkerSrc = null
+let pdfWorkerSrcPromise = null
+
+async function resolvePdfWorkerSrc() {
+  if (pdfWorkerSrc) {
+    return pdfWorkerSrc
+  }
+
+  if (!pdfWorkerSrcPromise) {
+    pdfWorkerSrcPromise = import('pdfjs-dist/build/pdf.worker.min.js?url')
+      .then((module) => {
+        pdfWorkerSrc = module?.default || module
+        return pdfWorkerSrc
+      })
+      .catch((error) => {
+        console.error('Failed to resolve pdf.js worker source:', error)
+        pdfWorkerSrcPromise = null
+        return null
+      })
+  }
+
+  return pdfWorkerSrcPromise
+}
+
+async function loadPdfJs() {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = import('pdfjs-dist/build/pdf')
+      .then(async (pdfjsLib) => {
+        const workerSrc = await resolvePdfWorkerSrc()
+        if (workerSrc && pdfjsLib.GlobalWorkerOptions) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
+        }
+        return pdfjsLib
+      })
+      .catch((error) => {
+        pdfjsLibPromise = null
+        throw error
+      })
+  }
+
+  return pdfjsLibPromise
+}
+
 /**
  * PDFをダウンロード
  * @param {string} url - PDFのURL
@@ -27,10 +71,7 @@ async function extractTextWithPdfJs(pdfData) {
     const pdfDataCopy = pdfData.slice()
     
     // pdf.jsライブラリを動的に読み込み
-    const pdfjsLib = await import('pdfjs-dist')
-    
-    // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+    const pdfjsLib = await loadPdfJs()
     
     const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     let fullText = ''
@@ -63,10 +104,7 @@ async function extractTextWithOCR(pdfData) {
     const Tesseract = await import('tesseract.js')
     
     // PDFを画像に変換（簡略化のため、最初のページのみ）
-    const pdfjsLib = await import('pdfjs-dist')
-    
-    // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+    const pdfjsLib = await loadPdfJs()
     
     const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     const page = await pdf.getPage(1)
@@ -99,10 +137,7 @@ async function extractPagesFromPDF(pdfData, pageNumbers) {
     // ArrayBufferのdetached問題を回避するため、データをコピー
     const pdfDataCopy = pdfData.slice()
     
-    const pdfjsLib = await import('pdfjs-dist')
-    
-    // ワーカーの設定
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+    const pdfjsLib = await loadPdfJs()
     
     const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
     const totalPages = pdf.numPages
@@ -155,8 +190,7 @@ async function extractWithGemini(pdfData, apiKey, usePartialRead = true) {
     
     if (usePartialRead) {
       // 部分読み取り: 最初の5ページと最後の5ページ
-      const pdfjsLib = await import('pdfjs-dist')
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+      const pdfjsLib = await loadPdfJs()
       
       const pdf = await pdfjsLib.getDocument({ data: pdfDataCopy }).promise
       const totalPages = pdf.numPages
@@ -227,7 +261,7 @@ ${atob(textBase64)}`
       }
       
       const data = await response.json()
-      const text = data.candidates[0]?.content?.parts[0]?.text
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text
       
       if (!text) {
         throw new Error('No response from Gemini')
@@ -300,7 +334,7 @@ ${atob(textBase64)}`
     }
     
     const data = await response.json()
-    const text = data.candidates[0]?.content?.parts[0]?.text
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
     
     if (!text) {
       throw new Error('No response from Gemini')
@@ -370,7 +404,7 @@ ${text.substring(0, 4000)}
     }
     
     const data = await response.json()
-    const responseText = data.candidates[0]?.content?.parts[0]?.text
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text
     
     if (!responseText) {
       throw new Error('No response from Gemini')
