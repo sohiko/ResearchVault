@@ -110,15 +110,41 @@ export default function Candidates() {
         return
       }
 
-      // 拡張機能が利用可能かチェック
-      if (typeof chrome === 'undefined' || !chrome.runtime) {
-        console.debug('Chrome extension not available')
-        return
-      }
-
       // 最後の分析から5分以上経過している場合のみ実行
       if (lastAnalyzedTime && Date.now() - lastAnalyzedTime < 5 * 60 * 1000) {
         console.debug('Skipping auto-analysis: too soon since last analysis')
+        return
+      }
+
+      // 拡張機能が利用可能かチェック（postMessageベース）
+      const extensionAvailable = await new Promise((resolve) => {
+        const checkTimeout = setTimeout(() => {
+          window.removeEventListener('message', checkHandler)
+          resolve(false)
+        }, 2000) // 2秒でタイムアウト
+        
+        const checkHandler = (event) => {
+          if (event.data && 
+              (event.data.type === 'RESEARCHVAULT_EXTENSION_RESPONSE' ||
+               (event.data.type === 'RESEARCHVAULT_EXTENSION_CHECK' && event.data.source === 'extension'))) {
+            clearTimeout(checkTimeout)
+            window.removeEventListener('message', checkHandler)
+            resolve(true)
+          }
+        }
+        
+        window.addEventListener('message', checkHandler)
+        
+        // 拡張機能チェックメッセージを送信
+        window.postMessage({
+          type: 'RESEARCHVAULT_EXTENSION_CHECK',
+          source: 'webpage',
+          timestamp: Date.now()
+        }, '*')
+      })
+
+      if (!extensionAvailable) {
+        console.debug('Chrome extension not available')
         return
       }
 
@@ -337,13 +363,42 @@ export default function Candidates() {
   const handleAnalyzeHistory = async () => {
     // 拡張機能から履歴を分析
     try {
-      if (typeof chrome === 'undefined' || !chrome.runtime) {
-        toast.error('拡張機能が利用できません。Chrome拡張機能をインストールしてください。')
-        return
-      }
-
       setLoading(true)
       const loadingToast = toast.loading('履歴を分析しています...')
+
+      // まず拡張機能が利用可能かチェック（postMessageベース）
+      const extensionAvailable = await new Promise((resolve) => {
+        const checkTimeout = setTimeout(() => {
+          window.removeEventListener('message', checkHandler)
+          resolve(false)
+        }, 2000) // 2秒でタイムアウト
+        
+        const checkHandler = (event) => {
+          if (event.data && 
+              (event.data.type === 'RESEARCHVAULT_EXTENSION_RESPONSE' ||
+               (event.data.type === 'RESEARCHVAULT_EXTENSION_CHECK' && event.data.source === 'extension'))) {
+            clearTimeout(checkTimeout)
+            window.removeEventListener('message', checkHandler)
+            resolve(true)
+          }
+        }
+        
+        window.addEventListener('message', checkHandler)
+        
+        // 拡張機能チェックメッセージを送信
+        window.postMessage({
+          type: 'RESEARCHVAULT_EXTENSION_CHECK',
+          source: 'webpage',
+          timestamp: Date.now()
+        }, '*')
+      })
+
+      if (!extensionAvailable) {
+        toast.dismiss(loadingToast)
+        toast.error('拡張機能が利用できません。Chrome拡張機能をインストールしてください。')
+        setLoading(false)
+        return
+      }
 
       // content scriptを通じてメッセージを送信
       window.postMessage({
