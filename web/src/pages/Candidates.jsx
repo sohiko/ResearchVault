@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 import React, { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
