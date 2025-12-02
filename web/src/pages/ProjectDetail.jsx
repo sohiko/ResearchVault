@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useModalContext } from '../hooks/useModalContext'
 import { usePageFocus } from '../hooks/usePageFocus'
@@ -17,7 +17,10 @@ import {
   Trash2,
   Copy,
   Download,
-  X
+  X,
+  Lock,
+  Eye,
+  AlertCircle
 } from 'lucide-react'
 
 // コンポーネント
@@ -33,10 +36,14 @@ import { generateProjectCitations } from '../utils/citationGenerator'
 
 export default function ProjectDetail() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { hasOpenModals } = useModalContext()
   const { pendingAction, clearPendingAction } = useReferenceAction()
+  
+  // URLパラメータからトークンを取得（リンク共有用）
+  const sharingToken = searchParams.get('token')
   
   // 状態管理
   const [project, setProject] = useState(null)
@@ -44,6 +51,10 @@ export default function ProjectDetail() {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  
+  // アクセス権限の状態
+  const [accessType, setAccessType] = useState(null) // 'owner' | 'member' | 'link_sharing' | null
+  const [memberRole, setMemberRole] = useState(null) // 'viewer' | 'editor' | 'admin' | null
   
   // モーダル状態
   const [showAddReference, setShowAddReference] = useState(false)
@@ -70,7 +81,7 @@ export default function ProjectDetail() {
   const debouncedSearchQuery = useDebounce(searchQuery, 500)
 
   const loadProject = useCallback(async () => {
-    if (!id || !user) {return}
+    if (!id || !user) return
     
     // モーダルが開いている場合はリロードをスキップ
     if (hasOpenModals) {
@@ -90,8 +101,8 @@ export default function ProjectDetail() {
 
     if (projectError) {
       if (projectError.code === 'PGRST116') {
-        navigate('/projects')
-        toast.error('プロジェクトが見つかりません')
+        // プロジェクトが見つからない
+        setError('プロジェクトが見つかりません')
         return
       }
       throw projectError
@@ -99,9 +110,12 @@ export default function ProjectDetail() {
 
     // アクセス権限をチェック
     const isOwner = projectData.owner_id === user.id
-    let hasAccess = isOwner
+    let currentAccessType = null
+    let currentMemberRole = null
 
-    if (!isOwner) {
+    if (isOwner) {
+      currentAccessType = 'owner'
+    } else {
       // メンバーかどうかチェック
       const { data: memberData } = await supabase
         .from('project_members')
@@ -110,18 +124,30 @@ export default function ProjectDetail() {
         .eq('user_id', user.id)
         .single()
 
-      hasAccess = !!memberData
+      if (memberData) {
+        currentAccessType = 'member'
+        currentMemberRole = memberData.role
+      } else if (projectData.is_link_sharing_enabled && sharingToken) {
+        // リンク共有でのアクセスをチェック
+        if (projectData.link_sharing_token === sharingToken) {
+          currentAccessType = 'link_sharing'
+        }
+      }
     }
 
-    if (!hasAccess) {
-      navigate('/projects')
-      toast.error('このプロジェクトにアクセスする権限がありません')
+    if (!currentAccessType) {
+      // アクセス権限なし
+      if (projectData.is_link_sharing_enabled) {
+        // リンク共有は有効だが、トークンが不正または未指定
+        setError('このプロジェクトにアクセスするには、正しい共有リンクが必要です')
+      } else {
+        setError('このプロジェクトにアクセスする権限がありません')
+      }
       return
     }
 
     // オーナーの場合は、project_membersに自分自身が含まれていないことを確認
     if (isOwner) {
-      // オーナーがメンバーテーブルに誤って追加されている場合は削除
       await supabase
         .from('project_members')
         .delete()
@@ -130,10 +156,12 @@ export default function ProjectDetail() {
     }
 
     setProject(projectData)
-  }, [id, user, navigate, hasOpenModals])
+    setAccessType(currentAccessType)
+    setMemberRole(currentMemberRole)
+  }, [id, user, hasOpenModals, sharingToken])
 
   const loadReferences = useCallback(async () => {
-    if (!id) {return}
+    if (!id) return
     
     // モーダルが開いている場合はリロードをスキップ
     if (hasOpenModals) {
@@ -159,7 +187,7 @@ export default function ProjectDetail() {
 
     const { data, error } = await query
 
-    if (error) {throw error}
+    if (error) throw error
 
     // データの整形
     const formattedReferences = data.map(ref => ({
@@ -173,7 +201,7 @@ export default function ProjectDetail() {
   }, [id, sortBy, sortOrder, hasOpenModals])
 
   const loadMembers = useCallback(async () => {
-    if (!id || !user) {return}
+    if (!id || !user) return
     
     // モーダルが開いている場合はリロードをスキップ
     if (hasOpenModals) {
@@ -190,13 +218,13 @@ export default function ProjectDetail() {
       .eq('project_id', id)
       .neq('user_id', user.id) // オーナー（現在のユーザー）を除外
 
-    if (error) {throw error}
+    if (error) throw error
 
     setMembers(data || [])
   }, [id, user, hasOpenModals])
 
   const loadCitationSettings = useCallback(async () => {
-    if (!user) {return}
+    if (!user) return
     
     try {
       const { data } = await supabase
@@ -294,7 +322,7 @@ export default function ProjectDetail() {
         .select()
         .single()
 
-      if (error) {throw error}
+      if (error) throw error
 
       await loadReferences()
       setShowAddReference(false)
@@ -321,7 +349,7 @@ export default function ProjectDetail() {
         })
         .eq('id', referenceToDelete)
 
-      if (error) {throw error}
+      if (error) throw error
 
       // ローカル状態から削除されたアイテムを即座に除去
       setReferences(prev => prev.filter(ref => ref.id !== referenceToDelete))
@@ -347,7 +375,7 @@ export default function ProjectDetail() {
         .select()
         .single()
 
-      if (error) {throw error}
+      if (error) throw error
 
       setProject(data)
       setShowEditModal(false)
@@ -369,7 +397,7 @@ export default function ProjectDetail() {
         .update(updateData)
         .eq('id', id)
 
-      if (error) {throw error}
+      if (error) throw error
 
       // ローカル状態を更新
       setReferences(prev => 
@@ -434,7 +462,7 @@ export default function ProjectDetail() {
         })
         .eq('id', id)
 
-      if (error) {throw error}
+      if (error) throw error
 
       toast.success('プロジェクトを削除しました')
       navigate('/projects')
@@ -446,10 +474,19 @@ export default function ProjectDetail() {
     }
   }
 
-  const isOwner = project?.owner_id === user?.id
-  const userRole = project?.project_members?.[0]?.role || (isOwner ? 'owner' : 'viewer')
-  const canEdit = isOwner || userRole === 'editor'
-  const canShare = isOwner || userRole === 'editor'
+  // アクセス権限に基づく操作可否の判定
+  const isOwner = accessType === 'owner'
+  const isMember = accessType === 'member'
+  const isLinkSharing = accessType === 'link_sharing'
+  
+  // 表示用のロール
+  const displayRole = isOwner ? 'owner' : (isMember ? memberRole : 'link_viewer')
+  
+  // 編集権限: オーナーまたは編集者権限を持つメンバー
+  const canEdit = isOwner || (isMember && (memberRole === 'editor' || memberRole === 'admin'))
+  
+  // 共有設定の変更権限: オーナーのみ
+  const canShare = isOwner || (isMember && (memberRole === 'editor' || memberRole === 'admin'))
 
   // ローカルフィルタリング（検索クエリによるフィルタリング）
   const filteredReferences = useMemo(() => {
@@ -487,13 +524,16 @@ export default function ProjectDetail() {
   if (error) {
     return (
       <div className="text-center py-12">
-        <div className="text-red-600 text-xl mb-4">エラーが発生しました</div>
-        <p className="text-gray-600 mb-6">{error}</p>
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+          <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+        </div>
+        <div className="text-red-600 dark:text-red-400 text-xl mb-4">アクセスできません</div>
+        <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">{error}</p>
         <button
-          onClick={loadProjectData}
+          onClick={() => navigate('/projects')}
           className="btn btn-primary"
         >
-          再試行
+          プロジェクト一覧に戻る
         </button>
       </div>
     )
@@ -509,26 +549,58 @@ export default function ProjectDetail() {
 
   return (
     <div className="space-y-6">
+      {/* リンク共有での閲覧中バナー */}
+      {isLinkSharing && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-center gap-3">
+          <Eye className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-blue-800 dark:text-blue-300 font-medium">閲覧モード</p>
+            <p className="text-blue-600 dark:text-blue-400 text-sm">
+              共有リンクからアクセスしています。このプロジェクトは閲覧のみ可能です。
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">
-            {project.name}
-          </h1>
+          <div className="flex items-center gap-3">
+            <div 
+              className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+              style={{ backgroundColor: project.color || '#3b82f6' }}
+            >
+              {project.icon || '📂'}
+            </div>
+            <h1 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">
+              {project.name}
+            </h1>
+          </div>
           <p className="text-secondary-600 dark:text-secondary-400 mt-1">
             {project.description || 'プロジェクトの説明はありません'}
           </p>
           <div className="flex items-center gap-4 mt-2 text-sm text-secondary-500">
             <span>{references.length} 件の参照</span>
             <span>作成日: {format(new Date(project.created_at), 'yyyy年MM月dd日', { locale: ja })}</span>
-            <span className={`px-2 py-1 rounded-full text-xs ${
-              userRole === 'owner' ? 'bg-purple-100 text-purple-800' :
-              userRole === 'editor' ? 'bg-green-100 text-green-800' :
-              'bg-gray-100 text-gray-800'
+            <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
+              displayRole === 'owner' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+              displayRole === 'editor' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+              displayRole === 'admin' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' :
+              displayRole === 'link_viewer' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' :
+              'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
             }`}>
-              {userRole === 'owner' ? 'オーナー' :
-               userRole === 'editor' ? '編集者' : '閲覧者'}
+              {displayRole === 'link_viewer' && <Eye className="w-3 h-3" />}
+              {displayRole === 'owner' ? 'オーナー' :
+               displayRole === 'editor' ? '編集者' :
+               displayRole === 'admin' ? '管理者' :
+               displayRole === 'link_viewer' ? 'リンク共有' : '閲覧者'}
             </span>
+            {project.is_link_sharing_enabled && isOwner && (
+              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                リンク共有有効
+              </span>
+            )}
           </div>
         </div>
         
@@ -553,56 +625,58 @@ export default function ProjectDetail() {
             </button>
           )}
 
-          {/* 3点リーダーメニュー */}
-          <div className="relative dropdown-menu">
-            <button
-              onClick={() => setShowDropdownMenu(!showDropdownMenu)}
-              className="btn btn-outline p-2"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            
-            {showDropdownMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10">
-                {canShare && (
-                  <button
-                    onClick={() => {
-                      setShowShareModal(true)
-                      setShowDropdownMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    共有
-                  </button>
-                )}
-                {canEdit && (
-                  <button
-                    onClick={() => {
-                      setShowEditModal(true)
-                      setShowDropdownMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    編集
-                  </button>
-                )}
-                {isOwner && (
-                  <button
-                    onClick={() => {
-                      setShowProjectDeleteConfirm(true)
-                      setShowDropdownMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    削除
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          {/* 3点リーダーメニュー（リンク共有の場合は非表示） */}
+          {!isLinkSharing && (
+            <div className="relative dropdown-menu">
+              <button
+                onClick={() => setShowDropdownMenu(!showDropdownMenu)}
+                className="btn btn-outline p-2"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              
+              {showDropdownMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                  {canShare && (
+                    <button
+                      onClick={() => {
+                        setShowShareModal(true)
+                        setShowDropdownMenu(false)
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      共有
+                    </button>
+                  )}
+                  {canEdit && (
+                    <button
+                      onClick={() => {
+                        setShowEditModal(true)
+                        setShowDropdownMenu(false)
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      編集
+                    </button>
+                  )}
+                  {isOwner && (
+                    <button
+                      onClick={() => {
+                        setShowProjectDeleteConfirm(true)
+                        setShowDropdownMenu(false)
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      削除
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -618,14 +692,14 @@ export default function ProjectDetail() {
                   placeholder="参照を検索..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
               <div className="flex gap-2">
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 >
                   <option value="saved_at">保存日時</option>
                   <option value="title">タイトル</option>
@@ -633,7 +707,7 @@ export default function ProjectDetail() {
                 </select>
                 <button
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100"
                 >
                   {sortOrder === 'asc' ? '↑' : '↓'}
                 </button>
@@ -645,8 +719,8 @@ export default function ProjectDetail() {
           {filteredReferences.length === 0 ? (
             <div className="card p-8 text-center">
               <div className="text-gray-400 text-6xl mb-4">📚</div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">参照がありません</h3>
-              <p className="text-gray-600 mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">参照がありません</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
                 {searchQuery ? '検索条件に一致する参照が見つかりません' : 'このプロジェクトには参照が追加されていません'}
               </p>
               {canEdit && !searchQuery && (
@@ -679,19 +753,19 @@ export default function ProjectDetail() {
         <div className="space-y-6">
           {/* プロジェクト統計 */}
           <div className="card p-4">
-            <h3 className="font-medium text-gray-900 mb-4">統計情報</h3>
+            <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">統計情報</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-gray-600">参照数</span>
-                <span className="font-medium">{references.length}</span>
+                <span className="text-gray-600 dark:text-gray-400">参照数</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{references.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">メンバー数</span>
-                <span className="font-medium">{members.length + 1}</span>
+                <span className="text-gray-600 dark:text-gray-400">メンバー数</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{members.length + 1}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">最終更新</span>
-                <span className="font-medium text-sm">
+                <span className="text-gray-600 dark:text-gray-400">最終更新</span>
+                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                   {format(new Date(project.updated_at), 'MM/dd', { locale: ja })}
                 </span>
               </div>
@@ -700,21 +774,21 @@ export default function ProjectDetail() {
 
           {/* メンバー一覧 */}
           <div className="card p-4">
-            <h3 className="font-medium text-gray-900 mb-4">メンバー</h3>
+            <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">メンバー</h3>
             <div className="space-y-3">
               {/* オーナー */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-purple-600 font-medium text-sm">
+                  <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                    <span className="text-purple-600 dark:text-purple-400 font-medium text-sm">
                       {project.profiles?.name?.[0] || project.profiles?.email?.[0] || 'O'}
                     </span>
                   </div>
                   <div>
-                    <div className="font-medium text-sm">
+                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
                       {project.profiles?.name || project.profiles?.email || 'オーナー'}
                     </div>
-                    <div className="text-xs text-gray-500">オーナー</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">オーナー</div>
                   </div>
                 </div>
               </div>
@@ -723,17 +797,17 @@ export default function ProjectDetail() {
               {members.map((member) => (
                 <div key={member.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                      <span className="text-gray-600 font-medium text-sm">
+                    <div className="w-8 h-8 bg-gray-100 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                      <span className="text-gray-600 dark:text-gray-300 font-medium text-sm">
                         {member.profiles?.name?.[0] || member.profiles?.email?.[0] || 'U'}
                       </span>
                     </div>
                     <div>
-                      <div className="font-medium text-sm">
+                      <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
                         {member.profiles?.name || member.profiles?.email || 'ユーザー'}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {member.role === 'editor' ? '編集者' : '閲覧者'}
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {member.role === 'editor' ? '編集者' : member.role === 'admin' ? '管理者' : '閲覧者'}
                       </div>
                     </div>
                   </div>
@@ -801,7 +875,7 @@ export default function ProjectDetail() {
                   <select
                     value={citationFormat}
                     onChange={(e) => setCitationFormat(e.target.value)}
-                    className="px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
                     <option value="APA">APA</option>
                     <option value="MLA">MLA</option>
@@ -819,7 +893,7 @@ export default function ProjectDetail() {
                   </button>
                   <button
                     onClick={() => setShowCitationModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -831,7 +905,7 @@ export default function ProjectDetail() {
               <textarea
                 value={generatedCitations}
                 readOnly
-                className="w-full h-64 p-4 border border-gray-300 rounded-lg font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full h-64 p-4 border border-gray-300 dark:border-gray-600 rounded-lg font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 placeholder="引用文がここに表示されます..."
               />
             </div>

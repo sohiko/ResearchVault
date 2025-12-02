@@ -13,6 +13,12 @@
     "api/projects.js": {
       "maxDuration": 30
     },
+    "api/projects/[id].js": {
+      "maxDuration": 30
+    },
+    "api/invitations.js": {
+      "maxDuration": 30
+    },
     "api/references.js": {
       "maxDuration": 30
     },

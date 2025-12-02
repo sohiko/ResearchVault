@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     return res.status(200).end()
   }
 
-  const { id } = req.query
+  const { id, token } = req.query
 
   if (!id) {
     return res.status(400).json({ error: 'プロジェクトIDが必要です' })
@@ -33,8 +33,8 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: '認証が必要です' })
     }
 
-    const token = authHeader.split(' ')[1]
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const authToken = authHeader.split(' ')[1]
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authToken)
 
     if (authError || !user) {
       return res.status(401).json({ error: '無効な認証トークンです' })
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
-        return handleGetProject(req, res, id, user.id)
+        return handleGetProject(req, res, id, user.id, token)
       case 'PUT':
         return handleUpdateProject(req, res, id, user.id)
       case 'DELETE':
@@ -59,39 +59,85 @@ export default async function handler(req, res) {
   }
 }
 
-async function handleGetProject(req, res, projectId, userId) {
+async function handleGetProject(req, res, projectId, userId, sharingToken) {
   try {
-    const { data: project, error } = await supabase
+    // まずプロジェクトを取得（リンク共有の確認のため）
+    const { data: project, error: projectError } = await supabase
       .from('projects')
       .select(`
         *,
-        project_members!inner(role),
-        references(id, title, url, saved_at)
+        profiles!owner_id (id, name, email)
       `)
       .eq('id', projectId)
-      .or(`owner_id.eq.${userId},project_members.user_id.eq.${userId}`)
       .single()
 
-    if (error) {
-      if (error.code === 'PGRST116') {
+    if (projectError) {
+      if (projectError.code === 'PGRST116') {
         return res.status(404).json({ error: 'プロジェクトが見つかりません' })
       }
-      console.error('Get project error:', error)
+      console.error('Get project error:', projectError)
       return res.status(500).json({ error: 'プロジェクトの取得に失敗しました' })
     }
+
+    // アクセス権限をチェック
+    let accessType = null
+    let memberRole = null
+
+    // オーナーかチェック
+    if (project.owner_id === userId) {
+      accessType = 'owner'
+    } else {
+      // メンバーかチェック
+      const { data: memberData } = await supabase
+        .from('project_members')
+        .select('role')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .single()
+
+      if (memberData) {
+        accessType = 'member'
+        memberRole = memberData.role
+      } else if (project.is_link_sharing_enabled && sharingToken) {
+        // リンク共有でのアクセスをチェック
+        if (project.link_sharing_token === sharingToken) {
+          accessType = 'link_sharing'
+        }
+      }
+    }
+
+    if (!accessType) {
+      return res.status(403).json({ 
+        error: 'このプロジェクトにアクセスする権限がありません',
+        isLinkSharingEnabled: project.is_link_sharing_enabled
+      })
+    }
+
+    // 参照データを取得
+    const { data: references } = await supabase
+      .from('references')
+      .select('id, title, url, saved_at')
+      .eq('project_id', projectId)
+      .is('deleted_at', null)
+      .order('saved_at', { ascending: false })
 
     const formattedProject = {
       id: project.id,
       name: project.name,
       description: project.description,
       color: project.color,
+      icon: project.icon,
       isPublic: project.is_public,
+      isLinkSharingEnabled: project.is_link_sharing_enabled,
+      linkSharingToken: accessType === 'owner' ? project.link_sharing_token : null, // オーナーのみトークンを返す
       ownerId: project.owner_id,
+      owner: project.profiles,
       createdAt: project.created_at,
       updatedAt: project.updated_at,
-      references: project.references || [],
-      referenceCount: project.references?.length || 0,
-      role: project.project_members?.[0]?.role || 'owner'
+      references: references || [],
+      referenceCount: references?.length || 0,
+      accessType: accessType,
+      role: accessType === 'owner' ? 'owner' : (memberRole || 'viewer')
     }
 
     return res.status(200).json(formattedProject)
@@ -104,9 +150,17 @@ async function handleGetProject(req, res, projectId, userId) {
 
 async function handleUpdateProject(req, res, projectId, userId) {
   try {
-    const { name, description, color, isPublic } = req.body
+    const { 
+      name, 
+      description, 
+      color, 
+      icon,
+      isPublic, 
+      isLinkSharingEnabled,
+      regenerateToken 
+    } = req.body
 
-    // 権限チェック
+    // 権限チェック - プロジェクト情報を取得
     const { data: project, error: checkError } = await supabase
       .from('projects')
       .select('owner_id')
@@ -117,8 +171,27 @@ async function handleUpdateProject(req, res, projectId, userId) {
       return res.status(404).json({ error: 'プロジェクトが見つかりません' })
     }
 
-    if (project.owner_id !== userId) {
+    // オーナーまたは編集者権限を持つメンバーのみ更新可能
+    let canUpdate = project.owner_id === userId
+
+    if (!canUpdate) {
+      const { data: memberData } = await supabase
+        .from('project_members')
+        .select('role')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .single()
+
+      canUpdate = memberData?.role === 'editor' || memberData?.role === 'admin'
+    }
+
+    if (!canUpdate) {
       return res.status(403).json({ error: 'プロジェクトを更新する権限がありません' })
+    }
+
+    // リンク共有設定の変更はオーナーのみ
+    if ((isLinkSharingEnabled !== undefined || regenerateToken) && project.owner_id !== userId) {
+      return res.status(403).json({ error: 'リンク共有設定を変更する権限がありません' })
     }
 
     // バリデーション
@@ -143,15 +216,30 @@ async function handleUpdateProject(req, res, projectId, userId) {
     if (color !== undefined) {
       updateData.color = color
     }
+    if (icon !== undefined) {
+      updateData.icon = icon
+    }
     if (isPublic !== undefined) {
       updateData.is_public = isPublic
+    }
+    if (isLinkSharingEnabled !== undefined) {
+      updateData.is_link_sharing_enabled = isLinkSharingEnabled
+    }
+
+    // トークン再生成
+    if (regenerateToken && project.owner_id === userId) {
+      const { v4: uuidv4 } = await import('uuid')
+      updateData.link_sharing_token = uuidv4()
     }
 
     const { data: updatedProject, error } = await supabase
       .from('projects')
       .update(updateData)
       .eq('id', projectId)
-      .select()
+      .select(`
+        *,
+        profiles!owner_id (id, name, email)
+      `)
       .single()
 
     if (error) {
@@ -164,8 +252,12 @@ async function handleUpdateProject(req, res, projectId, userId) {
       name: updatedProject.name,
       description: updatedProject.description,
       color: updatedProject.color,
+      icon: updatedProject.icon,
       isPublic: updatedProject.is_public,
+      isLinkSharingEnabled: updatedProject.is_link_sharing_enabled,
+      linkSharingToken: updatedProject.link_sharing_token,
       ownerId: updatedProject.owner_id,
+      owner: updatedProject.profiles,
       createdAt: updatedProject.created_at,
       updatedAt: updatedProject.updated_at,
       role: 'owner'
@@ -192,6 +284,7 @@ async function handleDeleteProject(req, res, projectId, userId) {
       return res.status(404).json({ error: 'プロジェクトが見つかりません' })
     }
 
+    // オーナーのみ削除可能
     if (project.owner_id !== userId) {
       return res.status(403).json({ error: 'プロジェクトを削除する権限がありません' })
     }
