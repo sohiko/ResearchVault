@@ -5,12 +5,38 @@
  */
 
 /**
- * PDFをダウンロードしてBase64エンコード
+ * プロキシAPI経由でPDFをダウンロード
  * @param {string} url - PDFのURL
  * @returns {Promise<string>} Base64エンコードされたPDFデータ
  */
-async function downloadPDFAsBase64(url) {
-  console.log('Downloading PDF from:', url)
+async function downloadPDFViaProxy(url) {
+  console.log('Downloading PDF via proxy:', url)
+  
+  const proxyUrl = `/api/pdf-proxy?url=${encodeURIComponent(url)}`
+  const response = await fetch(proxyUrl)
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.error || `Proxy failed: ${response.status}`)
+  }
+  
+  const data = await response.json()
+  
+  if (!data.success || !data.data) {
+    throw new Error('Proxy returned invalid response')
+  }
+  
+  console.log(`PDF downloaded via proxy: ${Math.round(data.data.length / 1024)} KB`)
+  return data.data
+}
+
+/**
+ * 直接PDFをダウンロードしてBase64エンコード
+ * @param {string} url - PDFのURL
+ * @returns {Promise<string>} Base64エンコードされたPDFデータ
+ */
+async function downloadPDFDirect(url) {
+  console.log('Downloading PDF directly:', url)
   
   const response = await fetch(url)
   if (!response.ok) {
@@ -27,8 +53,30 @@ async function downloadPDFAsBase64(url) {
       .join('')
   )
   
-  console.log(`PDF downloaded and encoded: ${Math.round(base64.length / 1024)} KB`)
+  console.log(`PDF downloaded directly: ${Math.round(base64.length / 1024)} KB`)
   return base64
+}
+
+/**
+ * PDFをダウンロードしてBase64エンコード（自動フォールバック付き）
+ * @param {string} url - PDFのURL
+ * @returns {Promise<string>} Base64エンコードされたPDFデータ
+ */
+async function downloadPDFAsBase64(url) {
+  // まず直接ダウンロードを試行
+  try {
+    return await downloadPDFDirect(url)
+  } catch (directError) {
+    console.warn('Direct download failed, trying proxy:', directError.message)
+    
+    // 直接ダウンロードが失敗した場合、プロキシを使用
+    try {
+      return await downloadPDFViaProxy(url)
+    } catch (proxyError) {
+      console.error('Proxy download also failed:', proxyError.message)
+      throw new Error(`PDFのダウンロードに失敗しました: ${proxyError.message}`)
+    }
+  }
 }
 
 /**

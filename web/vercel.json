@@ -24,6 +24,9 @@
     },
     "api/selected-texts.js": {
       "maxDuration": 30
+    },
+    "api/pdf-proxy.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
