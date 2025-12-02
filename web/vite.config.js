@@ -35,28 +35,8 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          // node_modules のライブラリをチャンクに分離
-          if (id.includes('node_modules')) {
-            if (id.includes('pdfjs-dist')) {
-              return 'pdfjs'
-            }
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor'
-            }
-            if (id.includes('react-router')) {
-              return 'router'
-            }
-            if (id.includes('@supabase')) {
-              return 'supabase'
-            }
-            if (id.includes('@headlessui') || id.includes('@heroicons') || id.includes('framer-motion')) {
-              return 'ui'
-            }
-            // その他の node_modules は vendor に
-            return 'vendor'
-          }
-        },
+        // チャンク分割はViteのデフォルトに任せる（循環依存問題を回避）
+        manualChunks: undefined,
       },
     },
     // チャンクサイズの警告を無効化（大きなライブラリがあるため）
