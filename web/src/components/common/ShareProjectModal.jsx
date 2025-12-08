@@ -6,6 +6,7 @@ import ProtectedModal from './ProtectedModal'
 import { useModalContext } from '../../hooks/useModalContext'
 import { useAuth } from '../../hooks/useAuth'
 import { Link, Copy, Mail, AlertTriangle, Check, X, UserPlus, Users, Globe, Lock } from 'lucide-react'
+import { renderProjectIcon } from '../../utils/iconRenderer'
 
 const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
   const { openModal, closeModal } = useModalContext()
@@ -342,7 +343,7 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
                 className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
                 style={{ backgroundColor: project.color || '#3b82f6' }}
               >
-                {project.icon || '📂'}
+                {renderProjectIcon(project.icon, null, 'w-6 h-6')}
               </div>
               <div>
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">{project.name}</h3>

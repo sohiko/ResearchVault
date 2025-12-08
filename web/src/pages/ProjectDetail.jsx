@@ -33,6 +33,7 @@ import { useReferenceAction } from '../context/ReferenceActionContext'
 
 // ユーティリティ
 import { generateProjectCitations } from '../utils/citationGenerator'
+import { renderProjectIcon } from '../utils/iconRenderer'
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -569,7 +570,7 @@ export default function ProjectDetail() {
               className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
               style={{ backgroundColor: project.color || '#3b82f6' }}
             >
-              {project.icon || '📂'}
+              {renderProjectIcon(project.icon, null, 'w-6 h-6')}
             </div>
             <h1 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">
               {project.name}

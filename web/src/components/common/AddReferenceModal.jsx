@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth'
 import ProtectedModal from './ProtectedModal'
 import { useModalContext } from '../../hooks/useModalContext'
 import { useReferenceFetchQueue } from '../../context/ReferenceFetchQueueContext'
+import { lucideIconMap } from '../../utils/iconRenderer'
 
 const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
   const { openModal, closeModal, setUnsavedChanges } = useModalContext()
@@ -38,6 +39,13 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
   const [isbnLoading, setIsbnLoading] = useState(false)
   const [projects, setProjects] = useState([])
   const [hasBackgroundJob, setHasBackgroundJob] = useState(false)
+
+  const formatProjectOptionLabel = (project) => {
+    const icon = project.icon || ''
+    const isLucideIcon = typeof icon === 'string' && (icon.startsWith('lucide:') || lucideIconMap[icon])
+    const displayIcon = !isLucideIcon && icon ? icon : ''
+    return displayIcon ? `${displayIcon} ${project.name}` : project.name
+  }
 
   // プロジェクト一覧を取得
   useEffect(() => {
@@ -417,7 +425,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
               <option value="">プロジェクトを選択（任意）</option>
               {projects.map(project => (
                 <option key={project.id} value={project.id}>
-                  {project.icon || '📁'} {project.name}
+                  {formatProjectOptionLabel(project)}
                 </option>
               ))}
             </select>
