@@ -216,7 +216,6 @@ export default function ProjectDetail() {
         profiles (name, email)
       `)
       .eq('project_id', id)
-      .neq('user_id', user.id) // オーナー（現在のユーザー）を除外
 
     if (error) throw error
 
