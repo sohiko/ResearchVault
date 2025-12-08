@@ -118,8 +118,8 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
         return
       }
 
-      // 既にメンバーかチェック
-      const existingMember = members.find(m => m.user_id === userProfile.id)
+      // 既にメンバーかチェック（ローカル状態を参照）
+      const existingMember = memberList.find(m => m.user_id === userProfile.id)
       if (existingMember) {
         toast.error('このユーザーは既にプロジェクトのメンバーです')
         return
@@ -171,7 +171,7 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
             .eq('id', user.id)
             .single()
 
-          await supabase.functions.invoke('send-invitation-email', {
+          const invokeResult = await supabase.functions.invoke('send-invitation-email', {
             body: {
               invitationId: invitation.id,
               projectId: project.id,
@@ -186,8 +186,14 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
               siteUrl: window.location.origin
             }
           })
+
+          if (invokeResult.error) {
+            console.warn('Failed to send invitation email via edge function:', invokeResult.error)
+            toast('招待は成功しましたが、メール送信に失敗しました。', { icon: '⚠️' })
+          }
         } catch (emailError) {
           console.warn('Failed to send invitation email via edge function:', emailError)
+          toast('招待は成功しましたが、メール送信に失敗しました。', { icon: '⚠️' })
         }
       }
 
@@ -232,6 +238,13 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
         .eq('user_id', memberToDelete.user_id)
 
       if (error) throw error
+
+      // 関連する招待レコードも削除（存在しない場合は無視）
+      await supabase
+        .from('project_invitations')
+        .delete()
+        .eq('project_id', memberToDelete.project_id)
+        .eq('invitee_id', memberToDelete.user_id)
 
       toast.success('メンバーを削除しました')
       // ローカル表示からも即時削除
