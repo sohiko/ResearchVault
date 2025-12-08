@@ -1897,6 +1897,16 @@ class BackgroundManager {
                 throw new Error('Storage not initialized');
             }
 
+            // サインアウト同期（web側でログアウトした場合）
+            if (authData?.signOut) {
+                await chrome.storage.sync.remove(['authToken', 'userInfo', 'sessionInfo', 'lastLoginTime']);
+                if (this.api) {
+                    await this.api.setAuthToken(null);
+                }
+                console.log('Auth cleared from webpage event:', authData?.event || 'unknown');
+                return;
+            }
+
             if (!authData || !authData.authToken || !authData.userInfo) {
                 console.debug('Invalid auth data structure:', authData);
                 throw new Error('Invalid auth data');
@@ -1915,7 +1925,7 @@ class BackgroundManager {
                 await this.api.setAuthToken(authData.authToken);
             }
 
-            console.log('Auth synced from webpage:', authData.userInfo.email);
+            console.log('Auth synced from webpage:', authData.userInfo.email, authData.event || 'SIGNED_IN');
             // 通知は表示しない（静かに同期）
         } catch (error) {
             console.debug('Auth sync skipped:', error.message);

@@ -33,6 +33,32 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
+// 拡張機能へ認証情報を同期（ログイン・トークン更新・ログアウト）
+const syncAuthToExtension = (session, event) => {
+  try {
+    const payload = session
+      ? {
+          authToken: session.access_token,
+          userInfo: {
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.name
+          },
+          sessionInfo: session,
+          event
+        }
+      : { signOut: true, event }
+
+    window.postMessage({
+      type: 'RESEARCHVAULT_AUTH_SYNC',
+      source: 'webpage',
+      data: payload
+    }, '*')
+  } catch (err) {
+    console.log('Extension sync failed (extension may not be installed):', err)
+  }
+}
+
 // 認証状態の監視
 export const authStateManager = {
   listeners: new Set(),
@@ -79,25 +105,11 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   try {
     await authStateManager.notify(session, event)
     
-    // 拡張機能にログイン情報を同期（ログイン時のみ）
-    if (event === 'SIGNED_IN' && session) {
-      try {
-        window.postMessage({
-          type: 'RESEARCHVAULT_AUTH_SYNC',
-          source: 'webpage',
-          data: {
-            authToken: session.access_token,
-            userInfo: {
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.name
-            },
-            sessionInfo: session
-          }
-        }, '*')
-      } catch (err) {
-        console.log('Extension sync failed (extension may not be installed):', err)
-      }
+    // 拡張機能に認証情報を同期
+    if (['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event) && session) {
+      syncAuthToExtension(session, event)
+    } else if (event === 'SIGNED_OUT') {
+      syncAuthToExtension(null, event)
     }
   } catch (error) {
     await handleError(error, {

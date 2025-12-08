@@ -61,11 +61,25 @@ class PopupManager {
 
     async checkAuthState() {
         try {
-            const { authToken, userInfo } = await chrome.storage.sync.get(['authToken', 'userInfo']);
+            const { authToken, userInfo, sessionInfo } = await chrome.storage.sync.get(['authToken', 'userInfo', 'sessionInfo']);
             
             if (authToken && userInfo) {
-                // トークンがあれば信頼してそのまま使用（最長セッション）
-                await this.api.setAuthToken(authToken);
+                let tokenToUse = authToken;
+
+                // トークン有効期限を確認し、切れそうならリフレッシュ
+                const expiry = this.getTokenExpiry(authToken);
+                if (expiry && (expiry.isExpired || expiry.timeUntilExpiry < 60)) {
+                    const refreshed = await this.refreshToken();
+                    if (refreshed.success && refreshed.token) {
+                        tokenToUse = refreshed.token;
+                    } else {
+                        await this.handleLogout();
+                        this.showAuthSection();
+                        return;
+                    }
+                }
+
+                await this.api.setAuthToken(tokenToUse);
                 this.currentUser = userInfo;
                 await this.loadProjects();
                 this.showMainSection();
@@ -308,11 +322,32 @@ class PopupManager {
         try {
             this.showLoading(true);
             
-            // 認証トークンの確認
-            if (!this.api.authToken) {
+            // 認証トークンの確認と期限チェック
+            let tokenToUse = this.api.authToken;
+            if (!tokenToUse) {
+                const stored = await chrome.storage.sync.get(['authToken']);
+                tokenToUse = stored.authToken;
+            }
+
+            if (!tokenToUse) {
                 this.showError('認証が必要です。ログインしてください');
+                await this.handleLogout();
                 return;
             }
+
+            const expiry = this.getTokenExpiry(tokenToUse);
+            if (expiry && (expiry.isExpired || expiry.timeUntilExpiry < 60)) {
+                const refreshed = await this.refreshToken();
+                if (refreshed.success && refreshed.token) {
+                    tokenToUse = refreshed.token;
+                } else {
+                    await this.handleLogout();
+                    this.showError('セッションが切れました。再ログインしてください');
+                    return;
+                }
+            }
+
+            await this.api.setAuthToken(tokenToUse);
             
             // 特殊なURLの場合は保存を拒否
             const currentUrl = this.currentTab.url;
@@ -1261,3 +1296,4 @@ class PopupManager {
 document.addEventListener('DOMContentLoaded', () => {
     new PopupManager();
 });
+
