@@ -20,6 +20,13 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [memberToDelete, setMemberToDelete] = useState(null)
   
+  // メンバー一覧はローカルでも保持して即時反映
+  const [memberList, setMemberList] = useState(members || [])
+
+  useEffect(() => {
+    setMemberList(members || [])
+  }, [members])
+
   // リンク共有関連の状態
   const [isLinkSharingEnabled, setIsLinkSharingEnabled] = useState(project.is_link_sharing_enabled || false)
   const [linkSharingToken, setLinkSharingToken] = useState(project.link_sharing_token || '')
@@ -155,11 +162,8 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
 
       if (invitationError) {
         console.warn('Failed to create invitation record:', invitationError)
-        // 招待レコードの作成に失敗してもメンバー追加は成功しているので続行
-      }
-
-      // 招待メール送信を試行
-      if (invitation) {
+      } else {
+        // Supabase Edge Functions経由でメール送信（supabase.functions.invokeでCORS/認証を処理）
         try {
           const { data: inviterProfile } = await supabase
             .from('profiles')
@@ -167,15 +171,8 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
             .eq('id', user.id)
             .single()
 
-          // Edge Functionを呼び出してメール送信
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
-          const response = await fetch(`${supabaseUrl}/functions/v1/send-invitation-email`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-            },
-            body: JSON.stringify({
+          await supabase.functions.invoke('send-invitation-email', {
+            body: {
               invitationId: invitation.id,
               projectId: project.id,
               projectName: project.name,
@@ -187,21 +184,26 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
               role: inviteRole,
               message: inviteMessage.trim() || null,
               siteUrl: window.location.origin
-            })
+            }
           })
-
-          if (response.ok) {
-            // メール送信日時を更新
-            await supabase
-              .from('project_invitations')
-              .update({ email_sent_at: new Date().toISOString() })
-              .eq('id', invitation.id)
-          }
         } catch (emailError) {
-          console.warn('Failed to send invitation email:', emailError)
-          // メール送信に失敗してもメンバー追加は成功しているので続行
+          console.warn('Failed to send invitation email via edge function:', emailError)
         }
       }
+
+      // ローカル表示を即時更新
+      setMemberList(prev => [
+        ...prev,
+        {
+          project_id: project.id,
+          user_id: userProfile.id,
+          role: inviteRole,
+          profiles: {
+            name: userProfile.name,
+            email: userProfile.email
+          }
+        }
+      ])
 
       toast.success('メンバーを招待しました')
       setInviteEmail('')
@@ -232,6 +234,8 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
       if (error) throw error
 
       toast.success('メンバーを削除しました')
+      // ローカル表示からも即時削除
+      setMemberList(prev => prev.filter(m => !(m.project_id === memberToDelete.project_id && m.user_id === memberToDelete.user_id)))
       onUpdate()
     } catch (error) {
       console.error('Failed to remove member:', error)
@@ -451,7 +455,7 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
             <div className="flex items-center gap-2 mb-3">
               <Users className="w-5 h-5 text-gray-500" />
               <span className="font-medium text-gray-900 dark:text-gray-100">
-                メンバー ({members.length + 1})
+                メンバー ({memberList.length + 1})
               </span>
             </div>
             <div className="space-y-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
@@ -478,7 +482,7 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
               </div>
 
               {/* メンバー */}
-              {members.map((member) => (
+              {memberList.map((member) => (
                 <div key={`${member.project_id}-${member.user_id}`} className="flex items-center justify-between py-2 px-3 bg-white dark:bg-gray-800 rounded-lg">
                   <div className="flex items-center">
                     <div className="w-9 h-9 bg-gray-100 dark:bg-gray-600 rounded-full flex items-center justify-center mr-3">

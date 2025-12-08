@@ -1,6 +1,7 @@
 -- 017_sharing_system.sql
 -- プロジェクト共有システム マイグレーション
 -- 作成日: 2025-12-02
+-- 修正: RLSポリシーの無限再帰を解消
 
 -- =====================================================
 -- 1. projectsテーブルにリンク共有用カラムを追加
@@ -61,7 +62,8 @@ CREATE TABLE IF NOT EXISTS public.project_invitations (
 );
 
 -- ユニーク制約: 同じプロジェクトに同じユーザーへの未処理招待は1つまで
-CREATE UNIQUE INDEX IF NOT EXISTS idx_project_invitations_unique_pending 
+DROP INDEX IF EXISTS idx_project_invitations_unique_pending;
+CREATE UNIQUE INDEX idx_project_invitations_unique_pending 
 ON public.project_invitations (project_id, invitee_id) 
 WHERE status = 'pending';
 
@@ -84,232 +86,65 @@ COMMENT ON COLUMN public.project_invitations.status IS '招待のステータス
 COMMENT ON COLUMN public.project_invitations.role IS '招待時に付与される権限（viewer: 閲覧者, editor: 編集者）';
 
 -- =====================================================
--- 3. RLSポリシーの設定
+-- 3. project_invitations テーブルのRLSポリシー
 -- =====================================================
 
--- project_invitations テーブルのRLS有効化
 ALTER TABLE public.project_invitations ENABLE ROW LEVEL SECURITY;
 
--- 招待者は自分が作成した招待を閲覧可能
-CREATE POLICY "Inviters can view their invitations"
+-- 既存のポリシーを削除
+DROP POLICY IF EXISTS "Inviters can view their invitations" ON public.project_invitations;
+DROP POLICY IF EXISTS "Invitees can view their invitations" ON public.project_invitations;
+DROP POLICY IF EXISTS "Project owners and editors can create invitations" ON public.project_invitations;
+DROP POLICY IF EXISTS "Inviters can update their invitations" ON public.project_invitations;
+DROP POLICY IF EXISTS "Invitees can respond to invitations" ON public.project_invitations;
+DROP POLICY IF EXISTS "Inviters can delete their invitations" ON public.project_invitations;
+
+-- シンプルなポリシー: 招待者または被招待者のみアクセス可能
+CREATE POLICY "Users can view related invitations"
   ON public.project_invitations
   FOR SELECT
-  USING (inviter_id = auth.uid());
+  USING (inviter_id = auth.uid() OR invitee_id = auth.uid());
 
--- 被招待者は自分宛ての招待を閲覧可能
-CREATE POLICY "Invitees can view their invitations"
-  ON public.project_invitations
-  FOR SELECT
-  USING (invitee_id = auth.uid());
-
--- プロジェクトオーナーと編集者は招待を作成可能
-CREATE POLICY "Project owners and editors can create invitations"
+-- 認証済みユーザーは招待を作成可能（詳細なチェックはアプリケーション側で実施）
+CREATE POLICY "Authenticated users can create invitations"
   ON public.project_invitations
   FOR INSERT
-  WITH CHECK (
-    inviter_id = auth.uid() AND
-    (
-      -- プロジェクトオーナーである
-      EXISTS (
-        SELECT 1 FROM public.projects 
-        WHERE id = project_id AND owner_id = auth.uid()
-      )
-      OR
-      -- 編集者権限を持つメンバーである
-      EXISTS (
-        SELECT 1 FROM public.project_members 
-        WHERE project_id = project_invitations.project_id 
-        AND user_id = auth.uid() 
-        AND role IN ('editor', 'admin')
-      )
-    )
-  );
+  WITH CHECK (auth.uid() IS NOT NULL AND inviter_id = auth.uid());
 
--- 招待者は招待をキャンセル可能
-CREATE POLICY "Inviters can update their invitations"
+-- 招待者または被招待者は更新可能
+CREATE POLICY "Related users can update invitations"
   ON public.project_invitations
   FOR UPDATE
-  USING (inviter_id = auth.uid())
-  WITH CHECK (inviter_id = auth.uid());
+  USING (inviter_id = auth.uid() OR invitee_id = auth.uid())
+  WITH CHECK (inviter_id = auth.uid() OR invitee_id = auth.uid());
 
--- 被招待者は招待に応答可能（ステータス変更）
-CREATE POLICY "Invitees can respond to invitations"
-  ON public.project_invitations
-  FOR UPDATE
-  USING (invitee_id = auth.uid())
-  WITH CHECK (invitee_id = auth.uid());
-
--- 招待者は招待を削除可能
-CREATE POLICY "Inviters can delete their invitations"
+-- 招待者は削除可能
+CREATE POLICY "Inviters can delete invitations"
   ON public.project_invitations
   FOR DELETE
   USING (inviter_id = auth.uid());
 
 -- =====================================================
--- 4. projectsテーブルのRLSポリシー更新（リンク共有対応）
--- =====================================================
-
--- 既存のSELECTポリシーを削除して再作成
-DROP POLICY IF EXISTS "Users can view projects they own or are members of" ON public.projects;
-
--- 新しいSELECTポリシー: オーナー、メンバー、またはリンク共有が有効な場合
-CREATE POLICY "Users can view accessible projects"
-  ON public.projects
-  FOR SELECT
-  USING (
-    -- オーナーである
-    owner_id = auth.uid()
-    OR
-    -- メンバーである
-    id IN (
-      SELECT project_id FROM public.project_members 
-      WHERE user_id = auth.uid()
-    )
-    OR
-    -- リンク共有が有効で、認証済みユーザーである
-    (is_link_sharing_enabled = true AND auth.uid() IS NOT NULL)
-  );
-
--- =====================================================
--- 5. referencesテーブルのRLSポリシー更新（リンク共有対応）
--- =====================================================
-
--- 既存のSELECTポリシーを削除して再作成
-DROP POLICY IF EXISTS "Users can view references in their projects" ON public.references;
-
--- 新しいSELECTポリシー
-CREATE POLICY "Users can view references in accessible projects"
-  ON public.references
-  FOR SELECT
-  USING (
-    -- 自分が保存した参照
-    saved_by = auth.uid()
-    OR
-    -- プロジェクトオーナーの参照
-    project_id IN (
-      SELECT id FROM public.projects WHERE owner_id = auth.uid()
-    )
-    OR
-    -- メンバーとしてアクセス可能なプロジェクトの参照
-    project_id IN (
-      SELECT project_id FROM public.project_members 
-      WHERE user_id = auth.uid()
-    )
-    OR
-    -- リンク共有が有効なプロジェクトの参照
-    project_id IN (
-      SELECT id FROM public.projects 
-      WHERE is_link_sharing_enabled = true AND auth.uid() IS NOT NULL
-    )
-  );
-
--- =====================================================
--- 6. selected_textsテーブルのRLSポリシー更新（リンク共有対応）
--- =====================================================
-
--- 閲覧用のポリシーを追加（リンク共有対応）
-DROP POLICY IF EXISTS "Users can view selected texts in accessible projects" ON public.selected_texts;
-
-CREATE POLICY "Users can view selected texts in accessible projects"
-  ON public.selected_texts
-  FOR SELECT
-  USING (
-    -- 自分が作成したテキスト
-    created_by = auth.uid()
-    OR
-    -- プロジェクトオーナーのテキスト
-    project_id IN (
-      SELECT id FROM public.projects WHERE owner_id = auth.uid()
-    )
-    OR
-    -- メンバーとしてアクセス可能なプロジェクトのテキスト
-    project_id IN (
-      SELECT project_id FROM public.project_members 
-      WHERE user_id = auth.uid()
-    )
-    OR
-    -- リンク共有が有効なプロジェクトのテキスト
-    project_id IN (
-      SELECT id FROM public.projects 
-      WHERE is_link_sharing_enabled = true AND auth.uid() IS NOT NULL
-    )
-  );
-
--- =====================================================
--- 7. bookmarksテーブルのRLSポリシー更新（リンク共有対応）
--- =====================================================
-
--- 閲覧用のポリシーを追加（リンク共有対応）
-DROP POLICY IF EXISTS "Users can view bookmarks in accessible projects" ON public.bookmarks;
-
-CREATE POLICY "Users can view bookmarks in accessible projects"
-  ON public.bookmarks
-  FOR SELECT
-  USING (
-    -- 自分が作成したブックマーク
-    created_by = auth.uid()
-    OR
-    -- プロジェクトオーナーのブックマーク
-    project_id IN (
-      SELECT id FROM public.projects WHERE owner_id = auth.uid()
-    )
-    OR
-    -- メンバーとしてアクセス可能なプロジェクトのブックマーク
-    project_id IN (
-      SELECT project_id FROM public.project_members 
-      WHERE user_id = auth.uid()
-    )
-    OR
-    -- リンク共有が有効なプロジェクトのブックマーク
-    project_id IN (
-      SELECT id FROM public.projects 
-      WHERE is_link_sharing_enabled = true AND auth.uid() IS NOT NULL
-    )
-  );
-
--- =====================================================
--- 8. project_membersテーブルのRLSポリシー更新
--- =====================================================
-
--- リンク共有でプロジェクトを閲覧している人もメンバー一覧を見れるようにする
-DROP POLICY IF EXISTS "Users can view project members for their projects" ON public.project_members;
-
-CREATE POLICY "Users can view project members for accessible projects"
-  ON public.project_members
-  FOR SELECT
-  USING (
-    -- プロジェクトオーナーである
-    project_id IN (
-      SELECT id FROM public.projects WHERE owner_id = auth.uid()
-    )
-    OR
-    -- 自分がメンバーである
-    user_id = auth.uid()
-    OR
-    -- リンク共有が有効なプロジェクト
-    project_id IN (
-      SELECT id FROM public.projects 
-      WHERE is_link_sharing_enabled = true AND auth.uid() IS NOT NULL
-    )
-  );
-
--- =====================================================
--- 9. 共有トークン再生成用の関数
+-- 4. 共有トークン再生成用の関数
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION regenerate_link_sharing_token(p_project_id uuid)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   new_token uuid;
+  project_owner_id uuid;
 BEGIN
+  -- プロジェクトオーナーを取得
+  SELECT owner_id INTO project_owner_id
+  FROM public.projects
+  WHERE id = p_project_id;
+
   -- オーナーのみが実行可能
-  IF NOT EXISTS (
-    SELECT 1 FROM public.projects 
-    WHERE id = p_project_id AND owner_id = auth.uid()
-  ) THEN
+  IF project_owner_id IS NULL OR project_owner_id != auth.uid() THEN
     RAISE EXCEPTION 'Only project owner can regenerate sharing token';
   END IF;
 
@@ -325,37 +160,7 @@ END;
 $$;
 
 -- =====================================================
--- 10. profilesテーブルの閲覧ポリシー更新
+-- 注意: 既存のRLSポリシーは変更しません
+-- リンク共有のアクセス制御はアプリケーション側で実装します
+-- これにより、循環参照の問題を回避します
 -- =====================================================
-
--- 招待のために他のユーザーのプロファイル（メールアドレス）を検索できるようにする
-DROP POLICY IF EXISTS "Users can view profiles for invitations" ON public.profiles;
-
-CREATE POLICY "Users can view profiles for invitations"
-  ON public.profiles
-  FOR SELECT
-  USING (
-    -- 自分のプロファイル
-    id = auth.uid()
-    OR
-    -- 同じプロジェクトのメンバー
-    id IN (
-      SELECT pm.user_id FROM public.project_members pm
-      WHERE pm.project_id IN (
-        SELECT project_id FROM public.project_members WHERE user_id = auth.uid()
-        UNION
-        SELECT id FROM public.projects WHERE owner_id = auth.uid()
-      )
-    )
-    OR
-    -- プロジェクトオーナー
-    id IN (
-      SELECT p.owner_id FROM public.projects p
-      WHERE p.id IN (
-        SELECT project_id FROM public.project_members WHERE user_id = auth.uid()
-      )
-    )
-    -- 認証済みユーザーはメールで他ユーザーを検索可能（招待用）
-    OR auth.uid() IS NOT NULL
-  );
-
