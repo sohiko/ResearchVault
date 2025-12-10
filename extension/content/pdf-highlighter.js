@@ -179,6 +179,22 @@
       case 'PDF_SAVE_ERROR':
         showErrorMessage(message.error);
         break;
+      case 'GET_PDF_SELECTION':
+        if (selectedText) {
+          sendResponse({
+            success: true,
+            data: {
+              text: selectedText,
+              page: currentPage,
+              position: getTextPosition(),
+              url: window.location.href,
+              title: document.title
+            }
+          });
+        } else {
+          sendResponse({ success: false, error: 'No PDF selection' });
+        }
+        break;
     }
   });
 

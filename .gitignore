@@ -108,3 +108,11 @@ temp/
 # Misc
 *.tsbuildinfo
 .vercel
+
+# Supabase
+supabase/.temp/
+supabase/migrations/
+
+# Specs
+specs/
+

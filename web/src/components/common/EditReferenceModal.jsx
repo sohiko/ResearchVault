@@ -226,7 +226,7 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
       hasUnsavedChanges={hasUnsavedChanges}
       confirmMessage="変更内容が失われますが、よろしいですか？"
     >
-      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-xl">
+      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-xl">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -243,7 +243,7 @@ const EditReferenceModal = ({ reference, onClose, onUpdate }) => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-96 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 flex-1 overflow-y-auto">
           {/* タイトル */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

@@ -5,9 +5,10 @@ class API {
     constructor() {
         // Chrome拡張機能環境では本番URLを使用
         // 開発時にローカルを使用したい場合はここを変更
+        // 本番環境のAPIエンドポイント
         this.baseURL = this.isLocalDevelopment() 
             ? 'http://localhost:3000/api'
-            : 'https://research-vault-eight.vercel.app/api';
+            : 'https://rv.jamknife.jp/api';
             
 
             
@@ -53,32 +54,41 @@ class API {
 
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
-        
+        const config = {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Client-Info': 'chrome-extension',
+                'X-Extension-Version': '1.0.0',
+                'User-Agent': 'ResearchVault-Extension/1.0.0',
+                ...options.headers
+            },
+            ...options
+        };
+
+        if (this.authToken) {
+            config.headers['Authorization'] = `Bearer ${this.authToken}`;
+        }
+
         try {
-            const config = {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Client-Info': 'chrome-extension',
-                    'X-Extension-Version': '1.0.0',
-                    'User-Agent': 'ResearchVault-Extension/1.0.0',
-                    ...options.headers
-                },
-                ...options
-            };
-
-            if (this.authToken) {
-                config.headers['Authorization'] = `Bearer ${this.authToken}`;
-            }
-
             const response = await fetch(url, config);
-            
+
             if (!response.ok) {
+                // 401の場合は1回だけリフレッシュを試みる
+                if (response.status === 401 && !options._retry) {
+                    const refreshed = await this.refreshAuthToken();
+                    if (refreshed.success) {
+                        // 新しいトークンでリトライ
+                        return await this.request(endpoint, { ...options, _retry: true });
+                    }
+                }
+
                 let errorMessage = '';
+                let errorDetails = null;
                 try {
                     const errorData = await response.json();
                     errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+                    errorDetails = errorData.details;
                 } catch (parseError) {
-                    // JSONパースに失敗した場合は、ステータスコードに基づいてメッセージを生成
                     switch (response.status) {
                         case 401:
                             errorMessage = '認証が必要です。ログインしてください';
@@ -97,12 +107,12 @@ class API {
                     }
                 }
                 console.error('API Error:', errorMessage);
-                throw new Error(errorMessage);
+                return { success: false, error: errorMessage, details: errorDetails };
             }
-            
+
             const data = await response.json();
             this.updateConnectionStatus('online');
-            
+
             return { success: true, data };
         } catch (error) {
             console.error('API request failed:', error.message);
@@ -111,6 +121,61 @@ class API {
                 success: false, 
                 error: error.message || 'Request failed'
             };
+        }
+    }
+
+    /**
+     * Supabaseトークンのリフレッシュ
+     */
+    async refreshAuthToken() {
+        try {
+            const { sessionInfo } = await chrome.storage.sync.get(['sessionInfo']);
+            if (!sessionInfo?.refresh_token) {
+                return { success: false, error: 'refresh token not found' };
+            }
+
+            const response = await fetch(`${this.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+                method: 'POST',
+                headers: {
+                    'apikey': this.supabaseAnonKey,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    refresh_token: sessionInfo.refresh_token
+                })
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                return { success: false, error: text || 'failed to refresh token' };
+            }
+
+            const data = await response.json();
+            if (!data.access_token) {
+                return { success: false, error: 'no access token returned' };
+            }
+
+            // 新しいセッション情報を保存
+            const newSession = {
+                ...sessionInfo,
+                access_token: data.access_token,
+                refresh_token: data.refresh_token || sessionInfo.refresh_token,
+                expires_in: data.expires_in,
+                expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 0),
+                token_type: data.token_type
+            };
+
+            await chrome.storage.sync.set({
+                authToken: data.access_token,
+                sessionInfo: newSession,
+                lastLoginTime: new Date().toISOString()
+            });
+
+            this.authToken = data.access_token;
+            return { success: true, token: data.access_token };
+        } catch (error) {
+            console.error('Token refresh failed:', error);
+            return { success: false, error: error.message };
         }
     }
 
@@ -274,45 +339,29 @@ class API {
     // プロジェクト関連
     async getProjects() {
         try {
-            // まずストレージからプロジェクト情報を取得
+            // ストレージキャッシュをまず確認
             const { projects } = await chrome.storage.local.get(['projects']);
             if (projects && projects.length > 0) {
                 return projects;
             }
-            
-            // ストレージにない場合はAPIから取得を試行
+
             if (!this.authToken) {
                 return [];
             }
-            
-            const projectsUrl = 'https://research-vault-eight.vercel.app/api/projects';
-            
-            const response = await fetch(projectsUrl, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.authToken}`,
-                    'X-Extension-Version': '1.0.0',
-                    'X-Client-Info': 'chrome-extension',
-                    'User-Agent': 'ResearchVault-Extension/1.0.0'
-                }
+
+            // 共通request経由で現在のベースURLを使用
+            const response = await this.request('/projects', {
+                method: 'GET'
             });
-            
-            if (response.ok) {
-                const data = await response.json();
-                
-                if (Array.isArray(data)) {
-                    // APIから取得したプロジェクトをストレージに保存
-                    await chrome.storage.local.set({ projects: data });
-                    return data;
-                } else {
-                    return [];
-                }
-            } else {
-                return [];
+
+            if (response.success && Array.isArray(response.data)) {
+                await chrome.storage.local.set({ projects: response.data });
+                return response.data;
             }
-            
+
+            return [];
         } catch (error) {
+            console.error('Failed to load projects:', error);
             return [];
         }
     }
@@ -355,79 +404,24 @@ class API {
     }
 
     async saveReference(data) {
-        try {
-            if (!this.authToken) {
-                return {
-                    success: false,
-                    error: '認証が必要です。ログインしてください'
-                };
-            }
-            
-            const referencesUrl = 'https://research-vault-eight.vercel.app/api/references';
-            const requestData = {
-                ...data,
-                savedAt: new Date().toISOString()
-            };
-            
-            const response = await fetch(referencesUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.authToken}`,
-                    'X-Extension-Version': '1.0.0',
-                    'X-Client-Info': 'chrome-extension',
-                    'User-Agent': 'ResearchVault-Extension/1.0.0'
-                },
-                body: JSON.stringify(requestData)
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                return {
-                    success: true,
-                    data: result
-                };
-            } else {
-                const errorText = await response.text();
-                
-                let errorMessage = '';
-                let errorDetails = null;
-                try {
-                    const errorData = JSON.parse(errorText);
-                    errorMessage = errorData.error || '参照の保存に失敗しました';
-                    errorDetails = errorData.details;
-                } catch (parseError) {
-                    switch (response.status) {
-                        case 401:
-                            errorMessage = '認証が必要です。ログインしてください';
-                            break;
-                        case 403:
-                            errorMessage = 'アクセスが拒否されました';
-                            break;
-                        case 404:
-                            errorMessage = '参照保存サービスが見つかりません';
-                            break;
-                        case 500:
-                            errorMessage = 'サーバーエラーが発生しました';
-                            break;
-                        default:
-                            errorMessage = `参照の保存に失敗しました (エラーコード: ${response.status})`;
-                    }
-                }
-                
-                return {
-                    success: false,
-                    error: errorMessage,
-                    details: errorDetails
-                };
-            }
-            
-        } catch (error) {
+        if (!this.authToken) {
             return {
                 success: false,
-                error: error.message || '参照の保存に失敗しました'
+                error: '認証が必要です。ログインしてください'
             };
         }
+
+        const requestData = {
+            ...data,
+            savedAt: new Date().toISOString()
+        };
+
+        const response = await this.request('/references', {
+            method: 'POST',
+            body: JSON.stringify(requestData)
+        });
+
+        return response;
     }
 
     async updateReference(id, data) {

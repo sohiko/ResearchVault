@@ -108,7 +108,7 @@ class BackgroundManager {
             autoSave: true,
             notifications: true,
             language: 'ja',
-            dashboardUrl: 'https://research-vault-eight.vercel.app'
+            dashboardUrl: 'https://rv.jamknife.jp'
         };
         
         await this.storage.setSettings(defaultSettings);
@@ -265,26 +265,64 @@ class BackgroundManager {
                 return;
             }
 
-            if (!info.selectionText) {
+            // コンテンツスクリプトから詳細な選択情報を取得（info.selectionText が不安定な場合に備える）
+            let selectionPayload = await this.captureSelectionPayload(tab.id);
+
+            // PDF ビューアの場合は PDF ハイライターから取得
+            if ((!selectionPayload || !selectionPayload.text) && await this.checkIfPDF(tab.url)) {
+                const pdfSelection = await this.getPdfSelection(tab.id);
+                if (pdfSelection && pdfSelection.text) {
+                    // 非同期保存（PDF用）
+                    await this.savePDFTextAsync({
+                        text: pdfSelection.text,
+                        page: pdfSelection.page,
+                        position: pdfSelection.position,
+                        url: tab.url,
+                        title: tab.title
+                    }, tab.id);
+                    return;
+                }
+            }
+
+            const selectedText = selectionPayload?.text || info.selectionText;
+
+            if (!selectedText) {
                 this.showNotification('テキストが選択されていません');
                 return;
             }
 
-            // 選択テキストのコンテキストを取得
-            const context = await this.getSelectionContext(tab.id);
-            
             const textData = {
-                text: info.selectionText,
+                text: selectedText,
                 url: tab.url,
                 title: tab.title,
-                xpath: context.xpath,
-                contextBefore: context.before,
-                contextAfter: context.after,
+                xpath: selectionPayload?.xpath,
+                contextBefore: selectionPayload?.before,
+                contextAfter: selectionPayload?.after,
+                textFragment: selectionPayload?.textFragment,
+                cssSelector: selectionPayload?.cssSelector,
+                html: selectionPayload?.html,
+                scrollY: selectionPayload?.scrollY,
                 createdAt: new Date().toISOString()
             };
 
+            // ローカルに保存（オフライン対応）
             await this.storage.addSelectedText(textData);
-            this.showNotification('選択テキストを保存しました', info.selectionText.substring(0, 50) + '...');
+
+            // APIにも送信（オンライン・認証済みであれば）
+            const apiPayload = {
+                text: selectedText,
+                url: tab.url,
+                title: tab.title,
+                context: selectionPayload
+            };
+            const apiResult = await this.saveSelectedTextToAPI(apiPayload);
+
+            if (apiResult.success) {
+                this.showNotification('選択テキストを保存しました', selectedText.substring(0, 50) + '...');
+            } else {
+                // ローカル保存済みだが同期失敗を通知
+                this.showNotification('ローカルに保存しました（未同期）', apiResult.error || '同期に失敗しました');
+            }
         } catch (error) {
             console.error('Failed to save selected text:', error);
             this.showNotification('テキスト保存に失敗しました', error.message);
@@ -355,6 +393,19 @@ class BackgroundManager {
             }
 
             // selected_textsに保存
+            // APIスキーマに存在するカラムのみ送る（未知のカラムは送信しない）
+            const payload = {
+                reference_id: referenceId,
+                text: data.text,
+                xpath: data.context?.xpath,
+                context_before: data.context?.before,
+                context_after: data.context?.after,
+                // PDF用カラム（存在する場合のみ利用）
+                pdf_page: data.pdf_page ?? data.context?.pdf_page,
+                pdf_position: data.pdf_position ?? data.context?.pdf_position,
+                created_by: userInfo.id
+            };
+
             const response = await fetch(`${supabaseUrl}/rest/v1/selected_texts`, {
                 method: 'POST',
                 headers: {
@@ -363,14 +414,7 @@ class BackgroundManager {
                     'Content-Type': 'application/json',
                     'Prefer': 'return=representation'
                 },
-                body: JSON.stringify({
-                    reference_id: referenceId,
-                    text: data.text,
-                    xpath: data.context?.xpath,
-                    context_before: data.context?.before,
-                    context_after: data.context?.after,
-                    created_by: userInfo.id
-                })
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
@@ -382,6 +426,32 @@ class BackgroundManager {
         } catch (error) {
             console.error('Failed to save selected text to API:', error);
             return { success: false, error: error.message };
+        }
+    }
+
+    async storeLocalSelectedText(data) {
+        try {
+            if (!this.storage || !data) return false;
+
+            const flattened = {
+                text: data.text,
+                url: data.url,
+                title: data.title,
+                xpath: data.context?.xpath || data.xpath,
+                contextBefore: data.context?.before || data.contextBefore,
+                contextAfter: data.context?.after || data.contextAfter,
+                textFragment: data.context?.textFragment || data.textFragment,
+                cssSelector: data.context?.cssSelector || data.cssSelector,
+                html: data.context?.html || data.html,
+                scrollY: data.context?.scrollY ?? data.scrollY ?? null,
+                createdAt: data.createdAt || new Date().toISOString()
+            };
+
+            await this.storage.addSelectedText(flattened);
+            return true;
+        } catch (error) {
+            console.error('Failed to store local selected text:', error);
+            return false;
         }
     }
 
@@ -1176,7 +1246,12 @@ class BackgroundManager {
                 console.log('Bookmarks found:', bookmarks.length);
                 return bookmarks.map((b, i) => ({
                     ...b,
-                    label: `${i + 1}. ${b.text.substring(0, 30)}...`
+                    label: `${i + 1}. ${b.text?.substring(0, 30) || '保存テキスト'}...`,
+                    text_fragment: b.text_fragment || b.textFragment,
+                    context_before: b.context_before || b.before,
+                    context_after: b.context_after || b.after,
+                    css_selector: b.css_selector || b.cssSelector,
+                    scroll_position: b.scroll_position ?? b.scrollY ?? null
                 }));
             }
 
@@ -1491,8 +1566,19 @@ class BackgroundManager {
                     break;
                     
                 case 'saveSelectedText':
+                    const localSaved = await this.storeLocalSelectedText(message.data);
                     const textResult = await this.saveSelectedTextToAPI(message.data);
-                    sendResponse(textResult);
+                    if (textResult.success) {
+                        sendResponse({ success: true, synced: true });
+                    } else {
+                        // ローカルには保存済みだが同期失敗
+                        sendResponse({
+                            success: false,
+                            localSaved: localSaved,
+                            synced: false,
+                            error: textResult.error
+                        });
+                    }
                     break;
                     
                 case 'SAVE_PDF_TEXT':
@@ -1860,6 +1946,28 @@ class BackgroundManager {
             console.error('Failed to get selection context:', error);
             return {};
         }
+    }
+
+    async captureSelectionPayload(tabId) {
+        try {
+            const response = await chrome.tabs.sendMessage(tabId, { action: 'getSelectionPayload' });
+            if (response?.data) return response.data;
+            if (response?.text || response?.xpath) return response;
+        } catch (error) {
+            console.debug('captureSelectionPayload failed:', error?.message || error);
+        }
+        return null;
+    }
+
+    async getPdfSelection(tabId) {
+        try {
+            const response = await chrome.tabs.sendMessage(tabId, { type: 'GET_PDF_SELECTION' });
+            if (response?.success && response.data) return response.data;
+            if (response?.text) return response;
+        } catch (error) {
+            console.debug('getPdfSelection failed or not a PDF tab:', error?.message || error);
+        }
+        return null;
     }
 
     async getBookmarkData(tabId) {

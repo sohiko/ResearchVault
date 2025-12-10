@@ -6,6 +6,7 @@ class ContentScriptManager {
         this.bookmarks = new Map();
         this.isInitialized = false;
         this.tooltipElement = null;
+        this.isSavingSelection = false;
         this.init();
     }
 
@@ -121,6 +122,11 @@ class ContentScriptManager {
                 case 'scrollToBookmark':
                     this.scrollToBookmark(message.data.id);
                     sendResponse({ success: true });
+                    break;
+                
+                case 'getSelectionPayload':
+                    const payload = this.getSelectionContext(window.getSelection());
+                    sendResponse({ success: !!payload, data: payload });
                     break;
                     
                 default:
@@ -422,64 +428,156 @@ class ContentScriptManager {
         if (this.tooltipElement) {
             this.tooltipElement.style.display = 'none';
             this.tooltipElement.style.opacity = '0';
-            // 確実に非表示にするためにDOMから削除して再追加
-            if (this.tooltipElement.parentNode) {
-                this.tooltipElement.parentNode.removeChild(this.tooltipElement);
-                document.body.appendChild(this.tooltipElement);
-            }
         }
     }
 
     async saveSelectedText() {
+        if (this.isSavingSelection) return;
+
         const selection = window.getSelection();
         const text = selection.toString().trim();
         
-        if (text.length === 0) return;
+        if (text.length === 0) {
+            this.hideTooltip();
+            return;
+        }
         
+        this.isSavingSelection = true;
+
         try {
-            // バックグラウンドスクリプトに保存を依頼
-            chrome.runtime.sendMessage({
+            // コンテキスト取得を先に行い、UIは即時非表示
+            const context = this.getSelectionContext(selection);
+            this.hideTooltip();
+            selection.removeAllRanges();
+
+            const response = await this.sendMessageWithRetry({
                 action: 'saveSelectedText',
                 data: {
                     text: text,
                     url: window.location.href,
                     title: document.title,
-                    context: this.getSelectionContext(selection)
+                    context: context
                 }
-            });
+            }, 1);
             
-            // ツールチップを即座に隠す
-            this.hideTooltip();
-            
-            // 選択を解除
-            selection.removeAllRanges();
-            
-            // 成功通知
-            this.showNotification('選択テキストを保存しました');
+            const res = response || {};
+            if (res.success && res.synced !== false) {
+                this.showNotification('選択テキストを保存しました');
+            } else if (res.localSaved) {
+                this.showNotification(res.error ? `ローカルに保存しました（未同期: ${res.error}）` : 'ローカルに保存しました（未同期）');
+            } else {
+                const msg = res.error || '選択テキストの保存に失敗しました';
+                this.showNotification(msg);
+            }
         } catch (error) {
             console.error('Failed to save selected text:', error);
+            if (this.isContextInvalidatedError(error)) {
+                this.showNotification('拡張機能を再読み込みしてください（コンテキスト無効化）');
+            } else {
+                this.showNotification('選択テキストの保存に失敗しました');
+            }
             this.hideTooltip();
+        } finally {
+            this.isSavingSelection = false;
         }
     }
 
     getSelectionContext(selection) {
-        if (selection.rangeCount === 0) return null;
+        if (!selection || selection.rangeCount === 0) return null;
         
         const range = selection.getRangeAt(0);
-        const startContainer = range.startContainer;
-        const endContainer = range.endContainer;
-        
+        const common = range.commonAncestorContainer;
+        const text = selection.toString().trim();
+
+        // HTMLスニペット（サニタイズ）
+        const htmlSnippet = this.getSanitizedHtml(range.cloneContents());
+
+        // 前後文脈
+        const before = range.startContainer?.textContent?.substring(
+            Math.max(0, range.startOffset - 50),
+            range.startOffset
+        ) || '';
+        const after = range.endContainer?.textContent?.substring(
+            range.endOffset,
+            Math.min(range.endContainer?.textContent?.length || 0, range.endOffset + 50)
+        ) || '';
+
         return {
-            before: startContainer.textContent.substring(
-                Math.max(0, range.startOffset - 50), 
-                range.startOffset
-            ),
-            after: endContainer.textContent.substring(
-                range.endOffset,
-                Math.min(endContainer.textContent.length, range.endOffset + 50)
-            ),
-            xpath: this.getXPath(range.commonAncestorContainer)
+            text,
+            html: htmlSnippet,
+            before,
+            after,
+            xpath: this.getXPath(common),
+            cssSelector: this.getCssSelector(common),
+            textFragment: this.buildTextFragment(text),
+            scrollY: window.scrollY
         };
+    }
+
+    getSanitizedHtml(fragment) {
+        try {
+            const container = document.createElement('div');
+            container.appendChild(fragment);
+            
+            // スクリプト/スタイル除去とイベント属性除去
+            const walker = document.createTreeWalker(
+                container,
+                NodeFilter.SHOW_ELEMENT,
+                null,
+                false
+            );
+            let node;
+            while (node = walker.nextNode()) {
+                if (['SCRIPT', 'STYLE'].includes(node.tagName)) {
+                    node.remove();
+                    continue;
+                }
+                // on* 属性を除去
+                Array.from(node.attributes || []).forEach(attr => {
+                    if (attr.name.startsWith('on')) {
+                        node.removeAttribute(attr.name);
+                    }
+                });
+            }
+            return container.innerHTML;
+        } catch (e) {
+            return '';
+        }
+    }
+
+    getCssSelector(node) {
+        if (!node) return '';
+        if (node.nodeType === Node.TEXT_NODE) {
+            node = node.parentElement;
+        }
+        if (!node || node.nodeType !== Node.ELEMENT_NODE) return '';
+
+        const parts = [];
+        let el = node;
+        while (el && el.nodeType === Node.ELEMENT_NODE && el !== document.body) {
+            let part = el.tagName.toLowerCase();
+            if (el.id) {
+                part += `#${el.id}`;
+                parts.unshift(part);
+                break;
+            }
+            const siblings = Array.from(el.parentNode ? el.parentNode.children : []);
+            const sameTagSiblings = siblings.filter(s => s.tagName === el.tagName);
+            if (sameTagSiblings.length > 1) {
+                const index = sameTagSiblings.indexOf(el) + 1;
+                part += `:nth-of-type(${index})`;
+            }
+            parts.unshift(part);
+            el = el.parentElement;
+        }
+        return parts.length ? parts.join(' > ') : '';
+    }
+
+    buildTextFragment(text) {
+        if (!text) return '';
+        const trimmed = text.replace(/\s+/g, ' ').trim();
+        if (trimmed.length <= 120) return trimmed;
+        return `${trimmed.slice(0, 60)} … ${trimmed.slice(-40)}`;
     }
 
     async restoreHighlights() {
@@ -655,10 +753,25 @@ class ContentScriptManager {
                 return;
             }
         }
+
+        // CSSセレクタがあれば先に試す
+        if (bookmark.css_selector) {
+            const el = document.querySelector(bookmark.css_selector);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                this.highlightTemporarily(el);
+                return;
+            }
+        }
         
-        // xpathが失敗した場合、テキスト検索でジャンプ
+        // xpathが失敗した場合、テキスト＋コンテキスト検索でジャンプ
         if (bookmark.text) {
-            const found = this.findAndScrollToText(bookmark.text);
+            const found = this.findAndScrollToText(
+                bookmark.text,
+                bookmark.context_before,
+                bookmark.context_after,
+                bookmark.text_fragment
+            );
             if (found) return;
         }
         
@@ -670,9 +783,13 @@ class ContentScriptManager {
         }
     }
 
-    findAndScrollToText(text) {
+    findAndScrollToText(text, contextBefore = '', contextAfter = '', textFragment = '') {
         // 長いテキストの場合は最初の50文字で検索
-        const searchText = text.length > 50 ? text.substring(0, 50) : text;
+        const fragmentSource = textFragment && textFragment.length > 0 ? textFragment : text;
+        const searchText = fragmentSource.length > 80 ? fragmentSource.substring(0, 80) : fragmentSource;
+        const secondarySearch = text.length > 50 ? text.substring(0, 50) : text;
+        const normalizedSearch = this.normalizeText(fragmentSource || text);
+        const normalizedSecondary = this.normalizeText(secondarySearch);
         
         const walker = document.createTreeWalker(
             document.body,
@@ -683,7 +800,16 @@ class ContentScriptManager {
         
         let node;
         while (node = walker.nextNode()) {
-            if (node.textContent.includes(searchText)) {
+            const content = node.textContent || '';
+            const normalizedContent = this.normalizeText(content);
+            if (
+                content.includes(searchText) ||
+                content.includes(secondarySearch) ||
+                normalizedContent.includes(normalizedSearch) ||
+                normalizedContent.includes(normalizedSecondary) ||
+                (contextBefore && content.includes(contextBefore.slice(-30))) ||
+                (contextAfter && content.includes(contextAfter.slice(0, 30)))
+            ) {
                 const element = node.parentElement;
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 
@@ -705,6 +831,30 @@ class ContentScriptManager {
             }
         }
         return false;
+    }
+
+    normalizeText(str) {
+        return (str || '').replace(/\s+/g, ' ').trim();
+    }
+
+    isContextInvalidatedError(error) {
+        const msg = error?.message?.toLowerCase?.() || '';
+        return msg.includes('context invalidated') || msg.includes('extension context invalidated');
+    }
+
+    async sendMessageWithRetry(message, retries = 0) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                const res = await chrome.runtime.sendMessage(message);
+                return res;
+            } catch (error) {
+                if (attempt < retries && this.isContextInvalidatedError(error)) {
+                    await new Promise(r => setTimeout(r, 200));
+                    continue;
+                }
+                throw error;
+            }
+        }
     }
 
     highlightTemporarily(element) {

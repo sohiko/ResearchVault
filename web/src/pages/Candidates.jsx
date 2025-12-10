@@ -21,7 +21,7 @@ export default function Candidates() {
   const [subjectFilter, setSubjectFilter] = useState('')
   const [autoAnalyzing, setAutoAnalyzing] = useState(false)
   const [lastAnalyzedTime, setLastAnalyzedTime] = useState(null)
-  const [sortOrder, setSortOrder] = useState('subject') // 'subject', 'newest', 'oldest', 'confidence'
+  const [sortOrder, setSortOrder] = useState('confidence') // 'confidence', 'subject', 'newest', 'oldest'
 
   const loadData = useCallback(async () => {
     if (!user) {

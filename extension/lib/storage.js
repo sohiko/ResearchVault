@@ -139,7 +139,7 @@ class StorageManager {
             autoSave: true,
             notifications: true,
             language: 'ja',
-            dashboardUrl: 'https://research-vault-eight.vercel.app'
+            dashboardUrl: 'https://rv.jamknife.jp'
         };
     }
 

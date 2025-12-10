@@ -104,7 +104,10 @@ export default function Header({ onMenuClick }) {
                     <div className="text-sm font-medium text-secondary-900 dark:text-secondary-100">
                       {getUserDisplayName()}
                     </div>
-                    <div className="text-sm text-secondary-500 dark:text-secondary-400">
+                    <div 
+                      className="text-sm text-secondary-500 dark:text-secondary-400 max-w-[220px] truncate"
+                      title={user?.email || ''}
+                    >
                       {user?.email}
                     </div>
                   </div>
