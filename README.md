@@ -1,124 +1,83 @@
+![ResearchVault](img/logo.png)
+
 # ResearchVault
 
-ResearchVaultは、IB生を中心とした学生の研究活動を支援する参照管理システムです。Chrome拡張機能とWebダッシュボードで構成され、レポート作成時の参考文献管理を効率化します。
+ResearchVaultは、IB（国際バカロレア）生を中心とした学生の研究活動を支える参照管理システムです。Chrome拡張機能とWebダッシュボードを組み合わせ、調査・引用・整理を落ち着いたワークフローで一元化します。
 
-## 🌟 主な機能
+## 目的と意義
+- 研究の過程で得た情報を「保存・整理・引用」まで一貫して管理し、記録漏れを防ぐ。
+- Extended EssayやTOK、IAなどの課題を効率的かつ正確に進めるための基盤を提供する。
+- 学校内外の共同研究でも同じ情報基盤を共有し、再利用性と透明性を高める。
 
-- **🌐 Webページの瞬時保存**: Chrome拡張機能でワンクリック保存
-- **✂️ 選択テキストの記録**: 重要な箇所をハイライト保存
-- **🔖 ページ内ブックマーク**: 特定の位置への素早いアクセス
-- **📝 自動引用生成**: APA、MLA、Chicago等の形式に対応
-- **📂 プロジェクト別整理**: Extended Essay、TOK、IA等で分類
-- **👥 チーム共有**: メンバーとの協働研究をサポート
-- **🔍 記録漏れ候補表示**: 学術サイトの訪問履歴から候補を自動検出
+## 対象
+- 広島叡智学園のIB課程の生徒を主対象に、一般の高校生・大学生までを想定。
 
-## 🎯 対象ユーザー
+## 主な機能
+- Webページのワンクリック保存と、選択テキストのハイライト保存
+- ページ内ブックマークによる位置指定
+- APA / MLA / Chicago等への自動引用生成
+- Extended Essay / TOK / IAなどのプロジェクト別整理
+- チームメンバーとの共有と共同編集
+- 学術サイト訪問履歴からの記録漏れ候補提示
 
-- **主要ターゲット**: 広島叡智学園の生徒（IB課程）
-- **二次ターゲット**: 一般の高校生・大学生
+## 構成
+- Chrome拡張機能: ページ保存、選択テキスト保存、ブックマーク作成
+- Webダッシュボード: 参照一覧、フィルター・検索・編集、引用生成、プロジェクト管理
 
-## 🛠️ 技術スタック
+## 技術スタック
+- Chrome拡張: Manifest V3 / JavaScript (ES6+) / Chrome Storage API / HTML / CSS
+- フロントエンド: React 18+ / Tailwind CSS / React Router v6
+- バックエンド: Supabase (PostgreSQL, Storage, Auth)
+- ホスティング: Vercel
 
-### Chrome拡張機能
-- Manifest V3
-- JavaScript (ES6+)
-- Chrome Storage API
-- HTML/CSS
+## セットアップ
+前提: Node.js 18+, npmまたはyarn, Git, Chromeブラウザ
 
-### Webダッシュボード
-- **フロントエンド**: React.js 18+, Tailwind CSS, React Router v6
-- **バックエンド**: Supabase (PostgreSQL, Storage, Auth)
-- **ホスティング**: Vercel
+1. リポジトリを取得: `git clone https://github.com/sohiko/ResearchVault.git`
+2. 必要に応じて `web/` 直下で依存を導入: `cd web && npm install` または `yarn`
+3. Supabaseの環境変数を設定（`.env`などにキーを配置）
 
-## 📁 プロジェクト構造
-
-```
-ResearchVault/
-├── extension/                 # Chrome拡張機能
-│   ├── manifest.json         # 拡張機能マニフェスト
-│   ├── popup/                # ポップアップUI
-│   ├── background/           # バックグラウンドスクリプト
-│   ├── content/              # コンテンツスクリプト
-│   ├── icons/                # アイコンファイル
-│   └── lib/                  # 共通ライブラリ
-├── web/                      # Webダッシュボード
-│   ├── src/
-│   │   ├── components/       # Reactコンポーネント
-│   │   ├── pages/           # ページコンポーネント
-│   │   ├── hooks/           # カスタムフック
-│   │   ├── lib/             # Supabaseクライアント
-│   │   └── styles/          # スタイルファイル
-│   ├── public/              # 静的ファイル
-│   └── package.json
-├── supabase/                # Supabase設定
-│   ├── migrations/          # データベースマイグレーション
-│   └── seed.sql             # 初期データ
-├── docs/                    # ドキュメント
-├── scripts/                 # ユーティリティスクリプト
-└── specs/                   # 仕様書
-```
-
-## 🚀 セットアップ
-
-### 前提条件
-
-- Node.js 18+
-- npm or yarn
-- Git
-- Chromeブラウザ
-
-
-## 📖 使用方法
-
-### Chrome拡張機能
-
-1. **ページ保存**: 拡張機能アイコンをクリック → 情報入力 → 保存
-2. **選択テキスト保存**: テキスト選択 → 右クリック → "選択テキストを保存"
-3. **ブックマーク作成**: 右クリック → "ページ内ブックマークを作成"
+## 使い方
+### Chrome拡張
+1. 拡張機能を読み込み（デベロッパーモードで `extension/` を指定）
+2. ページ閲覧中にアイコンクリックで保存
+3. テキストを選択し右クリックで「選択テキストを保存」
+4. 右クリックから「ページ内ブックマークを作成」
 
 ### Webダッシュボード
+1. ログイン後、サイドバーの「+」からプロジェクトを作成
+2. 参照一覧でフィルター・検索・編集
+3. 引用生成ページでフォーマットを選びコピー
 
-1. **プロジェクト作成**: サイドバー → "+" → プロジェクト情報入力
-2. **参照管理**: 参照一覧 → フィルター・検索・編集
-3. **引用生成**: 引用生成ページ → フォーマット選択 → コピー
-
-
-## 📊 対応引用フォーマット
-
-- APA 7th Edition
-- APA 6th Edition  
-- MLA 9th Edition
-- Chicago 17th Edition
+## 対応引用フォーマット
+- APA 7th / APA 6th
+- MLA 9th
+- Chicago 17th
 - Harvard
 - IEEE
 
-## 🤝 コントリビューション
+## ディレクトリ概要
+```
+ResearchVault/
+├── extension/      Chrome拡張（manifest, popup, background, content, icons, lib）
+├── web/            Webダッシュボード（React, Tailwind, Supabaseクライアント）
+├── supabase/       DBスキーマ・シード
+├── docs/           ドキュメント
+├── scripts/        ユーティリティ
+└── specs/          仕様書
+```
 
-1. フォークする
-2. フィーチャーブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. コミット (`git commit -m 'Add some amazing feature'`)
-4. プッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを作成
+## 開発と貢献
+1. フォーク
+2. ブランチ作成: `git checkout -b feature/your-feature`
+3. コミット: `git commit -m "Add feature"`
+4. プッシュ: `git push origin feature/your-feature`
+5. Pull Requestを作成
 
-## 📝 ライセンス
+## ライセンス
+MIT License. 詳細は `LICENSE` を参照。
 
-このプロジェクトはMITライセンスの下で公開されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
-
-## 👥 作成者
-
-- **Sohiko Misaki** - [GitHub](https://github.com/sohiko)
-
-## 🙏 謝辞
-
-- 広島叡智学園のIB生のフィードバック
-- オープンソースコミュニティの貢献
-- Supabase、Vercel、Reactの素晴らしいツール
-
-## 📞 サポート
-
-- **Issues**: [GitHub Issues](https://github.com/sohiko/ResearchVault/issues)
-- **フィードバック**: アプリ内の機能リクエスト機能
-
----
-
-**ResearchVault** - 研究活動をもっと効率的に 🚀
+## リンクとサポート
+- GitHub: https://github.com/sohiko/ResearchVault
+- Issues: https://github.com/sohiko/ResearchVault/issues
+- フィードバック: アプリ内の機能リクエストから送信可能
