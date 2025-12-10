@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import { renderProjectIcon } from '../../utils/iconRenderer'
 
-import { LayoutDashboard, FileText, FolderKanban, Quote, AlertTriangle, Trash2, Lightbulb, Download, Bookmark } from 'lucide-react'
+import { LayoutDashboard, FileText, FolderKanban, Quote, AlertTriangle, Trash2, Lightbulb, Download, Bookmark, Shield } from 'lucide-react'
 
 const navigation = [
   {
@@ -102,6 +102,11 @@ export default function Sidebar() {
       name: '機能リクエスト',
       href: '/feedback',
       icon: <Lightbulb className="w-5 h-5" />
+    },
+    {
+      name: 'プライバシーポリシー',
+      href: '/privacy',
+      icon: <Shield className="w-5 h-5" />
     }
   ]
 
