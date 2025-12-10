@@ -337,32 +337,40 @@ class API {
     }
 
     // プロジェクト関連
-    async getProjects() {
+    async getProjects(options = {}) {
+        const { forceRefresh = false } = options;
+        
         try {
-            // ストレージキャッシュをまず確認
-            const { projects } = await chrome.storage.local.get(['projects']);
-            if (projects && projects.length > 0) {
-                return projects;
-            }
+            const { projects: cachedProjects } = await chrome.storage.local.get(['projects']);
+            const hasCache = Array.isArray(cachedProjects) && cachedProjects.length > 0;
 
+            // 認証がない場合はキャッシュのみ返却
             if (!this.authToken) {
-                return [];
+                return cachedProjects || [];
             }
 
-            // 共通request経由で現在のベースURLを使用
-            const response = await this.request('/projects', {
-                method: 'GET'
-            });
+            // 常にAPIから最新を取得し、失敗時のみキャッシュにフォールバック
+            const response = await this.request('/projects', { method: 'GET' });
 
             if (response.success && Array.isArray(response.data)) {
-                await chrome.storage.local.set({ projects: response.data });
+                await chrome.storage.local.set({ 
+                    projects: response.data,
+                    projectsUpdatedAt: new Date().toISOString()
+                });
                 return response.data;
+            }
+
+            // オンライン取得が失敗した場合はキャッシュを返す（forceRefreshでも安全にフォールバック）
+            if (hasCache && !forceRefresh) {
+                return cachedProjects;
             }
 
             return [];
         } catch (error) {
             console.error('Failed to load projects:', error);
-            return [];
+            // 例外時もキャッシュがあれば返す
+            const { projects: cachedProjects } = await chrome.storage.local.get(['projects']);
+            return cachedProjects || [];
         }
     }
 

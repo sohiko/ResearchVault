@@ -88,4 +88,5 @@ MIT License. 詳細は `LICENSE` を参照。
 ## リンクとサポート
 - GitHub: https://github.com/sohiko/ResearchVault
 - Issues: https://github.com/sohiko/ResearchVault/issues
+- アンケート: https://forms.office.com/r/3UEXYidDuy
 - フィードバック: アプリ内の機能リクエストから送信可能
