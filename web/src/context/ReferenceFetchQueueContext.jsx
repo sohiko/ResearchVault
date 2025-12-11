@@ -158,7 +158,37 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
             payload: { statusMessage: 'PDFを解析しています (Gemini)...' }
           })
 
-          extractedData = await extractReferenceFromPDF(task.url, geminiApiKey)
+          try {
+            extractedData = await extractReferenceFromPDF(task.url, geminiApiKey)
+          } catch (error) {
+            const isRateLimit =
+              error?.code === 'GEMINI_RATE_LIMIT' ||
+              String(error?.message || '').includes('429')
+
+            if (isRateLimit) {
+              const fallbackData = {
+                extractionMethod: 'gemini-rate-limited',
+                geminiError: error.message
+              }
+
+              extractedData = { ...(extractedData || {}), ...fallbackData }
+
+              dispatch({
+                type: 'UPDATE',
+                id: task.id,
+                payload: {
+                  statusMessage:
+                    'Geminiの使用上限に達したため、既存情報のみで保存します'
+                }
+              })
+
+              toast.error(
+                'Gemini APIの使用上限を超過しました。既存のメタデータのみで参照を保存します。'
+              )
+            } else {
+              throw error
+            }
+          }
         } else {
           dispatch({
             type: 'UPDATE',

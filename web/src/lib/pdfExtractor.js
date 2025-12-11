@@ -128,10 +128,15 @@ function extractTextFromGeminiResponse(data) {
  * @param {string} apiKey - Gemini APIキー
  * @returns {Promise<Object>} 抽出された情報
  */
+const GEMINI_MODEL =
+  typeof import !== 'undefined' && import.meta?.env?.VITE_GEMINI_MODEL
+    ? import.meta.env.VITE_GEMINI_MODEL
+    : 'gemini-2.5-flash-lite'
+
 async function extractWithGemini(base64Data, apiKey) {
   console.log('Sending PDF to Gemini API for extraction...')
   
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -177,7 +182,34 @@ async function extractWithGemini(base64Data, apiKey) {
   if (!response.ok) {
     const errorBody = await response.text().catch(() => '')
     console.error('Gemini API HTTP error:', response.status, errorBody.substring(0, 500))
-    throw new Error(`Gemini API error: ${response.status}`)
+
+    let parsedBody = null
+    try {
+      parsedBody = JSON.parse(errorBody)
+    } catch {
+      // ignore parse errors
+    }
+
+    const apiMessage = parsedBody?.error?.message || parsedBody?.message
+    let errorMessage = apiMessage || `Gemini API error: ${response.status}`
+
+    if (!apiMessage && errorBody) {
+      errorMessage = `${errorMessage} - ${errorBody.substring(0, 200)}`
+    }
+
+    if (response.status === 429) {
+      const rateError = new Error(
+        `Gemini APIのレート制限/クォータを超過しました。Geminiの使用量と課金設定を確認してください。${apiMessage ? ` (${apiMessage})` : ''}`
+      )
+      rateError.code = 'GEMINI_RATE_LIMIT'
+      throw rateError
+    }
+
+    const generalError = new Error(errorMessage)
+    if (parsedBody?.error?.status) {
+      generalError.code = parsedBody.error.status
+    }
+    throw generalError
   }
   
   const data = await response.json()
