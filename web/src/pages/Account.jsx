@@ -17,6 +17,10 @@ export default function Account() {
     email: '',
     created_at: null
   })
+  const [geminiKeyInput, setGeminiKeyInput] = useState('')
+  const [geminiKeyEnabled, setGeminiKeyEnabled] = useState(false)
+  const [hasGeminiKey, setHasGeminiKey] = useState(false)
+  const [apiKeySaving, setApiKeySaving] = useState(false)
   
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -69,6 +73,12 @@ export default function Account() {
         selectedTexts: textsResult.count || 0,
         bookmarks: bookmarksResult.count || 0
       })
+
+      setHasGeminiKey(!!profileData?.gemini_api_key)
+      setGeminiKeyEnabled(
+        !!(profileData?.gemini_api_key && profileData?.gemini_api_key_enabled)
+      )
+      setGeminiKeyInput('')
 
     } catch (error) {
       console.error('Failed to load account data:', error)
@@ -159,6 +169,113 @@ export default function Account() {
       toast.error('パスワードの変更に失敗しました')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveGeminiKey = async () => {
+    if (!geminiKeyInput.trim()) {
+      toast.error('Gemini APIキーを入力してください')
+      return
+    }
+
+    try {
+      setApiKeySaving(true)
+
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          gemini_api_key: geminiKeyInput.trim(),
+          gemini_api_key_enabled: true,
+          updated_at: new Date().toISOString()
+        })
+
+      if (error) {
+        throw error
+      }
+
+      setHasGeminiKey(true)
+      setGeminiKeyEnabled(true)
+      setGeminiKeyInput('')
+      toast.success('Gemini APIキーを保存し、有効化しました')
+      window.dispatchEvent(new CustomEvent('gemini-key-updated'))
+    } catch (error) {
+      console.error('Failed to save Gemini API key:', error)
+      toast.error('Gemini APIキーの保存に失敗しました')
+    } finally {
+      setApiKeySaving(false)
+    }
+  }
+
+  const handleToggleGeminiKey = async (enabled) => {
+    if (!hasGeminiKey) {
+      toast.error('まずGemini APIキーを保存してください')
+      return
+    }
+
+    try {
+      setApiKeySaving(true)
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          gemini_api_key_enabled: enabled,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+
+      if (error) {
+        throw error
+      }
+
+      setGeminiKeyEnabled(enabled)
+      toast.success(enabled ? 'Gemini APIキーを有効化しました' : 'Gemini APIキーを無効化しました')
+      window.dispatchEvent(new CustomEvent('gemini-key-updated'))
+    } catch (error) {
+      console.error('Failed to toggle Gemini API key:', error)
+      toast.error('Gemini APIキーの状態変更に失敗しました')
+    } finally {
+      setApiKeySaving(false)
+    }
+  }
+
+  const handleDeleteGeminiKey = async () => {
+    if (!hasGeminiKey) {
+      toast.error('保存済みのGemini APIキーがありません')
+      return
+    }
+
+    const confirmed = window.confirm('保存済みのGemini APIキーを削除しますか？')
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      setApiKeySaving(true)
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          gemini_api_key: null,
+          gemini_api_key_enabled: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+
+      if (error) {
+        throw error
+      }
+
+      setHasGeminiKey(false)
+      setGeminiKeyEnabled(false)
+      setGeminiKeyInput('')
+      toast.success('Gemini APIキーを削除しました')
+      window.dispatchEvent(new CustomEvent('gemini-key-updated'))
+    } catch (error) {
+      console.error('Failed to delete Gemini API key:', error)
+      toast.error('Gemini APIキーの削除に失敗しました')
+    } finally {
+      setApiKeySaving(false)
     }
   }
 
@@ -361,6 +478,82 @@ export default function Account() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Gemini APIキー */}
+      <div className="card p-6">
+        <h2 className="text-lg font-semibold text-secondary-900 dark:text-secondary-100 mb-4">
+          Gemini APIキー
+        </h2>
+        <p className="text-secondary-600 dark:text-secondary-400 text-sm mb-4">
+          保存したキーが有効な場合、Gemini APIの呼び出しに優先的に利用されます。未設定または無効化時は、環境変数に設定された管理者キーがあればそちらを使用します。
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className={`px-2 py-1 text-xs rounded-full ${hasGeminiKey ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+            {hasGeminiKey ? '保存済み' : '未設定'}
+          </span>
+          <span className={`px-2 py-1 text-xs rounded-full ${geminiKeyEnabled ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+            {geminiKeyEnabled ? '有効' : '無効'}
+          </span>
+          {apiKeySaving && (
+            <span className="text-xs text-secondary-500">
+              処理中...
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-1">
+              Gemini APIキー
+            </label>
+            <input
+              type="password"
+              value={geminiKeyInput}
+              onChange={(e) => setGeminiKeyInput(e.target.value)}
+              className="input-field"
+              placeholder="AIza... で始まるキーを入力"
+              autoComplete="off"
+            />
+            <p className="text-xs text-secondary-500 mt-1">
+              保存済みのキーは表示されません。新しいキーを入力すると上書きされます。
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleSaveGeminiKey}
+              disabled={apiKeySaving || !geminiKeyInput.trim()}
+              className="btn-primary"
+            >
+              {apiKeySaving ? '保存中...' : hasGeminiKey ? 'キーを更新して有効化' : 'キーを保存して有効化'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleToggleGeminiKey(!geminiKeyEnabled)}
+              disabled={apiKeySaving || !hasGeminiKey}
+              className="btn-secondary"
+            >
+              {geminiKeyEnabled ? '一時的に無効化' : '保存済みキーを有効化'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDeleteGeminiKey}
+              disabled={apiKeySaving || !hasGeminiKey}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              キーを削除
+            </button>
+          </div>
+
+          <div className="text-xs text-secondary-500">
+            <p>保存済みのキーを無効化すると、環境変数のVITE_GEMINI_API_KEYが設定されている場合はそちらを利用します。</p>
+          </div>
+        </div>
       </div>
 
       {/* パスワード変更 */}

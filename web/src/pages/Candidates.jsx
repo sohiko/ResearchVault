@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { usePageFocus } from '../hooks/usePageFocus'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import GeminiClient from '../lib/geminiClient'
+import { resolveGeminiApiKey } from '../lib/userGemini'
 
 export default function Candidates() {
   const { user } = useAuth()
@@ -22,6 +23,26 @@ export default function Candidates() {
   const [autoAnalyzing, setAutoAnalyzing] = useState(false)
   const [lastAnalyzedTime, setLastAnalyzedTime] = useState(null)
   const [sortOrder, setSortOrder] = useState('confidence') // 'confidence', 'subject', 'newest', 'oldest'
+  const envGeminiApiKey = import.meta.env.VITE_GEMINI_API_KEY
+  const [geminiKeyConfig, setGeminiKeyConfig] = useState({
+    apiKey: envGeminiApiKey || null,
+    source: envGeminiApiKey ? 'env' : 'none'
+  })
+
+  const refreshGeminiKey = useCallback(async () => {
+    const resolved = await resolveGeminiApiKey(user?.id, envGeminiApiKey)
+    setGeminiKeyConfig(resolved)
+  }, [envGeminiApiKey, user?.id])
+
+  useEffect(() => {
+    refreshGeminiKey()
+  }, [refreshGeminiKey])
+
+  useEffect(() => {
+    const handler = () => refreshGeminiKey()
+    window.addEventListener('gemini-key-updated', handler)
+    return () => window.removeEventListener('gemini-key-updated', handler)
+  }, [refreshGeminiKey])
 
   const loadData = useCallback(async () => {
     if (!user) {
@@ -443,11 +464,11 @@ export default function Candidates() {
   }
 
   const handleClassifyCandidates = async () => {
-    // 環境変数からGemini APIキーを取得
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    // ユーザー設定を優先したGemini APIキーを取得
+    const apiKey = geminiKeyConfig.apiKey
     
     if (!apiKey) {
-      toast.error('Gemini APIキーが設定されていません。GEMINI_SETUP.mdを参照してください。')
+      toast.error('Gemini APIキーが設定されていません。アカウント設定からキーを保存するか、環境変数で管理者キーを設定してください。')
       return
     }
 

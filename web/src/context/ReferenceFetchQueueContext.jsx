@@ -5,7 +5,8 @@ import React, {
   useEffect,
   useMemo,
   useReducer,
-  useRef
+  useRef,
+  useState
 } from 'react'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
@@ -13,6 +14,7 @@ import { supabase } from '../lib/supabase'
 import { extractReferenceFromPDF } from '../lib/pdfExtractor'
 import { useNavigate } from 'react-router-dom'
 import { useReferenceAction } from './ReferenceActionContext'
+import { resolveGeminiApiKey } from '../lib/userGemini'
 
 const ReferenceFetchQueueContext = createContext(null)
 
@@ -101,9 +103,28 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
   const [state, dispatch] = useReducer(queueReducer, initialState)
   const processingRef = useRef(false)
   const { user } = useAuth()
-  const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY
+  const envGeminiApiKey = import.meta.env.VITE_GEMINI_API_KEY
+  const [geminiKeyConfig, setGeminiKeyConfig] = useState({
+    apiKey: envGeminiApiKey || null,
+    source: envGeminiApiKey ? 'env' : 'none'
+  })
   const navigate = useNavigate()
   const { requestReferenceEdit } = useReferenceAction()
+
+  const refreshGeminiKey = useCallback(async () => {
+    const resolved = await resolveGeminiApiKey(user?.id, envGeminiApiKey)
+    setGeminiKeyConfig(resolved)
+  }, [envGeminiApiKey, user?.id])
+
+  useEffect(() => {
+    refreshGeminiKey()
+  }, [refreshGeminiKey])
+
+  useEffect(() => {
+    const handleKeyUpdate = () => refreshGeminiKey()
+    window.addEventListener('gemini-key-updated', handleKeyUpdate)
+    return () => window.removeEventListener('gemini-key-updated', handleKeyUpdate)
+  }, [refreshGeminiKey])
 
   const enqueueFetch = useCallback((payload) => {
     if (!payload?.url) {
@@ -153,9 +174,11 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
 
         let geminiFallback = false
 
+        const activeGeminiKey = geminiKeyConfig.apiKey
+
         if (referenceInfo.isPdf) {
-          if (!geminiApiKey) {
-            throw new Error('Gemini APIキーが設定されていません')
+          if (!activeGeminiKey) {
+            throw new Error('Gemini APIキーが設定されていません。アカウント設定からキーを保存してください。')
           }
 
           dispatch({
@@ -165,7 +188,7 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
           })
 
           try {
-            extractedData = await extractReferenceFromPDF(task.url, geminiApiKey)
+            extractedData = await extractReferenceFromPDF(task.url, activeGeminiKey)
           } catch (error) {
             const isRateLimit =
               error?.code === 'GEMINI_RATE_LIMIT' ||
@@ -284,7 +307,7 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
         toast.error(error.message || '参照情報の取得に失敗しました')
       }
     },
-    [geminiApiKey, user]
+    [geminiKeyConfig, navigate, requestReferenceEdit, user]
   )
 
   useEffect(() => {

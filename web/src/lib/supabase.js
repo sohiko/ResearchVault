@@ -120,6 +120,18 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   }
 })
 
+// 初期ロード時にも現在のセッションを拡張機能へ同期（自動ログイン維持用）
+;(async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      syncAuthToExtension(session, 'SESSION_RESTORED')
+    }
+  } catch (error) {
+    console.debug('Initial extension auth sync skipped:', error?.message || error)
+  }
+})()
+
 // ユーティリティ関数
 export const authHelpers = {
   // 現在のユーザーを取得

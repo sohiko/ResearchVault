@@ -11,6 +11,7 @@ class PopupManager {
         this.isLoading = false;
         this.retryCount = 0;
         this.maxRetries = 3;
+        this.geminiKeyCached = null;
         this.init();
     }
 
@@ -21,6 +22,7 @@ class PopupManager {
             await this.loadModules();
             await this.getCurrentTab();
             await this.checkAuthState();
+            await this.loadGeminiKeyStatus();
             this.bindEvents();
             this.updatePageInfo();
         } catch (error) {
@@ -130,6 +132,7 @@ class PopupManager {
 
         // 検索機能を追加
         searchInput.addEventListener('input', (e) => {
+            dropdown.classList.remove('hidden');
             const query = e.target.value.toLowerCase();
             this.filterProjects(query);
         });
@@ -137,18 +140,18 @@ class PopupManager {
         // フォーカス時の動作
         searchInput.addEventListener('focus', () => {
             dropdown.classList.remove('hidden');
-            this.filterProjects(searchInput.value.toLowerCase());
+            // フォーカス時は常に全件表示
+            this.filterProjects('');
+            // クリック／フォーカスでテキストを全選択
+            searchInput.select();
         });
 
-        // クリック時の動作（空欄にする）
+        // クリック時の動作（テキストを全選択し、候補を表示）
         searchInput.addEventListener('click', () => {
-            if (searchInput.value && !searchInput.value.includes('📁') && !searchInput.value.includes('📂')) {
-                // プロジェクト名が表示されている場合のみ空欄にする
-                searchInput.value = '';
-                hiddenSelect.value = '';
-                dropdown.classList.remove('hidden');
-                this.filterProjects('');
-            }
+            searchInput.select();
+            dropdown.classList.remove('hidden');
+            // クリック時も全件表示（入力変更までは絞り込まない）
+            this.filterProjects('');
         });
 
         document.addEventListener('click', (e) => {
@@ -260,6 +263,10 @@ class PopupManager {
         // ログアウトボタン
         document.getElementById('logoutBtn')?.addEventListener('click', () => this.handleLogout());
 
+        // Geminiキーの保存/クリア
+        document.getElementById('saveGeminiKeyBtn')?.addEventListener('click', () => this.handleSaveGeminiKey());
+        document.getElementById('clearGeminiKeyBtn')?.addEventListener('click', () => this.handleClearGeminiKey());
+
         // プロジェクト選択の保存は updateProjectSelect で処理
 
         // Enterキーでログイン
@@ -269,6 +276,56 @@ class PopupManager {
         document.getElementById('password')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.handleLogin();
         });
+    }
+
+    async loadGeminiKeyStatus() {
+        try {
+            const { geminiApiKey } = await chrome.storage.sync.get(['geminiApiKey']);
+            this.geminiKeyCached = geminiApiKey || null;
+            const status = document.getElementById('geminiStatus');
+            const input = document.getElementById('geminiKeyInput');
+            if (status) {
+                status.textContent = geminiApiKey ? '設定済み' : '未設定';
+                status.style.color = geminiApiKey ? '#16a34a' : '#6b7280';
+            }
+            if (input) {
+                input.value = '';
+                input.placeholder = geminiApiKey ? 'キーを再入力して上書き' : 'APIキーを入力';
+            }
+        } catch (error) {
+            console.error('Failed to load Gemini key status:', error);
+        }
+    }
+
+    async handleSaveGeminiKey() {
+        try {
+            const input = document.getElementById('geminiKeyInput');
+            const key = input?.value.trim();
+            if (!key) {
+                this.showWarning('APIキーを入力してください');
+                return;
+            }
+            await chrome.storage.sync.set({ geminiApiKey: key });
+            this.geminiKeyCached = key;
+            this.showSuccess('Gemini APIキーを保存しました');
+            await this.loadGeminiKeyStatus();
+            if (input) input.value = '';
+        } catch (error) {
+            console.error('Failed to save Gemini key:', error);
+            this.showError('APIキーの保存に失敗しました');
+        }
+    }
+
+    async handleClearGeminiKey() {
+        try {
+            await chrome.storage.sync.remove(['geminiApiKey']);
+            this.geminiKeyCached = null;
+            this.showInfo('Gemini APIキーを無効化しました');
+            await this.loadGeminiKeyStatus();
+        } catch (error) {
+            console.error('Failed to clear Gemini key:', error);
+            this.showError('APIキーの削除に失敗しました');
+        }
     }
 
     async handleLogin() {
@@ -321,35 +378,16 @@ class PopupManager {
 
         try {
             this.showLoading(true);
-            
-            // 認証トークンの確認と期限チェック
-            let tokenToUse = this.api.authToken;
-            if (!tokenToUse) {
-                const stored = await chrome.storage.sync.get(['authToken']);
-                tokenToUse = stored.authToken;
-            }
+            this.showInfo('保存処理を開始しました。ポップアップを閉じても処理は継続します。', { duration: 4000 });
 
-            if (!tokenToUse) {
+            // 認証トークン存在チェックだけ実施（実処理はバックグラウンドで）
+            const { authToken } = await chrome.storage.sync.get(['authToken']);
+            if (!authToken) {
                 this.showError('認証が必要です。ログインしてください');
                 await this.handleLogout();
                 return;
             }
 
-            const expiry = this.getTokenExpiry(tokenToUse);
-            if (expiry && (expiry.isExpired || expiry.timeUntilExpiry < 60)) {
-                const refreshed = await this.refreshToken();
-                if (refreshed.success && refreshed.token) {
-                    tokenToUse = refreshed.token;
-                } else {
-                    await this.handleLogout();
-                    this.showError('セッションが切れました。再ログインしてください');
-                    return;
-                }
-            }
-
-            await this.api.setAuthToken(tokenToUse);
-            
-            // 特殊なURLの場合は保存を拒否
             const currentUrl = this.currentTab.url;
             if (currentUrl.startsWith('chrome://') || 
                 currentUrl.startsWith('moz-extension://') || 
@@ -359,60 +397,29 @@ class PopupManager {
                 this.showError('このページは保存できません');
                 return;
             }
-            
-            console.log('Saving reference with token:', this.api.authToken);
-            
-            // PDF判定
-            const isPdf = await this.checkIfPDF(currentUrl);
-            let pdfInfo = null;
-            
-            if (isPdf) {
-                console.log('Detected PDF, attempting Gemini analysis...');
-                pdfInfo = await this.extractPDFInfoWithGemini(currentUrl);
-            }
-            
-            const referenceData = {
+
+            // バックグラウンドで保存処理を実行し、ポップアップは即時閉じる
+            const payload = {
+                tabId: this.currentTab.id,
                 url: currentUrl,
-                title: pdfInfo?.title || this.currentTab.title,
+                title: this.currentTab.title,
                 favicon: this.currentTab.favIconUrl,
                 projectId: projectId || null,
                 memo: memo,
-                metadata: {
-                    ...(await this.extractPageMetadata()),
-                    tags: tags
-                }
+                tags: tags
             };
 
-            // PDF情報があれば追加
-            if (pdfInfo) {
-                referenceData.reference_type = pdfInfo.referenceType;
-                referenceData.authors = pdfInfo.authors;
-                referenceData.published_date = pdfInfo.publishedDate;
-                referenceData.publisher = pdfInfo.publisher;
-                referenceData.pages = pdfInfo.pages;
-                referenceData.doi = pdfInfo.doi;
-                referenceData.isbn = pdfInfo.isbn;
-                referenceData.journal_name = pdfInfo.journalName;
-                referenceData.volume = pdfInfo.volume;
-                referenceData.issue = pdfInfo.issue;
-                referenceData.edition = pdfInfo.edition;
-                referenceData.metadata.description = pdfInfo.description;
-            }
+            const result = await chrome.runtime.sendMessage({
+                action: 'saveReferenceAsync',
+                data: payload
+            });
 
-            console.log('Reference data to save:', referenceData);
-            const result = await this.api.saveReference(referenceData);
-            
-            if (result.success) {
-                this.showSuccess('ページを保存しました');
+            if (result?.success) {
+                this.showSuccess('バックグラウンドで保存を開始しました。このまま閉じても処理は続きます。');
                 this.clearForm();
-                
-                // 保存成功を背景スクリプトに通知
-                chrome.runtime.sendMessage({
-                    action: 'referenceSaved',
-                    data: result.data
-                });
+                try { window.close(); } catch (e) { /* ignore */ }
             } else {
-                this.showError(result.error || '保存に失敗しました');
+                this.showError(result?.error || '保存に失敗しました');
             }
         } catch (error) {
             console.error('Save error:', error);
@@ -489,367 +496,23 @@ class PopupManager {
     }
 
     /**
-     * GeminiでPDFから情報を抽出（ポップアップ版 - コスト最適化）
+     * GeminiでPDFから情報を抽出（ポップアップ版）
+     * Webアプリと同一の判定基準で処理
      */
     async extractPDFInfoWithGemini(url) {
         try {
-            // Gemini APIキーを取得（設定から）
             const { geminiApiKey } = await chrome.storage.sync.get(['geminiApiKey']);
             if (!geminiApiKey) {
-                console.log('Gemini API key not found, skipping PDF analysis');
-                return null;
+                throw new Error('Gemini APIキーが未設定です（設定画面で追加してください）');
             }
-
-            console.log('Downloading PDF for analysis...');
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`Failed to download PDF: ${response.status}`);
+            if (!window?.PDFExtractor?.extractReferenceFromPDF) {
+                throw new Error('PDF抽出モジュールが読み込まれていません');
             }
-            
-            const arrayBuffer = await response.arrayBuffer();
-            
-            // 1. 部分読み取りを試行（最初5ページ+最後5ページ）
-            console.log('Attempting partial PDF extraction (first 5 + last 5 pages)...');
-            let result = await this.extractWithGeminiPartial(arrayBuffer, geminiApiKey);
-            
-            if (result && result.title && result.title.trim() !== '') {
-                console.log('Successfully extracted with partial method');
-                return result;
-            }
-            
-            // 2. 部分読み取りで不十分な場合、全文読み取り
-            console.log('Partial extraction insufficient, attempting full PDF extraction...');
-            result = await this.extractWithGeminiFull(arrayBuffer, geminiApiKey);
-            
-            if (result && result.title && result.title.trim() !== '') {
-                console.log('Successfully extracted with full method');
-                return result;
-            }
-            
-            return null;
+            const result = await window.PDFExtractor.extractReferenceFromPDF(url, geminiApiKey);
+            return result || null;
         } catch (error) {
             console.error('Gemini PDF extraction failed:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Geminiで部分PDF読み取り（最初5ページ+最後5ページ）
-     */
-    async extractWithGeminiPartial(arrayBuffer, apiKey) {
-        try {
-            // pdf.jsでページ数を取得
-            const pdfjsLib = await import('pdfjs-dist');
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
-            
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            const totalPages = pdf.numPages;
-            
-            // 最初の5ページと最後の5ページを抽出
-            const pagesToExtract = [];
-            for (let i = 1; i <= Math.min(5, totalPages); i++) {
-                pagesToExtract.push(i);
-            }
-            for (let i = Math.max(1, totalPages - 4); i <= totalPages; i++) {
-                if (!pagesToExtract.includes(i)) {
-                    pagesToExtract.push(i);
-                }
-            }
-            
-            console.log(`PDF部分読み取り: 全${totalPages}ページ中、${pagesToExtract.length}ページを抽出 (ページ: ${pagesToExtract.join(', ')})`);
-            
-            // 最初のページのみを画像として抽出（簡略化）
-            const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 1.0 });
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            
-            await page.render({ canvasContext: context, viewport }).promise;
-            
-            // CanvasをBase64エンコード
-            const base64Image = canvas.toDataURL('image/png').split(',')[1];
-            
-            return await this.callGeminiAPI(base64Image, apiKey, true);
-        } catch (error) {
-            console.error('Partial PDF extraction failed:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Geminiで全文PDF読み取り
-     */
-    async extractWithGeminiFull(arrayBuffer, apiKey) {
-        try {
-            const uint8Array = new Uint8Array(arrayBuffer);
-            const base64Pdf = btoa(
-                Array.from(uint8Array)
-                    .map(byte => String.fromCharCode(byte))
-                    .join('')
-            );
-            
-            return await this.callGeminiAPI(base64Pdf, apiKey, false);
-        } catch (error) {
-            console.error('Full PDF extraction failed:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Gemini API呼び出し
-     */
-    async callGeminiAPI(base64Data, apiKey, isPartial) {
-        try {
-            const prompt = isPartial 
-                ? `以下のPDF文書（最初の5ページと最後の5ページのみ）から学術的な参照情報を抽出してください。以下の情報をJSON形式で返してください：`
-                : `以下のPDF文書から学術的な参照情報を抽出してください。以下の情報をJSON形式で返してください：`;
-
-            const geminiResponse = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { text: prompt + `
-
-必須項目:
-- referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
-- title: 論文・書籍のタイトル
-- authors: 著者のリスト（配列形式、各要素は{"name": "著者名", "order": 順番}）。著者が見つからない場合は空配列[]
-- publishedDate: 発行日（YYYY-MM-DD形式、年のみの場合はYYYY-01-01）
-- publisher: 出版社または論文誌名
-- pages: ページ数または範囲
-- doi: DOI（あれば）
-- isbn: ISBN（書籍の場合）
-- journalName: 論文誌名（論文の場合）
-- volume: 巻（論文の場合）
-- issue: 号（論文の場合）
-- language: 言語コード（ja または en）
-- description: 文書の要約（200文字以内）
-
-判定基準:
-- 査読付き学術論文（IEEE, ACM, Springer等）→ "article"
-- 雑誌や一般誌の論文 → "journal"
-- 書籍（ISBNあり）→ "book"
-- 技術レポート、白書、調査報告書 → "report"
-
-回答は以下のJSON形式のみで返してください（説明文は不要）：
-{
-  "referenceType": "article",
-  "title": "タイトル",
-  "authors": [{"name": "著者名", "order": 1}],
-  "publishedDate": "YYYY-MM-DD",
-  "publisher": "出版社",
-  "pages": "1-10",
-  "doi": "10.xxxx/xxxx",
-  "isbn": null,
-  "journalName": "論文誌名",
-  "volume": "1",
-  "issue": "1",
-  "language": "ja",
-  "description": "要約"
-}` },
-                                {
-                                    inline_data: {
-                                        mime_type: isPartial ? 'image/png' : 'application/pdf',
-                                        data: base64Data
-                                    }
-                                }
-                            ]
-                        }],
-                        generationConfig: {
-                            temperature: 0.1,
-                            topK: 1,
-                            topP: 1,
-                            maxOutputTokens: 2048
-                        }
-                    })
-                }
-            );
-
-            if (!geminiResponse.ok) {
-                const errorText = await geminiResponse.text();
-                console.error('Gemini API error:', errorText);
-                throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorText}`);
-            }
-
-            const geminiData = await geminiResponse.json();
-            
-            // エラーチェック
-            if (geminiData.error) {
-                console.error('Gemini API error:', geminiData.error);
-                throw new Error(`Gemini API error: ${geminiData.error.message}`);
-            }
-            
-            const text = geminiData.candidates[0]?.content?.parts[0]?.text;
-
-            if (!text) {
-                console.error('No response text from Gemini:', geminiData);
-                throw new Error('No response from Gemini');
-            }
-
-            console.log('Gemini response text:', text);
-
-            // JSONを抽出（より柔軟なパターンマッチング）
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                console.error('No JSON found in response:', text);
-                throw new Error('No JSON found in response');
-            }
-
-            let extractedInfo;
-            try {
-                extractedInfo = JSON.parse(jsonMatch[0]);
-            } catch (parseError) {
-                console.error('JSON parse error:', parseError, 'Raw text:', jsonMatch[0]);
-                throw new Error('Failed to parse JSON response');
-            }
-            
-            // 著者情報がない場合はサイト名を使用
-            if (!extractedInfo.authors || extractedInfo.authors.length === 0) {
-                const siteName = this.extractSiteNameFromUrl(url);
-                console.log(`No authors found, using site name: ${siteName}`);
-                extractedInfo.authors = [{ name: siteName, order: 1 }];
-                extractedInfo.isSiteAuthor = true;
-            }
-
-            console.log('Successfully extracted PDF info with Gemini');
-            return extractedInfo;
-        } catch (error) {
-            console.error('Gemini API call failed:', error);
-            return null;
-        }
-    }
-
-    /**
-     * URLからサイト名を抽出（著者情報がない場合のフォールバック）
-     */
-    extractSiteNameFromUrl(url) {
-        try {
-            const urlObj = new URL(url);
-            const domain = urlObj.hostname.toLowerCase();
-            
-            // 既知のサイト名マッピング（service-worker.jsと同じ）
-            const siteNameMap = {
-                'y-history.net': '世界史の窓',
-                'www.y-history.net': '世界史の窓',
-                'ibo.org': 'IBO',
-                'www.ibo.org': 'IBO',
-                'wikipedia.org': 'Wikipedia',
-                'ja.wikipedia.org': 'Wikipedia',
-                'en.wikipedia.org': 'Wikipedia',
-                'github.com': 'GitHub',
-                'stackoverflow.com': 'Stack Overflow',
-                'qiita.com': 'Qiita',
-                'zenn.dev': 'Zenn',
-                'note.com': 'note',
-                'hatenablog.com': 'はてなブログ',
-                'ameblo.jp': 'アメブロ',
-                'boj.or.jp': '日本銀行',
-                'mof.go.jp': '財務省',
-                'mext.go.jp': '文部科学省',
-                'mhlw.go.jp': '厚生労働省',
-                'meti.go.jp': '経済産業省',
-                'mlit.go.jp': '国土交通省',
-                'env.go.jp': '環境省',
-                'soumu.go.jp': '総務省',
-                'cao.go.jp': '内閣府',
-                'mofa.go.jp': '外務省',
-                'mod.go.jp': '防衛省',
-                'moj.go.jp': '法務省',
-                'maff.go.jp': '農林水産省',
-                'treasury.gov': '米国財務省',
-                'state.gov': '米国国務省',
-                'whitehouse.gov': 'ホワイトハウス',
-                'congress.gov': '米国議会',
-                'usgs.gov': '米国地質調査所',
-                'epa.gov': '米国環境保護庁',
-                'fda.gov': 'FDA',
-                'ed.gov': '米国教育省',
-                'un.org': 'United Nations',
-                'who.int': 'World Health Organization',
-                'worldbank.org': 'World Bank',
-                'imf.org': 'International Monetary Fund',
-                'wto.org': 'World Trade Organization',
-                'oecd.org': 'OECD',
-                'unesco.org': 'UNESCO',
-                'unicef.org': 'UNICEF',
-                'europa.eu': 'European Union',
-                'ecb.europa.eu': 'European Central Bank',
-                'nih.gov': 'National Institutes of Health',
-                'cdc.gov': 'Centers for Disease Control and Prevention',
-                'nasa.gov': 'NASA',
-                'nist.gov': 'NIST',
-                'riken.jp': '理化学研究所',
-                'aist.go.jp': '産業技術総合研究所',
-                'jaxa.jp': 'JAXA',
-                'nii.ac.jp': '国立情報学研究所',
-                'nies.go.jp': '国立環境研究所',
-                'nims.go.jp': '物質・材料研究機構',
-                'jst.go.jp': '科学技術振興機構',
-                'jsps.go.jp': '日本学術振興会',
-                'ieee.org': 'IEEE',
-                'acm.org': 'ACM',
-                'springer.com': 'Springer',
-                'elsevier.com': 'Elsevier',
-                'wiley.com': 'Wiley',
-                'nature.com': 'Nature',
-                'science.org': 'Science',
-                'oup.com': 'Oxford University Press',
-                'cambridge.org': 'Cambridge University Press',
-                'jstor.org': 'JSTOR',
-                'researchgate.net': 'ResearchGate',
-                'academia.edu': 'Academia.edu',
-                'pubmed.ncbi.nlm.nih.gov': 'PubMed',
-                'scholar.google.com': 'Google Scholar',
-                'semanticscholar.org': 'Semantic Scholar',
-                'mdpi.com': 'MDPI',
-                'plos.org': 'PLOS',
-                'frontiersin.org': 'Frontiers',
-                'jstage.jst.go.jp': 'J-STAGE',
-                'ci.nii.ac.jp': 'CiNii'
-            };
-            
-            // 完全一致をチェック
-            if (siteNameMap[domain]) {
-                return siteNameMap[domain];
-            }
-            
-            // 部分一致をチェック
-            for (const [key, value] of Object.entries(siteNameMap)) {
-                if (domain.includes(key)) {
-                    return value;
-                }
-            }
-            
-            // ドメインから推測
-            const parts = domain.split('.');
-            if (parts.length >= 2) {
-                const mainDomain = parts[parts.length - 2];
-                
-                // 一般的なTLDを除外
-                const commonTlds = ['com', 'org', 'net', 'edu', 'gov', 'co', 'jp', 'uk', 'de', 'fr', 'it', 'es', 'ca', 'au', 'nz'];
-                if (!commonTlds.includes(mainDomain)) {
-                    return mainDomain.charAt(0).toUpperCase() + mainDomain.slice(1);
-                }
-                
-                // サブドメインがある場合はそれを使用
-                if (parts.length >= 3) {
-                    const subdomain = parts[parts.length - 3];
-                    return subdomain.charAt(0).toUpperCase() + subdomain.slice(1);
-                }
-            }
-            
-            // 最後の手段：ドメイン名をそのまま使用
-            return domain.charAt(0).toUpperCase() + domain.slice(1);
-        } catch {
-            return 'Unknown Site';
+            throw error;
         }
     }
 

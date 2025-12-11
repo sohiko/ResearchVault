@@ -79,6 +79,8 @@ CREATE TABLE public.profiles (
   email text NOT NULL UNIQUE,
   name text,
   avatar_url text,
+  gemini_api_key text,
+  gemini_api_key_enabled boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   is_admin boolean NOT NULL DEFAULT false,
