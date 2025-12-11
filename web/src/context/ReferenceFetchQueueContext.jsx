@@ -164,11 +164,16 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
             const isRateLimit =
               error?.code === 'GEMINI_RATE_LIMIT' ||
               String(error?.message || '').includes('429')
+          const isBlocked =
+            error?.code === 'GEMINI_BLOCKED' ||
+            String(error?.blockReason || '').length > 0 ||
+            String(error?.message || '').includes('block')
 
-            if (isRateLimit) {
+          if (isRateLimit || isBlocked) {
               const fallbackData = {
-                extractionMethod: 'gemini-rate-limited',
-                geminiError: error.message
+              extractionMethod: isBlocked ? 'gemini-blocked' : 'gemini-rate-limited',
+              geminiError: error.message,
+              geminiBlockReason: error.blockReason || null
               }
 
               extractedData = { ...(extractedData || {}), ...fallbackData }
@@ -177,14 +182,17 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
                 type: 'UPDATE',
                 id: task.id,
                 payload: {
-                  statusMessage:
-                    'Geminiの使用上限に達したため、既存情報のみで保存します'
+                statusMessage: isBlocked
+                  ? 'Geminiがコンテンツをブロックしたため、既存情報のみで保存します'
+                  : 'Geminiの使用上限に達したため、既存情報のみで保存します'
                 }
               })
 
-              toast.error(
-                'Gemini APIの使用上限を超過しました。既存のメタデータのみで参照を保存します。'
-              )
+            toast.error(
+              isBlocked
+                ? 'Geminiがコンテンツをブロックしました。既存のメタデータのみで保存します。'
+                : 'Gemini APIの使用上限を超過しました。既存のメタデータのみで参照を保存します。'
+            )
             } else {
               throw error
             }

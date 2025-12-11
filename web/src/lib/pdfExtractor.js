@@ -164,7 +164,7 @@ async function extractWithGemini(base64Data, apiKey) {
     body: JSON.stringify({
       contents: [{
         parts: [{
-          text: `このPDF文書から学術的な参照情報を抽出してください。以下の情報をJSON形式で返してください：
+          text: `このPDF文書から学術的な参照情報を抽出してください。必ず以下の判定基準に従い、JSONのみで返してください：
 
 必須項目:
 - referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
@@ -181,6 +181,13 @@ async function extractWithGemini(base64Data, apiKey) {
 - description: 要約または説明（200文字程度）
 
 注意事項:
+- referenceTypeの判定を厳格に行うこと。以下を優先順に適用してください：
+  1) DOI, 卷(Volume)/号(Issue)/ページ範囲、査読誌名、学会名があれば "article"
+  2) 雑誌・一般誌（ニュース/ビジネス誌）で巻号や発行日がある場合は "journal"
+  3) ISBNがあれば "book"
+  4) 白書・調査報告・技術報告・ワーキングペーパー・卒論/修論/博士論文は "report"
+  5) 上記いずれにも当てはまらず、ブログや単なるウェブページのときのみ "website"
+- 迷った場合は "website" にせず、証拠に基づき最も近いものを選ぶこと。DOIや巻号がある場合に "website" を返してはいけません。
 - 著者情報が見つからない場合は空配列[]を返してください
 - 日付は正確に抽出し、不明な場合は空文字列を返してください
 - すべてのフィールドは文字列または配列として返してください
@@ -233,10 +240,23 @@ async function extractWithGemini(base64Data, apiKey) {
   }
   
   const data = await response.json()
+  if (data?.promptFeedback?.blockReason) {
+    const blockedError = new Error(
+      `Geminiがリクエストをブロックしました: ${data.promptFeedback.blockReason}`
+    )
+    blockedError.code = 'GEMINI_BLOCKED'
+    blockedError.blockReason = data.promptFeedback.blockReason
+    throw blockedError
+  }
   const text = extractTextFromGeminiResponse(data)
   
   if (!text) {
-    throw new Error('No text in Gemini response')
+    const noTextError = new Error('No text in Gemini response')
+    if (data?.promptFeedback?.blockReason) {
+      noTextError.code = 'GEMINI_BLOCKED'
+      noTextError.blockReason = data.promptFeedback.blockReason
+    }
+    throw noTextError
   }
   
   console.log('Gemini response received, parsing JSON...')
