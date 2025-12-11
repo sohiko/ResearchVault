@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useReferenceFetchQueue } from '../../context/ReferenceFetchQueueContext'
 
 const STATUS_LABELS = {
@@ -18,12 +18,33 @@ const STATUS_COLORS = {
 export default function ReferenceFetchStatusPanel() {
   const { tasks, dismissTask, hasActiveTasks } = useReferenceFetchQueue()
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isDismissed, setIsDismissed] = useState(false)
 
   const visibleTasks = useMemo(() => {
+    const priority = (task) => {
+      if (task.status === 'processing') return 0
+      if (task.status === 'pending') return 1
+      return 2
+    }
+
     return [...tasks]
-      .sort((a, b) => b.createdAt - a.createdAt)
+      .sort((a, b) => {
+        const priorityDiff = priority(a) - priority(b)
+        if (priorityDiff !== 0) return priorityDiff
+        return b.createdAt - a.createdAt
+      })
       .slice(0, 4)
   }, [tasks])
+
+  useEffect(() => {
+    if (hasActiveTasks) {
+      setIsDismissed(false)
+    }
+  }, [hasActiveTasks])
+
+  if (isDismissed && !hasActiveTasks) {
+    return null
+  }
 
   const totalPending = tasks.filter((task) => task.status === 'pending').length
   const totalProcessing = tasks.filter(
@@ -42,13 +63,50 @@ export default function ReferenceFetchStatusPanel() {
                 : '現在の処理はありません'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsCollapsed((prev) => !prev)}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <span className="sr-only">トグル</span>
-            {isCollapsed ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsCollapsed((prev) => !prev)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <span className="sr-only">トグル</span>
+              {isCollapsed ? (
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 15l7-7 7 7"
+                  />
+                </svg>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDismissed(true)}
+              disabled={hasActiveTasks}
+              className="text-gray-400 hover:text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="sr-only">パネルを閉じる</span>
               <svg
                 className="w-5 h-5"
                 fill="none"
@@ -59,25 +117,11 @@ export default function ReferenceFetchStatusPanel() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
+                  d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
-            ) : (
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 15l7-7 7 7"
-                />
-              </svg>
-            )}
-          </button>
+            </button>
+          </div>
         </div>
 
         {!isCollapsed && (
