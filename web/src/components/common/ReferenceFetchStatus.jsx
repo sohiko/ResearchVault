@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useReferenceFetchQueue } from '../../context/ReferenceFetchQueueContext'
 import { useNavigate } from 'react-router-dom'
 import { useReferenceAction } from '../../context/ReferenceActionContext'
@@ -6,18 +6,43 @@ import { useReferenceAction } from '../../context/ReferenceActionContext'
 export default function ReferenceFetchStatus() {
   const { tasks, activeTasks, dismissTask } = useReferenceFetchQueue()
   const [isMinimized, setIsMinimized] = useState(false)
+  const [isDismissed, setIsDismissed] = useState(false)
   const navigate = useNavigate()
   const { requestReferenceEdit } = useReferenceAction()
 
   // アクティブなタスクまたは完了したがまだ表示されているタスクがある場合に表示
-  const visibleTasks = tasks.filter(task =>
-    task.status === 'processing' ||
-    task.status === 'pending' ||
-    (task.status === 'success' && !task.dismissed) ||
-    (task.status === 'error' && !task.dismissed)
-  )
+  const visibleTasks = useMemo(() => {
+    const priority = (task) => {
+      if (task.status === 'processing') return 0
+      if (task.status === 'pending') return 1
+      return 2
+    }
 
-  if (visibleTasks.length === 0) {
+    return tasks
+      .filter(
+        (task) =>
+          task.status === 'processing' ||
+          task.status === 'pending' ||
+          (task.status === 'success' && !task.dismissed) ||
+          (task.status === 'error' && !task.dismissed)
+      )
+      .sort((a, b) => {
+        const diff = priority(a) - priority(b)
+        if (diff !== 0) return diff
+        return (b.createdAt || 0) - (a.createdAt || 0)
+      })
+  }, [tasks])
+
+  const hasActiveTasks = activeTasks.length > 0
+
+  useEffect(() => {
+    if (hasActiveTasks) {
+      // 新規処理開始時は再表示
+      setIsDismissed(false)
+    }
+  }, [hasActiveTasks])
+
+  if ((isDismissed && !hasActiveTasks) || visibleTasks.length === 0) {
     return null
   }
 
@@ -57,20 +82,33 @@ export default function ReferenceFetchStatus() {
               {visibleTasks.length}
             </span>
           </div>
-          <button
-            onClick={() => setIsMinimized(!isMinimized)}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
-          >
-            {isMinimized ? (
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setIsMinimized(!isMinimized)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
+            >
+              {isMinimized ? (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={() => {
+                if (!hasActiveTasks) setIsDismissed(true)
+              }}
+              disabled={hasActiveTasks}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-            ) : (
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            )}
-          </button>
+            </button>
+          </div>
         </div>
 
         {/* Task List */}
