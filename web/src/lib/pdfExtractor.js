@@ -144,6 +144,46 @@ function normalizeReferenceType(value) {
   return 'website'
 }
 
+function parseJsonWithFallback(rawText) {
+  const trimmed = (rawText || '').trim()
+
+  // 1) 素直にパース
+  try {
+    return JSON.parse(trimmed)
+  } catch (e1) {
+    // fallbackへ
+  }
+
+  // 2) 複数オブジェクトが並んでいる場合を配列として扱う
+  const splitByObjects = trimmed.split(/\}\s*,?\s*\{/)
+  if (splitByObjects.length > 1) {
+    const joined = '[' +
+      splitByObjects
+        .map((part, index) => {
+          if (index === 0) {
+            return part + '}'
+          }
+          if (index === splitByObjects.length - 1) {
+            return '{' + part
+          }
+          return '{' + part + '}'
+        })
+        .join(',') +
+      ']'
+    try {
+      const arr = JSON.parse(joined)
+      if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === 'object') {
+        return arr[0]
+      }
+    } catch (e2) {
+      // 続行
+    }
+  }
+
+  console.error('JSON parse error: unable to parse Gemini response', trimmed.substring(0, 500))
+  throw new Error('Failed to parse JSON from response')
+}
+
 /**
  * GeminiでPDFを直接読み取り
  * @param {string} base64Data - Base64エンコードされたPDFデータ
@@ -267,19 +307,15 @@ async function extractWithGemini(base64Data, apiKey) {
     console.error('No JSON found in response:', text.substring(0, 500))
     throw new Error('No JSON found in response')
   }
-  
-  try {
-    const parsed = JSON.parse(jsonMatch[0])
-    const normalizedType = normalizeReferenceType(
-      parsed.referenceType ||
-      parsed.reference_type ||
-      parsed.type
-    )
-    return { ...parsed, referenceType: normalizedType }
-  } catch (parseError) {
-    console.error('JSON parse error:', parseError, 'Raw text:', jsonMatch[0].substring(0, 500))
-    throw new Error('Failed to parse JSON from response')
-  }
+
+  const parsed = parseJsonWithFallback(jsonMatch[0])
+
+  const normalizedType = normalizeReferenceType(
+    parsed.referenceType ||
+    parsed.reference_type ||
+    parsed.type
+  )
+  return { ...parsed, referenceType: normalizedType }
 }
 
 /**
