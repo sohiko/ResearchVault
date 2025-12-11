@@ -1,18 +1,50 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
 import ProtectedModal from './ProtectedModal'
 import { useModalContext } from '../../hooks/useModalContext'
+import {
+  renderProjectIcon,
+  getAvailableLucideIcons,
+  getAvailableEmojiIcons,
+  lucideIconMap
+} from '../../utils/iconRenderer'
 
 const EditProjectModal = ({ project, onClose, onUpdate }) => {
   const { openModal, closeModal } = useModalContext()
   const modalId = 'edit-project'
-  
+
+  // アイコンの初期タイプ判定
+  const initialIconType = useMemo(() => {
+    if (!project.icon) return 'emoji'
+    if (typeof project.icon === 'string' && project.icon.startsWith('lucide:')) {
+      return 'lucide'
+    }
+    if (lucideIconMap[project.icon]) {
+      return 'lucide'
+    }
+    return 'emoji'
+  }, [project.icon])
+
+  const initialIconName = useMemo(() => {
+    if (!project.icon) return 'Folder'
+    if (typeof project.icon === 'string' && project.icon.startsWith('lucide:')) {
+      return project.icon.replace('lucide:', '')
+    }
+    if (lucideIconMap[project.icon]) {
+      return project.icon
+    }
+    return project.icon // emoji
+  }, [project.icon])
+
   const [formData, setFormData] = useState({
     name: project.name || '',
     description: project.description || '',
     color: project.color || '#3B82F6',
-    isPublic: project.is_public || false
+    icon: initialIconName,
+    iconType: initialIconType
   })
+  const [iconSearchQuery, setIconSearchQuery] = useState('')
+  const [showAllIcons, setShowAllIcons] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
 
@@ -32,7 +64,8 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
   const hasUnsavedChanges = formData.name !== (project.name || '') ||
                            formData.description !== (project.description || '') ||
                            formData.color !== (project.color || '#3B82F6') ||
-                           formData.isPublic !== (project.is_public || false)
+                           formData.icon !== initialIconName ||
+                           formData.iconType !== initialIconType
 
   const colorOptions = [
     { value: '#3B82F6', label: 'ブルー', class: 'bg-blue-500' },
@@ -44,6 +77,25 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
     { value: '#EC4899', label: 'ピンク', class: 'bg-pink-500' },
     { value: '#6B7280', label: 'グレー', class: 'bg-gray-500' }
   ]
+
+  const lucideIcons = useMemo(() => getAvailableLucideIcons(), [])
+  const emojiIcons = useMemo(() => getAvailableEmojiIcons(), [])
+
+  const filteredLucideIcons = useMemo(() => {
+    const query = iconSearchQuery.toLowerCase()
+    return lucideIcons.filter(
+      (icon) =>
+        icon.label.toLowerCase().includes(query) ||
+        icon.name.toLowerCase().includes(query)
+    )
+  }, [iconSearchQuery, lucideIcons])
+
+  const filteredEmojiIcons = useMemo(() => {
+    const query = iconSearchQuery.toLowerCase()
+    return emojiIcons.filter((icon) =>
+      icon.label.toLowerCase().includes(query)
+    )
+  }, [iconSearchQuery, emojiIcons])
 
   const validateForm = () => {
     const newErrors = {}
@@ -71,11 +123,16 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
 
     try {
       setLoading(true)
+      let iconValue = formData.icon || 'Folder'
+      if (formData.iconType === 'lucide') {
+        iconValue = `lucide:${formData.icon}`
+      }
+
       await onUpdate({
         name: formData.name.trim(),
         description: formData.description.trim(),
         color: formData.color,
-        is_public: formData.isPublic
+        icon: iconValue
       })
     } catch (error) {
       console.error('Failed to update project:', error)
@@ -107,7 +164,7 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
       hasUnsavedChanges={hasUnsavedChanges}
       confirmMessage="変更内容が失われますが、よろしいですか？"
     >
-      <div className="bg-white rounded-lg max-w-md w-full">
+      <div className="bg-white dark:bg-secondary-800 rounded-lg max-w-2xl w-full shadow-xl">
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-900">プロジェクトを編集</h2>
@@ -123,100 +180,179 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
-          {/* プロジェクト名 */}
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-              プロジェクト名 <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="name"
-              value={formData.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-                errors.name ? 'border-red-300' : 'border-gray-300'
-              }`}
-              placeholder="プロジェクト名を入力"
-              maxLength={100}
-            />
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-600">{errors.name}</p>
-            )}
-            <p className="mt-1 text-xs text-gray-500">
-              {formData.name.length}/100文字
-            </p>
-          </div>
-
-          {/* 説明 */}
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-              説明
-            </label>
-            <textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={3}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-                errors.description ? 'border-red-300' : 'border-gray-300'
-              }`}
-              placeholder="プロジェクトの説明を入力（任意）"
-              maxLength={500}
-            />
-            {errors.description && (
-              <p className="mt-1 text-sm text-red-600">{errors.description}</p>
-            )}
-            <p className="mt-1 text-xs text-gray-500">
-              {formData.description.length}/500文字
-            </p>
-          </div>
-
-          {/* カラー */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              カラー
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {colorOptions.map((color) => (
-                <button
-                  key={color.value}
-                  type="button"
-                  onClick={() => handleChange('color', color.value)}
-                  className={`w-full h-10 rounded-md border-2 flex items-center justify-center ${
-                    formData.color === color.value 
-                      ? 'border-gray-800' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  } ${color.class}`}
-                  title={color.label}
-                >
-                  {formData.color === color.value && (
-                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 公開設定 */}
-          <div>
-            <div className="flex items-center">
-              <input
-                id="isPublic"
-                type="checkbox"
-                checked={formData.isPublic}
-                onChange={(e) => handleChange('isPublic', e.target.checked)}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-              <label htmlFor="isPublic" className="ml-2 block text-sm text-gray-700">
-                プロジェクトを公開する
+        <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5">
+          {/* プロジェクト名 + 説明 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                プロジェクト名 <span className="text-red-500">*</span>
               </label>
+              <input
+                type="text"
+                id="name"
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                  errors.name ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="プロジェクト名を入力"
+                maxLength={100}
+              />
+              {errors.name && (
+                <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                {formData.name.length}/100文字
+              </p>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
-              公開プロジェクトは、リンクを知っている人が閲覧できます
-            </p>
+
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                説明
+              </label>
+              <textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleChange('description', e.target.value)}
+                rows={3}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                  errors.description ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="プロジェクトの説明を入力（任意）"
+                maxLength={500}
+              />
+              {errors.description && (
+                <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                {formData.description.length}/500文字
+              </p>
+            </div>
+          </div>
+
+          {/* カラー & アイコン */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                カラー
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {colorOptions.map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    onClick={() => handleChange('color', color.value)}
+                    className={`w-full h-10 rounded-md border-2 flex items-center justify-center ${
+                      formData.color === color.value 
+                        ? 'border-gray-800' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    } ${color.class}`}
+                    title={color.label}
+                  >
+                    {formData.color === color.value && (
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  アイコン
+                </label>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-1">
+                    プレビュー:
+                    <span className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-gray-200">
+                      {renderProjectIcon(
+                        formData.iconType === 'lucide' ? formData.icon : formData.icon || '📂',
+                        formData.iconType === 'lucide' ? 'lucide' : 'emoji',
+                        'w-5 h-5'
+                      )}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              {/* アイコンタイプ選択 */}
+              <div className="flex space-x-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => handleChange('iconType', 'lucide')}
+                  className={`flex-1 px-3 py-2 rounded-md border ${
+                    formData.iconType === 'lucide'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Lucide
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChange('iconType', 'emoji')}
+                  className={`flex-1 px-3 py-2 rounded-md border ${
+                    formData.iconType === 'emoji'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  絵文字
+                </button>
+              </div>
+
+              {/* 検索 */}
+              <input
+                type="text"
+                placeholder="アイコンを検索..."
+                value={iconSearchQuery}
+                onChange={(e) => setIconSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 mb-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+
+              {/* アイコン一覧 */}
+              <div className="space-y-2">
+                <div className="grid grid-cols-6 gap-2">
+                  {(formData.iconType === 'lucide'
+                    ? (showAllIcons ? filteredLucideIcons : filteredLucideIcons.slice(0, 12))
+                    : (showAllIcons ? filteredEmojiIcons : filteredEmojiIcons.slice(0, 12))
+                  ).map((icon) => {
+                    const iconName = formData.iconType === 'lucide' ? icon.name : icon.name
+                    const selected = formData.icon === iconName
+                    return (
+                      <button
+                        key={icon.name}
+                        type="button"
+                        onClick={() => handleChange('icon', iconName)}
+                        className={`h-10 rounded-md border flex items-center justify-center ${
+                          selected ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        title={icon.label}
+                      >
+                        {renderProjectIcon(
+                          formData.iconType === 'lucide' ? icon.name : icon.name,
+                          formData.iconType === 'lucide' ? 'lucide' : 'emoji',
+                          'w-5 h-5'
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllIcons((prev) => !prev)}
+                    className="text-xs text-primary-600 hover:text-primary-700"
+                  >
+                    {showAllIcons ? '少なく表示' : 'もっと見る'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
 
