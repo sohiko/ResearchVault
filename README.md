@@ -1,4 +1,5 @@
 ![ResearchVault](img/logo.png)
+![Mockup](img/web-mockup.png)
 
 # ResearchVault
 
