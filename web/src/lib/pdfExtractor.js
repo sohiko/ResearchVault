@@ -3,6 +3,14 @@
  * Gemini APIを使用してPDFから参照情報を抽出
  * （pdf.jsのworker問題を回避するため、Gemini APIに直接PDFを送信）
  */
+// Geminiのブロックを受けた場合にのみ使う緩和セーフティ設定
+const RELAXED_SAFETY_SETTINGS = [
+  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
+]
 
 /**
  * プロキシAPI経由でPDFをダウンロード
@@ -193,18 +201,16 @@ function parseJsonWithFallback(rawText) {
 const GEMINI_MODEL = (import.meta?.env?.VITE_GEMINI_MODEL || '').trim() ||
   'gemini-2.5-flash-lite'
 
-async function extractWithGemini(base64Data, apiKey) {
-  console.log('Sending PDF to Gemini API for extraction...')
+function isBlockedError(error) {
+  const message = error?.message || ''
+  return error?.code === 'GEMINI_BLOCKED' || message.includes('PROHIBITED_CONTENT')
+}
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: `このPDF文書から学術的な参照情報を抽出してください。必ず以下の判定基準に従い、JSONのみで返してください：
+async function callGeminiGenerate(base64Data, apiKey, { useRelaxedSafety = false } = {}) {
+  const body = {
+    contents: [{
+      parts: [{
+        text: `このPDF文書から学術的な参照情報を抽出してください。必ず以下の判定基準に従い、JSONのみで返してください：
 
 必須項目:
 - referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
@@ -232,18 +238,29 @@ async function extractWithGemini(base64Data, apiKey) {
 - 日付は正確に抽出し、不明な場合は空文字列を返してください
 - すべてのフィールドは文字列または配列として返してください
 - JSONのみを返し、他の説明文は含めないでください`
-        }, {
-          inline_data: {
-            mime_type: 'application/pdf',
-            data: base64Data
-          }
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 2048
-      }
-    })
+      }, {
+        inline_data: {
+          mime_type: 'application/pdf',
+          data: base64Data
+        }
+      }]
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 2048
+    }
+  }
+
+  if (useRelaxedSafety) {
+    body.safetySettings = RELAXED_SAFETY_SETTINGS
+  }
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
   })
 
   if (!response.ok) {
@@ -279,7 +296,10 @@ async function extractWithGemini(base64Data, apiKey) {
     throw generalError
   }
 
-  const data = await response.json()
+  return response.json()
+}
+
+function parseGeminiData(data) {
   if (data?.promptFeedback?.blockReason) {
     const blockedError = new Error(
       `Geminiがリクエストをブロックしました: ${data.promptFeedback.blockReason}`
@@ -288,6 +308,7 @@ async function extractWithGemini(base64Data, apiKey) {
     blockedError.blockReason = data.promptFeedback.blockReason
     throw blockedError
   }
+
   const text = extractTextFromGeminiResponse(data)
 
   if (!text) {
@@ -299,8 +320,6 @@ async function extractWithGemini(base64Data, apiKey) {
     throw noTextError
   }
 
-  console.log('Gemini response received, parsing JSON...')
-
   // JSONを抽出
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) {
@@ -308,14 +327,44 @@ async function extractWithGemini(base64Data, apiKey) {
     throw new Error('No JSON found in response')
   }
 
-  const parsed = parseJsonWithFallback(jsonMatch[0])
+  return parseJsonWithFallback(jsonMatch[0])
+}
 
+function normalizeGeminiResult(parsed) {
   const normalizedType = normalizeReferenceType(
     parsed.referenceType ||
     parsed.reference_type ||
     parsed.type
   )
   return { ...parsed, referenceType: normalizedType }
+}
+
+async function extractWithGemini(base64Data, apiKey) {
+  console.log('Sending PDF to Gemini API for extraction...')
+
+  let lastError = null
+
+  // 1st: 元の挙動（安全設定なし）
+  try {
+    const data = await callGeminiGenerate(base64Data, apiKey, { useRelaxedSafety: false })
+    return normalizeGeminiResult(parseGeminiData(data))
+  } catch (error) {
+    lastError = error
+    // ブロック以外はそのまま返す
+    if (!isBlockedError(error)) {
+      throw error
+    }
+    console.warn('Gemini blocked request, retrying with relaxed safety settings...')
+  }
+
+  // 2nd: ブロック時のみ安全閾値を緩和
+  try {
+    const data = await callGeminiGenerate(base64Data, apiKey, { useRelaxedSafety: true })
+    return normalizeGeminiResult(parseGeminiData(data))
+  } catch (error) {
+    // 2回目も失敗したら元のエラーを優先して返す
+    throw lastError || error
+  }
 }
 
 /**
