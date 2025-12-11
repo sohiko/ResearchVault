@@ -11,6 +11,8 @@ import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { extractReferenceFromPDF } from '../lib/pdfExtractor'
+import { useNavigate } from 'react-router-dom'
+import { useReferenceAction } from './ReferenceActionContext'
 
 const ReferenceFetchQueueContext = createContext(null)
 
@@ -100,6 +102,8 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
   const processingRef = useRef(false)
   const { user } = useAuth()
   const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY
+  const navigate = useNavigate()
+  const { requestReferenceEdit } = useReferenceAction()
 
   const enqueueFetch = useCallback((payload) => {
     if (!payload?.url) {
@@ -146,6 +150,8 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
         const referenceInfo = await fetchReferenceInfo(task.url)
 
         let extractedData = referenceInfo.metadata || {}
+
+        let geminiFallback = false
 
         if (referenceInfo.isPdf) {
           if (!geminiApiKey) {
@@ -194,7 +200,26 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
                 : 'Gemini APIの使用上限を超過しました。既存のメタデータのみで参照を保存します。'
             )
             } else {
-              throw error
+              const fallbackData = {
+                extractionMethod: 'gemini-failed',
+                geminiError: error.message
+              }
+
+              extractedData = { ...(extractedData || {}), ...fallbackData }
+              geminiFallback = true
+
+              dispatch({
+                type: 'UPDATE',
+                id: task.id,
+                payload: {
+                  statusMessage: 'Gemini解析に失敗したため、既存情報のみで保存します'
+                }
+              })
+
+              toast.error(
+                'Gemini解析に失敗しました。最小限の情報で保存しました。手動での追記を推奨します。',
+                { duration: 6000 }
+              )
             }
           }
         } else {
@@ -234,20 +259,25 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
           })
         )
 
-
-        dispatch({
-          type: 'SUCCESS',
-          id: task.id,
-          reference: referenceRecord
-        })
-
-        window.dispatchEvent(
-          new CustomEvent('reference:created', {
-            detail: {
-              reference: referenceRecord
+        if (geminiFallback) {
+          const toastId = toast(
+            '詳細情報の自動取得に失敗しました。クリックして手動編集してください。',
+            {
+              icon: '✏️',
+              duration: 9000,
+              className: 'cursor-pointer',
+              // onClickはtoast本体に直接付ける
+              onClick: () => {
+                const destination = referenceRecord.project_id
+                  ? `/projects/${referenceRecord.project_id}`
+                  : '/references'
+                navigate(destination)
+                requestReferenceEdit(referenceRecord.id, referenceRecord.project_id)
+                toast.dismiss(toastId)
+              }
             }
-          })
-        )
+          )
+        }
       } catch (error) {
         console.error('Reference fetch task failed:', error)
         dispatch({ type: 'FAIL', id: task.id, error: error.message })
