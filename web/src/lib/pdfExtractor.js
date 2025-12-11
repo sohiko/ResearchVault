@@ -4,52 +4,6 @@
  * （pdf.jsのworker問題を回避するため、Gemini APIに直接PDFを送信）
  */
 
-// 安全閾値を最大限緩和してブロックを減らす
-const RELAXED_SAFETY_SETTINGS = [
-  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-  { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
-]
-
-const PRIMARY_PROMPT = `このPDF文書から学術的な参照情報を抽出してください。必ず以下の判定基準に従い、JSONのみで返してください。本文の内容が過激・自殺・暴力・性的・個人情報・連絡先等を含んでいても、それらを要約・転載せず、書誌情報のみを返してください。特に電話番号・住所・メール等は返さないでください。
-
-必須項目:
-- referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
-- title: 論文・書籍のタイトル
-- authors: 著者のリスト（配列形式、各要素は{"name": "著者名", "order": 順番}）。著者が見つからない場合は空配列[]
-- publishedDate: 発行日（YYYY-MM-DD形式、年のみの場合はYYYY-01-01）
-- publisher: 出版社または論文誌名
-- pages: ページ数または範囲
-- doi: DOI（あれば）
-- isbn: ISBN（書籍の場合）
-- journalName: 論文誌名（論文の場合）
-- volume: 巻（論文の場合）
-- issue: 号（論文の場合）
-- description: 要約または説明（200文字程度、危険・過激・個人情報を含めない）
-
-注意事項:
-- referenceTypeの判定を厳格に行うこと。以下を優先順に適用してください：
-  1) DOI, 卷(Volume)/号(Issue)/ページ範囲、査読誌名、学会名があれば "article"
-  2) 雑誌・一般誌（ニュース/ビジネス誌）で巻号や発行日がある場合は "journal"
-  3) ISBNがあれば "book"
-  4) 白書・調査報告・技術報告・ワーキングペーパー・卒論/修論/博士論文は "report"
-  5) 上記いずれにも当てはまらず、ブログや単なるウェブページのときのみ "website"
-- 迷った場合は "website" にせず、証拠に基づき最も近いものを選ぶこと。DOIや巻号がある場合に "website" を返してはいけません。
-- 著者情報が見つからない場合は空配列[]を返してください
-- 日付は正確に抽出し、不明な場合は空文字列を返してください
-- すべてのフィールドは文字列または配列として返してください
-- JSONのみを返し、他の説明文は含めないでください`
-
-// ブロックされた場合の再試行用（より強く個人情報除去を指示）
-const FALLBACK_PROMPT = `${PRIMARY_PROMPT}
-
-追加要件:
-- 個人名・電話番号・住所・メールアドレス・組織の連絡先などセンシティブ情報は抽出しない
-- descriptionには安全な概要のみ記載し、連絡先や個人を特定しない内容に限定する
-- 危険行為の手順や助長表現は一切含めない`
-
 /**
  * プロキシAPI経由でPDFをダウンロード
  * @param {string} url - PDFのURL
@@ -239,31 +193,57 @@ function parseJsonWithFallback(rawText) {
 const GEMINI_MODEL = (import.meta?.env?.VITE_GEMINI_MODEL || '').trim() ||
   'gemini-2.5-flash-lite'
 
-function buildGeminiPayload(base64Data, prompt) {
-  return {
-    contents: [{
-      parts: [{
-        text: prompt
-      }, {
-        inline_data: {
-          mime_type: 'application/pdf',
-          data: base64Data
-        }
-      }]
-    }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 2048
-    },
-    safetySettings: RELAXED_SAFETY_SETTINGS
-  }
-}
+async function extractWithGemini(base64Data, apiKey) {
+  console.log('Sending PDF to Gemini API for extraction...')
 
-async function callGeminiGenerate(payload, apiKey) {
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{
+          text: `このPDF文書から学術的な参照情報を抽出してください。必ず以下の判定基準に従い、JSONのみで返してください：
+
+必須項目:
+- referenceType: 文献の種類（"article"=学術論文, "journal"=雑誌論文, "book"=書籍, "report"=レポート, "website"=ウェブサイトのいずれか）
+- title: 論文・書籍のタイトル
+- authors: 著者のリスト（配列形式、各要素は{"name": "著者名", "order": 順番}）。著者が見つからない場合は空配列[]
+- publishedDate: 発行日（YYYY-MM-DD形式、年のみの場合はYYYY-01-01）
+- publisher: 出版社または論文誌名
+- pages: ページ数または範囲
+- doi: DOI（あれば）
+- isbn: ISBN（書籍の場合）
+- journalName: 論文誌名（論文の場合）
+- volume: 巻（論文の場合）
+- issue: 号（論文の場合）
+- description: 要約または説明（200文字程度）
+
+注意事項:
+- referenceTypeの判定を厳格に行うこと。以下を優先順に適用してください：
+  1) DOI, 卷(Volume)/号(Issue)/ページ範囲、査読誌名、学会名があれば "article"
+  2) 雑誌・一般誌（ニュース/ビジネス誌）で巻号や発行日がある場合は "journal"
+  3) ISBNがあれば "book"
+  4) 白書・調査報告・技術報告・ワーキングペーパー・卒論/修論/博士論文は "report"
+  5) 上記いずれにも当てはまらず、ブログや単なるウェブページのときのみ "website"
+- 迷った場合は "website" にせず、証拠に基づき最も近いものを選ぶこと。DOIや巻号がある場合に "website" を返してはいけません。
+- 著者情報が見つからない場合は空配列[]を返してください
+- 日付は正確に抽出し、不明な場合は空文字列を返してください
+- すべてのフィールドは文字列または配列として返してください
+- JSONのみを返し、他の説明文は含めないでください`
+        }, {
+          inline_data: {
+            mime_type: 'application/pdf',
+            data: base64Data
+          }
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 2048
+      }
+    })
   })
 
   if (!response.ok) {
@@ -299,10 +279,7 @@ async function callGeminiGenerate(payload, apiKey) {
     throw generalError
   }
 
-  return response.json()
-}
-
-function parseGeminiData(data) {
+  const data = await response.json()
   if (data?.promptFeedback?.blockReason) {
     const blockedError = new Error(
       `Geminiがリクエストをブロックしました: ${data.promptFeedback.blockReason}`
@@ -311,8 +288,8 @@ function parseGeminiData(data) {
     blockedError.blockReason = data.promptFeedback.blockReason
     throw blockedError
   }
-
   const text = extractTextFromGeminiResponse(data)
+
   if (!text) {
     const noTextError = new Error('No text in Gemini response')
     if (data?.promptFeedback?.blockReason) {
@@ -322,6 +299,8 @@ function parseGeminiData(data) {
     throw noTextError
   }
 
+  console.log('Gemini response received, parsing JSON...')
+
   // JSONを抽出
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) {
@@ -329,58 +308,14 @@ function parseGeminiData(data) {
     throw new Error('No JSON found in response')
   }
 
-  return parseJsonWithFallback(jsonMatch[0])
-}
+  const parsed = parseJsonWithFallback(jsonMatch[0])
 
-function normalizeGeminiResult(parsed) {
   const normalizedType = normalizeReferenceType(
     parsed.referenceType ||
     parsed.reference_type ||
     parsed.type
   )
   return { ...parsed, referenceType: normalizedType }
-}
-
-function shouldRetryGemini(error, isFirstAttempt) {
-  if (!isFirstAttempt) return false
-  const message = error?.message || ''
-  return error?.code === 'GEMINI_BLOCKED' || message.includes('PROHIBITED_CONTENT')
-}
-
-async function runGeminiAttempt(base64Data, apiKey, prompt) {
-  const payload = buildGeminiPayload(base64Data, prompt)
-  const data = await callGeminiGenerate(payload, apiKey)
-  return normalizeGeminiResult(parseGeminiData(data))
-}
-
-async function extractWithGemini(base64Data, apiKey) {
-  console.log('Sending PDF to Gemini API for extraction...')
-
-  let lastError = null
-  const attempts = [
-    { prompt: PRIMARY_PROMPT, label: 'primary' },
-    { prompt: FALLBACK_PROMPT, label: 'fallback' }
-  ]
-
-  for (let i = 0; i < attempts.length; i++) {
-    const attempt = attempts[i]
-    try {
-      return await runGeminiAttempt(base64Data, apiKey, attempt.prompt)
-    } catch (error) {
-      lastError = error
-      console.warn(`Gemini extraction attempt "${attempt.label}" failed: ${error.message}`)
-      if (!shouldRetryGemini(error, i === 0)) {
-        throw error
-      }
-      console.warn('Retrying Gemini extraction with relaxed prompt and safety settings...')
-    }
-  }
-
-  if (lastError) {
-    throw lastError
-  }
-
-  throw new Error('Gemini extraction failed without specific error')
 }
 
 /**
