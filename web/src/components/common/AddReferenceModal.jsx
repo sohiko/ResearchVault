@@ -40,6 +40,13 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
   const [projects, setProjects] = useState([])
   const [hasBackgroundJob, setHasBackgroundJob] = useState(false)
 
+  const inputClass =
+    'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 border-gray-300 dark:border-gray-600'
+  const selectClass =
+    'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+  const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1'
+  const hintClass = 'mt-1 text-xs text-gray-500 dark:text-gray-400'
+
   const formatProjectOptionLabel = (project) => {
     const icon = project.icon || ''
     const isLucideIcon = typeof icon === 'string' && (icon.startsWith('lucide:') || lucideIconMap[icon])
@@ -316,13 +323,13 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
       hasUnsavedChanges={modalHasUnsavedChanges}
       confirmMessage="入力内容が失われますが、よろしいですか？"
     >
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-xl">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">参照を追加</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">参照を追加</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-500"
+              className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-200"
             >
               <span className="sr-only">閉じる</span>
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -335,7 +342,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
         <form onSubmit={handleSubmit} className="px-6 py-4 max-h-[calc(90vh-120px)] overflow-y-auto space-y-4">
           {/* URL */}
           <div>
-            <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="url" className={labelClass}>
               URL <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-2">
@@ -344,15 +351,14 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 id="url"
                 value={formData.url}
                 onChange={(e) => handleChange('url', e.target.value)}
-                className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.url ? 'border-red-300' : 'border-gray-300'
-                  }`}
+                className={`${inputClass} flex-1 ${errors.url ? 'border-red-300 dark:border-red-400' : ''}`}
                 placeholder="https://example.com"
               />
               <button
                 type="button"
                 onClick={queueReferenceFetch}
                 disabled={isQueueing || !formData.url || hasBackgroundJob}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 text-sm"
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 text-sm"
               >
                 {isQueueing ? 'キュー追加中...' : '情報取得'}
               </button>
@@ -360,14 +366,14 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
             {errors.url && (
               <p className="mt-1 text-sm text-red-600">{errors.url}</p>
             )}
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               情報取得を開始するとバックグラウンドで処理され、モーダルを閉じても継続します
             </p>
           </div>
 
           {/* タイトル */}
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="title" className={labelClass}>
               タイトル <span className="text-red-500">*</span>
             </label>
             <input
@@ -375,22 +381,21 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
               id="title"
               value={formData.title}
               onChange={(e) => handleChange('title', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.title ? 'border-red-300' : 'border-gray-300'
-                }`}
+              className={`${inputClass} ${errors.title ? 'border-red-300 dark:border-red-400' : ''}`}
               placeholder="参照のタイトルを入力"
               maxLength={200}
             />
             {errors.title && (
               <p className="mt-1 text-sm text-red-600">{errors.title}</p>
             )}
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               {formData.title.length}/200文字
             </p>
           </div>
 
           {/* 説明 */}
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="description" className={labelClass}>
               説明
             </label>
             <textarea
@@ -398,29 +403,28 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
               value={formData.description}
               onChange={(e) => handleChange('description', e.target.value)}
               rows={3}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.description ? 'border-red-300' : 'border-gray-300'
-                }`}
+              className={`${inputClass} ${errors.description ? 'border-red-300 dark:border-red-400' : ''}`}
               placeholder="参照の説明を入力（任意）"
               maxLength={1000}
             />
             {errors.description && (
               <p className="mt-1 text-sm text-red-600">{errors.description}</p>
             )}
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               {formData.description.length}/1000文字
             </p>
           </div>
 
           {/* プロジェクト */}
           <div>
-            <label htmlFor="projectId" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="projectId" className={labelClass}>
               プロジェクト
             </label>
             <select
               id="projectId"
               value={formData.projectId}
               onChange={(e) => handleChange('projectId', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className={selectClass}
             >
               <option value="">プロジェクトを選択（任意）</option>
               {projects.map(project => (
@@ -429,21 +433,21 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               参照を追加するプロジェクトを選択できます
             </p>
           </div>
 
           {/* 引用種類 */}
           <div>
-            <label htmlFor="reference_type" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="reference_type" className={labelClass}>
               引用種類
             </label>
             <select
               id="reference_type"
               value={formData.reference_type}
               onChange={(e) => handleChange('reference_type', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className={selectClass}
             >
               <option value="website">ウェブサイト</option>
               <option value="article">論文</option>
@@ -451,14 +455,14 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
               <option value="book">書籍</option>
               <option value="report">レポート</option>
             </select>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               引用の種類を選択してください
             </p>
           </div>
 
           {/* タグ */}
           <div>
-            <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="tags" className={labelClass}>
               タグ
             </label>
             <input
@@ -466,17 +470,17 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
               id="tags"
               value={formData.tags}
               onChange={(e) => handleChange('tags', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className={inputClass}
               placeholder="タグをカンマ区切りで入力（例: 研究, AI, 機械学習）"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               カンマ（,）で区切って複数のタグを入力できます
             </p>
           </div>
 
           {/* 著者（複数対応） */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className={labelClass}>
               著者・執筆者
             </label>
             <div className="space-y-2">
@@ -486,7 +490,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                     type="text"
                     value={author.name}
                     onChange={(e) => updateAuthor(index, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className={`${inputClass} flex-1`}
                     placeholder={`著者 ${index + 1}`}
                   />
                   {authors.length > 1 && (
@@ -508,14 +512,14 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 + 著者を追加
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               共同執筆者がいる場合は追加できます
             </p>
           </div>
 
           {/* 公開日 */}
           <div>
-            <label htmlFor="publishedDate" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="publishedDate" className={labelClass}>
               公開日
             </label>
             <input
@@ -523,9 +527,9 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
               id="publishedDate"
               value={formData.publishedDate}
               onChange={(e) => handleChange('publishedDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className={inputClass}
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               ページの公開日（自動取得または手動入力）
             </p>
           </div>
@@ -533,7 +537,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           {/* アクセス日（オンライン資料のみ） */}
           {formData.reference_type !== 'book' && (
             <div>
-              <label htmlFor="accessedDate" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="accessedDate" className={labelClass}>
                 アクセス日
               </label>
               <input
@@ -541,9 +545,9 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 id="accessedDate"
                 value={formData.accessedDate}
                 onChange={(e) => handleChange('accessedDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className={inputClass}
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className={hintClass}>
                 このページにアクセスした日（デフォルト: 今日）
               </p>
             </div>
@@ -552,7 +556,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           {/* ISBN（書籍のみ） */}
           {formData.reference_type === 'book' && (
             <div>
-              <label htmlFor="isbn" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="isbn" className={labelClass}>
                 ISBN
               </label>
               <div className="flex gap-2">
@@ -561,7 +565,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                   id="isbn"
                   value={formData.isbn}
                   onChange={(e) => handleChange('isbn', e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className={`${inputClass} flex-1`}
                   placeholder="978-4-XXXX-XXXX-X"
                 />
                 <button
@@ -573,7 +577,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                   {isbnLoading ? '取得中...' : '自動取得'}
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className={hintClass}>
                 ISBNを入力して自動取得ボタンを押すと、書籍情報が自動入力されます
               </p>
             </div>
@@ -582,7 +586,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           {/* 出版社（書籍、レポート） */}
           {(formData.reference_type === 'book' || formData.reference_type === 'report') && (
             <div>
-              <label htmlFor="publisher" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="publisher" className={labelClass}>
                 出版社
               </label>
               <input
@@ -590,7 +594,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 id="publisher"
                 value={formData.publisher}
                 onChange={(e) => handleChange('publisher', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className={inputClass}
                 placeholder="出版社名"
               />
             </div>
@@ -599,7 +603,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           {/* 論文誌名（雑誌論文、論文） */}
           {(formData.reference_type === 'journal' || formData.reference_type === 'article') && (
             <div>
-              <label htmlFor="journal_name" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="journal_name" className={labelClass}>
                 論文誌・ジャーナル名
               </label>
               <input
@@ -607,7 +611,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 id="journal_name"
                 value={formData.journal_name}
                 onChange={(e) => handleChange('journal_name', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className={inputClass}
                 placeholder="論文誌名またはジャーナル名"
               />
             </div>
@@ -617,7 +621,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           {(formData.reference_type === 'journal' || formData.reference_type === 'article') && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="volume" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="volume" className={labelClass}>
                   巻
                 </label>
                 <input
@@ -625,12 +629,12 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                   id="volume"
                   value={formData.volume}
                   onChange={(e) => handleChange('volume', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className={inputClass}
                   placeholder="例: 12"
                 />
               </div>
               <div>
-                <label htmlFor="issue" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="issue" className={labelClass}>
                   号
                 </label>
                 <input
@@ -638,7 +642,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                   id="issue"
                   value={formData.issue}
                   onChange={(e) => handleChange('issue', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className={inputClass}
                   placeholder="例: 3"
                 />
               </div>
@@ -648,7 +652,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           {/* ページ（論文、書籍、レポート、雑誌論文） */}
           {formData.reference_type !== 'website' && (
             <div>
-              <label htmlFor="pages" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="pages" className={labelClass}>
                 ページ
               </label>
               <input
@@ -656,10 +660,10 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 id="pages"
                 value={formData.pages}
                 onChange={(e) => handleChange('pages', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className={inputClass}
                 placeholder="例: 45-67 または 250（総ページ数）"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className={hintClass}>
                 {formData.reference_type === 'book' ? '総ページ数または参照ページ' : '掲載ページ範囲'}
               </p>
             </div>
@@ -668,7 +672,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           {/* DOI（論文、雑誌論文） */}
           {(formData.reference_type === 'journal' || formData.reference_type === 'article') && (
             <div>
-              <label htmlFor="doi" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="doi" className={labelClass}>
                 DOI
               </label>
               <input
@@ -676,10 +680,10 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 id="doi"
                 value={formData.doi}
                 onChange={(e) => handleChange('doi', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className={inputClass}
                 placeholder="例: 10.1000/xxxxx"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className={hintClass}>
                 Digital Object Identifier（デジタルオブジェクト識別子）
               </p>
             </div>
@@ -688,7 +692,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
           {/* 版（書籍のみ） */}
           {formData.reference_type === 'book' && (
             <div>
-              <label htmlFor="edition" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="edition" className={labelClass}>
                 版
               </label>
               <input
@@ -696,7 +700,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
                 id="edition"
                 value={formData.edition}
                 onChange={(e) => handleChange('edition', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className={inputClass}
                 placeholder="例: 第2版"
               />
             </div>
@@ -704,7 +708,7 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
 
           {/* メモ */}
           <div>
-            <label htmlFor="memo" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="memo" className={labelClass}>
               メモ
             </label>
             <textarea
@@ -712,25 +716,24 @@ const AddReferenceModal = ({ onClose, onAdd, projectId: _projectId }) => {
               value={formData.memo}
               onChange={(e) => handleChange('memo', e.target.value)}
               rows={2}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.memo ? 'border-red-300' : 'border-gray-300'
-                }`}
+              className={`${inputClass} ${errors.memo ? 'border-red-300 dark:border-red-400' : ''}`}
               placeholder="個人的なメモを入力（任意）"
               maxLength={500}
             />
             {errors.memo && (
               <p className="mt-1 text-sm text-red-600">{errors.memo}</p>
             )}
-            <p className="mt-1 text-xs text-gray-500">
+            <p className={hintClass}>
               {formData.memo.length}/500文字
             </p>
           </div>
         </form>
 
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-end space-x-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+            className="px-4 py-2 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             キャンセル
           </button>

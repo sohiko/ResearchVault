@@ -561,7 +561,7 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
       hasUnsavedChanges={hasUnsavedChanges}
       confirmMessage="入力内容が失われますが、よろしいですか？"
     >
-      <div className="bg-white dark:bg-secondary-800 rounded-lg max-w-md w-full">
+      <div className="bg-white dark:bg-secondary-800 rounded-lg max-w-md w-full shadow-xl">
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
@@ -588,7 +588,7 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
               <input
                 type="text"
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="例: Extended Essay"
@@ -600,7 +600,7 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
                 説明
               </label>
               <textarea
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                 rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -620,8 +620,8 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
                   onClick={() => setFormData({ ...formData, iconType: 'lucide', icon: 'Folder' })}
                   className={`px-3 py-1 text-sm rounded-md ${
                     formData.iconType === 'lucide' 
-                      ? 'bg-primary-100 text-primary-800 border border-primary-300' 
-                      : 'bg-gray-100 text-gray-600 border border-gray-300'
+                      ? 'bg-primary-100 text-primary-800 border border-primary-300 dark:bg-primary-900/30 dark:text-primary-100 dark:border-primary-500' 
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 border border-gray-300 dark:border-gray-600'
                   }`}
                 >
                   アイコン
@@ -631,8 +631,8 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
                   onClick={() => setFormData({ ...formData, iconType: 'emoji', icon: '📂' })}
                   className={`px-3 py-1 text-sm rounded-md ${
                     formData.iconType === 'emoji' 
-                      ? 'bg-primary-100 text-primary-800 border border-primary-300' 
-                      : 'bg-gray-100 text-gray-600 border border-gray-300'
+                      ? 'bg-primary-100 text-primary-800 border border-primary-300 dark:bg-primary-900/30 dark:text-primary-100 dark:border-primary-500' 
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 border border-gray-300 dark:border-gray-600'
                   }`}
                 >
                   絵文字
@@ -646,20 +646,20 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
                   placeholder="アイコンを検索..."
                   value={iconSearchQuery}
                   onChange={(e) => setIconSearchQuery(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                 />
               </div>
 
               {/* アイコン選択グリッド */}
-              <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
+              <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-white dark:bg-gray-800">
                 {formData.iconType === 'lucide' ? (
                   displayedLucideIcons.map((iconData) => (
                     <button
                       key={iconData.name}
                       type="button"
                       title={iconData.label}
-                      className={`p-2 border rounded-lg hover:bg-gray-50 flex items-center justify-center ${
-                        formData.icon === iconData.name ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
+                      className={`p-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-center bg-white dark:bg-gray-700 ${
+                        formData.icon === iconData.name ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-900/30' : 'border-gray-200 dark:border-gray-600'
                       }`}
                       onClick={() => setFormData({ ...formData, icon: iconData.name })}
                     >
@@ -672,8 +672,8 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
                       key={iconData.name}
                       type="button"
                       title={iconData.label}
-                      className={`p-2 text-lg border rounded-lg hover:bg-gray-50 ${
-                        formData.icon === iconData.name ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
+                      className={`p-2 text-lg border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-700 ${
+                        formData.icon === iconData.name ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-900/30' : 'border-gray-200 dark:border-gray-600'
                       }`}
                       onClick={() => setFormData({ ...formData, icon: iconData.name })}
                     >
@@ -689,7 +689,7 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
                 <button
                   type="button"
                   onClick={() => setShowAllIcons(!showAllIcons)}
-                  className="mt-2 text-sm text-primary-600 hover:text-primary-700"
+                  className="mt-2 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200"
                 >
                   {showAllIcons ? '少なく表示' : 'もっと見る'}
                 </button>
@@ -697,7 +697,7 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
 
               {/* 選択中のアイコンプレビュー */}
               <div className="mt-3 flex items-center space-x-2">
-                <span className="text-sm text-gray-600">選択中:</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">選択中:</span>
                 <div 
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
                   style={{ backgroundColor: formData.color }}
@@ -716,8 +716,8 @@ function CreateProjectModal({ onClose, onCreate, loading }) {
                   <button
                     key={color}
                     type="button"
-                    className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center ${
-                      formData.color === color ? 'border-gray-800' : 'border-gray-200 hover:border-gray-300'
+                  className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center ${
+                      formData.color === color ? 'border-gray-800 dark:border-gray-100' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-400'
                     }`}
                     style={{ backgroundColor: color }}
                     onClick={() => setFormData({ ...formData, color })}

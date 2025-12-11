@@ -207,7 +207,7 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
             </div>
 
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                 説明
               </label>
               <textarea
@@ -215,8 +215,8 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
                 rows={3}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-                  errors.description ? 'border-red-300' : 'border-gray-300'
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 ${
+                  errors.description ? 'border-red-300 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
                 }`}
                 placeholder="プロジェクトの説明を入力（任意）"
                 maxLength={500}
@@ -233,7 +233,7 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
           {/* カラー & アイコン */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                 カラー
               </label>
               <div className="grid grid-cols-4 gap-2">
@@ -244,8 +244,8 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
                     onClick={() => handleChange('color', color.value)}
                     className={`w-full h-10 rounded-md border-2 flex items-center justify-center ${
                       formData.color === color.value 
-                        ? 'border-gray-800' 
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-gray-800 dark:border-gray-100' 
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-400'
                     } ${color.class}`}
                     title={color.label}
                   >
@@ -261,13 +261,13 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   アイコン
                 </label>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                   <span className="inline-flex items-center gap-1">
                     プレビュー:
-                    <span className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-gray-200">
+                    <span className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700">
                       {renderProjectIcon(
                         formData.iconType === 'lucide' ? formData.icon : formData.icon || '📂',
                         formData.iconType === 'lucide' ? 'lucide' : 'emoji',
@@ -285,8 +285,8 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
                   onClick={() => handleChange('iconType', 'lucide')}
                   className={`flex-1 px-3 py-2 rounded-md border ${
                     formData.iconType === 'lucide'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-100'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   Lucide
@@ -296,8 +296,8 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
                   onClick={() => handleChange('iconType', 'emoji')}
                   className={`flex-1 px-3 py-2 rounded-md border ${
                     formData.iconType === 'emoji'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-100'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   絵文字
@@ -310,7 +310,7 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
                 placeholder="アイコンを検索..."
                 value={iconSearchQuery}
                 onChange={(e) => setIconSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 mb-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 mb-3 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
               />
 
               {/* アイコン一覧 */}
@@ -327,9 +327,11 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
                         key={icon.name}
                         type="button"
                         onClick={() => handleChange('icon', iconName)}
-                        className={`h-10 rounded-md border flex items-center justify-center ${
-                          selected ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
+                    className={`h-10 rounded-md border flex items-center justify-center bg-white dark:bg-gray-700 ${
+                      selected
+                        ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-900/30'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-400'
+                    }`}
                         title={icon.label}
                       >
                         {renderProjectIcon(
@@ -356,11 +358,11 @@ const EditProjectModal = ({ project, onClose, onUpdate }) => {
           </div>
         </form>
 
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-end space-x-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+            className="px-4 py-2 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             キャンセル
           </button>
