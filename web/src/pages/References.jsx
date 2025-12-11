@@ -242,9 +242,49 @@ export default function References() {
 
   const handleUpdateReference = async (updatedReference) => {
     try {
-      // descriptionはmetadataに含まれるため、個別に送信しない
-      const { id, ...updateData } = updatedReference
-      delete updateData.description // descriptionカラムは存在しないため削除
+      const {
+        id,
+        title,
+        url,
+        authors,
+        published_date,
+        accessed_date,
+        project_id,
+        reference_type,
+        publisher,
+        pages,
+        isbn,
+        doi,
+        journal_name,
+        volume,
+        issue,
+        edition,
+        metadata,
+        updated_at,
+        favicon
+      } = updatedReference
+
+      // Supabaseに存在しないフィールド（bookmarkCount など）を送らない
+      const updateData = {
+        title,
+        url,
+        authors,
+        published_date,
+        accessed_date,
+        project_id,
+        reference_type,
+        publisher,
+        pages,
+        isbn,
+        doi,
+        journal_name,
+        volume,
+        issue,
+        edition,
+        metadata,
+        updated_at,
+        favicon
+      }
       
       const { error } = await supabase
         .from('references')
