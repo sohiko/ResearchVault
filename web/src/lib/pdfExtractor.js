@@ -128,10 +128,8 @@ function extractTextFromGeminiResponse(data) {
  * @param {string} apiKey - Gemini APIキー
  * @returns {Promise<Object>} 抽出された情報
  */
-const GEMINI_MODEL =
-  typeof import !== 'undefined' && import.meta?.env?.VITE_GEMINI_MODEL
-    ? import.meta.env.VITE_GEMINI_MODEL
-    : 'gemini-2.5-flash-lite'
+const GEMINI_MODEL = (import.meta?.env?.VITE_GEMINI_MODEL || '').trim() ||
+  'gemini-2.5-flash-lite'
 
 async function extractWithGemini(base64Data, apiKey) {
   console.log('Sending PDF to Gemini API for extraction...')
