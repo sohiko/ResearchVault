@@ -388,7 +388,15 @@ function buildReferencePayload({ task, extractedData, referenceInfo, userId }) {
     infoMetadata.referenceType ||
     infoMetadata.reference_type
 
-  const referenceType = normalizeReferenceType(rawReferenceType)
+  const inferredType = inferReferenceType({
+    rawType: rawReferenceType,
+    extractedData,
+    infoMetadata,
+    referenceInfo,
+    task
+  })
+
+  const referenceType = normalizeReferenceType(inferredType)
 
   return {
     title:
@@ -508,6 +516,73 @@ function normalizeReferenceType(value) {
     return 'report'
   }
   return 'website'
+}
+
+function inferReferenceType({ rawType, extractedData = {}, infoMetadata = {}, referenceInfo = {}, task = {} }) {
+  const normalizedRaw = (rawType || '').toLowerCase()
+  const isPdf = !!referenceInfo.isPdf
+  const url = task.url || referenceInfo.url || ''
+  const domain = (() => {
+    try {
+      return new URL(url).hostname.toLowerCase()
+    } catch {
+      return ''
+    }
+  })()
+
+  const hasDoi = !!(extractedData.doi || infoMetadata.doi)
+  const hasIsbn = !!(extractedData.isbn || infoMetadata.isbn)
+  const hasJournalSignals =
+    !!(extractedData.journalName ||
+      extractedData.journal_name ||
+      infoMetadata.journalName ||
+      infoMetadata.journal_name ||
+      extractedData.volume ||
+      extractedData.issue ||
+      extractedData.pages)
+
+  const filename = (() => {
+    try {
+      return new URL(url).pathname.toLowerCase()
+    } catch {
+      return ''
+    }
+  })()
+
+  const maybeReportByFilename = ['report', 'whitepaper', 'wp', 'policy', 'survey', 'workingpaper', 'discussion', 'special_report']
+    .some(keyword => filename.includes(keyword))
+
+  const isGovOrEdu = /(go\.jp|gov|gob|\.edu|ac\.jp|ac\.uk|edu\.cn|edu)/.test(domain)
+  const isKnownReportDomain = ['mof.go.jp', 'pri.go.jp', 'ilo.org', 'oecd.org', 'imf.org', 'worldbank.org']
+    .some(d => domain.includes(d))
+
+  // If Gemini already returned a non-website, respect it
+  if (normalizedRaw && normalizedRaw !== 'website') {
+    return normalizedRaw
+  }
+
+  // PDFでDOIや巻号があれば論文扱い
+  if (isPdf && (hasDoi || hasJournalSignals)) {
+    return 'article'
+  }
+
+  // ISBNがあれば書籍
+  if (hasIsbn) {
+    return 'book'
+  }
+
+  // 政府・研究機関ドメインやファイル名のシグナルでレポート優先
+  if (isPdf && (isGovOrEdu || isKnownReportDomain || maybeReportByFilename)) {
+    return 'report'
+  }
+
+  // PDFで非ウェブならレポートを既定に
+  if (isPdf) {
+    return 'report'
+  }
+
+  // それ以外は元の値（websiteを含む）
+  return normalizedRaw || 'website'
 }
 
 function generateTaskId() {
