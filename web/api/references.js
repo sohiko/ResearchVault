@@ -91,6 +91,7 @@ async function handleGetReferences(req, res, userId, userSupabase) {
         reference_tags(tags(name, color))
       `)
       .eq('saved_by', userId)
+      .is('deleted_at', null) // ソフトデリート済みは除外
       .order('saved_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1)
 
@@ -172,13 +173,68 @@ async function handleCreateReference(req, res, userId, userSupabase) {
     // プロジェクトごとの重複チェック
     const { data: existing, error: duplicateError } = await userSupabase
       .from('references')
-      .select('id, project_id')
+      .select('id, project_id, deleted_at, deleted_by')
       .eq('url', url)
       .eq('saved_by', userId)
       .eq('project_id', projectId || null)
       .single()
 
     if (!duplicateError && existing) {
+      // ソフトデリート済みの場合は復元して再利用する
+      if (existing.deleted_at) {
+        const restorePayload = {
+          title: title.trim(),
+          url: url.trim(),
+          favicon: favicon || null,
+          metadata: { ...(metadata || {}), memo: (finalDescription || '').trim() },
+          project_id: projectId || null,
+          saved_at: finalSavedAt,
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
+          deleted_by: null
+        }
+
+        const { data: restored, error: restoreError } = await userSupabase
+          .from('references')
+          .update(restorePayload)
+          .eq('id', existing.id)
+          .select()
+          .single()
+
+        if (restoreError) {
+          return res.status(500).json({
+            error: '削除済み参照の復元に失敗しました',
+            details: restoreError.message
+          })
+        }
+
+        // タグが指定されている場合は関連を付け直す（古い関連はクリア）
+        if (tags && Array.isArray(tags)) {
+          await userSupabase.from('reference_tags').delete().eq('reference_id', existing.id)
+          try {
+            await addTagsToReference(existing.id, tags, userId, userSupabase)
+          } catch (tagError) {
+            console.warn('Failed to re-attach tags on restore:', tagError)
+          }
+        }
+
+        const formattedRestored = {
+          id: restored.id,
+          title: restored.title,
+          url: restored.url,
+          favicon: restored.favicon,
+          metadata: restored.metadata || {},
+          projectId: restored.project_id,
+          tags: tags || [],
+          savedAt: restored.saved_at,
+          savedBy: restored.saved_by,
+          updatedAt: restored.updated_at
+        }
+
+        return res.status(200).json(formattedRestored)
+      }
+
+      // 未削除のものが既に存在する場合は重複として扱う
       if (projectId) {
         return res.status(409).json({ error: 'この参照は既にこのプロジェクトに保存されています' })
       } else {
