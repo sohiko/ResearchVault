@@ -371,11 +371,16 @@ function buildReferencePayload({ task, extractedData, referenceInfo, userId }) {
 
   const tags = Array.isArray(task.tags) ? task.tags : []
 
-  const referenceType = normalizeReferenceType(
+  const rawReferenceType =
     manual.reference_type ||
+    manual.referenceType ||
     extractedData.referenceType ||
-    infoMetadata.referenceType
-  )
+    extractedData.reference_type ||
+    extractedData.type ||
+    infoMetadata.referenceType ||
+    infoMetadata.reference_type
+
+  const referenceType = normalizeReferenceType(rawReferenceType)
 
   return {
     title:

@@ -122,6 +122,28 @@ function extractTextFromGeminiResponse(data) {
   return text
 }
 
+const ALLOWED_REFERENCE_TYPES = ['website', 'article', 'journal', 'book', 'report']
+
+function normalizeReferenceType(value) {
+  const normalized = (value || '').toString().trim().toLowerCase()
+  if (ALLOWED_REFERENCE_TYPES.includes(normalized)) {
+    return normalized
+  }
+  if (normalized.includes('journal')) {
+    return 'journal'
+  }
+  if (normalized.includes('article') || normalized.includes('paper')) {
+    return 'article'
+  }
+  if (normalized.includes('book')) {
+    return 'book'
+  }
+  if (normalized.includes('report')) {
+    return 'report'
+  }
+  return 'website'
+}
+
 /**
  * GeminiでPDFを直接読み取り
  * @param {string} base64Data - Base64エンコードされたPDFデータ
@@ -227,7 +249,13 @@ async function extractWithGemini(base64Data, apiKey) {
   }
   
   try {
-    return JSON.parse(jsonMatch[0])
+    const parsed = JSON.parse(jsonMatch[0])
+    const normalizedType = normalizeReferenceType(
+      parsed.referenceType ||
+      parsed.reference_type ||
+      parsed.type
+    )
+    return { ...parsed, referenceType: normalizedType }
   } catch (parseError) {
     console.error('JSON parse error:', parseError, 'Raw text:', jsonMatch[0].substring(0, 500))
     throw new Error('Failed to parse JSON from response')
