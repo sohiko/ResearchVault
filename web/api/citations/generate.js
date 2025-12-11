@@ -69,14 +69,69 @@ export default async function handler(req, res) {
   }
 }
 
+function formatAuthorsAPA(authors) {
+  if (!authors || authors.length === 0) { return '' }
+
+  const normalized = authors
+    .map((author) => typeof author === 'string' ? author.trim() : author?.name?.trim())
+    .filter(Boolean)
+
+  if (normalized.length === 0) { return '' }
+  if (normalized.length === 1) { return normalized[0] }
+
+  if (normalized.length <= 20) {
+    const head = normalized.slice(0, -1).join(', ')
+    const last = normalized[normalized.length - 1]
+    return `${head}, & ${last}`
+  }
+
+  const head19 = normalized.slice(0, 19).join(', ')
+  const last = normalized[normalized.length - 1]
+  return `${head19}, ..., & ${last}`
+}
+
+const hasDayInfo = (dateString) => /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateString) || /\b\d{1,2},?\s*[A-Za-z]+\s*\d{4}/.test(dateString)
+const hasMonthInfo = (dateString) => /[-/][0-1]?\d/.test(dateString) || /[A-Za-z]+/.test(dateString)
+
+function formatAPADate(rawDate) {
+  if (!rawDate) { return 'n.d.' }
+  const dateString = rawDate.toString()
+  const date = new Date(rawDate)
+  if (Number.isNaN(date.getTime())) { return 'n.d.' }
+
+  const year = date.getFullYear()
+  const dateHasDay = hasDayInfo(dateString)
+  const dateHasMonth = dateHasDay || hasMonthInfo(dateString)
+
+  const monthName = date.toLocaleDateString('en-US', { month: 'long' })
+  const day = date.getDate()
+
+  if (dateHasDay) {
+    return `${year}, ${monthName} ${day}`
+  }
+
+  if (dateHasMonth) {
+    return `${year}, ${monthName}`
+  }
+
+  return `${year}`
+}
+
+function formatAccessDate(rawDate) {
+  if (!rawDate) { return '' }
+  const date = new Date(rawDate)
+  if (Number.isNaN(date.getTime())) { return '' }
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 function generateCitation({ url, title, metadata, format, accessDate }) {
   const parsedUrl = new URL(url)
   const siteName = metadata.siteName || parsedUrl.hostname
-  const author = metadata.author || ''
+
+  const authors = metadata.authors || []
+  const author = formatAuthorsAPA(authors) || metadata.author || ''
   const publishedDate = metadata.publishedDate || ''
-  // const _description = metadata.description || '' // 将来使用予定
-  const accessDateFormatted = formatDate(new Date(accessDate))
-  const publishedDateFormatted = publishedDate ? formatDate(new Date(publishedDate)) : ''
+  const accessDateFormatted = formatAccessDate(accessDate)
 
   switch (format.toUpperCase()) {
     case 'APA':
@@ -85,7 +140,7 @@ function generateCitation({ url, title, metadata, format, accessDate }) {
         title,
         author,
         siteName,
-        publishedDate: publishedDateFormatted,
+        publishedDate,
         accessDate: accessDateFormatted
       })
     
@@ -95,7 +150,7 @@ function generateCitation({ url, title, metadata, format, accessDate }) {
         title,
         author,
         siteName,
-        publishedDate: publishedDateFormatted,
+        publishedDate,
         accessDate: accessDateFormatted
       })
     
@@ -105,7 +160,7 @@ function generateCitation({ url, title, metadata, format, accessDate }) {
         title,
         author,
         siteName,
-        publishedDate: publishedDateFormatted,
+        publishedDate,
         accessDate: accessDateFormatted
       })
     
@@ -115,7 +170,7 @@ function generateCitation({ url, title, metadata, format, accessDate }) {
         title,
         author,
         siteName,
-        publishedDate: publishedDateFormatted,
+        publishedDate,
         accessDate: accessDateFormatted
       })
     
@@ -125,35 +180,38 @@ function generateCitation({ url, title, metadata, format, accessDate }) {
         title,
         author,
         siteName,
-        publishedDate: publishedDateFormatted,
+        publishedDate,
         accessDate: accessDateFormatted
       })
   }
 }
 
 function generateAPACitation({ url, title, author, siteName, publishedDate, accessDate }) {
-  let citation = ''
+  const dateText = formatAPADate(publishedDate)
+  const retrievalNeeded = !publishedDate && !!accessDate
+
+  const parts = []
+
+  parts.push(`${author || title}.`)
+  parts.push(`(${dateText}).`)
 
   if (author) {
-    citation += `${author}. `
+    parts.push(`${title}.`)
   }
-
-  if (publishedDate) {
-    const year = publishedDate.split('/')[0]
-    citation += `(${year}). `
-  } else {
-    citation += '(n.d.). '
-  }
-
-  citation += `${title}. `
 
   if (siteName) {
-    citation += `${siteName}. `
+    parts.push(`${siteName}.`)
   }
 
-  citation += `Retrieved ${accessDate}, from ${url}`
+  if (url) {
+    if (retrievalNeeded) {
+      parts.push(`Retrieved ${accessDate}, from ${url}`)
+    } else {
+      parts.push(url)
+    }
+  }
 
-  return citation
+  return parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 }
 
 function generateMLACitation({ url, title, author, siteName, publishedDate, accessDate }) {
@@ -223,13 +281,4 @@ function generateHarvardCitation({ url, title, author, siteName, publishedDate, 
   citation += `viewed ${accessDate}, <${url}>.`
 
   return citation
-}
-
-function formatDate(date) {
-  const options = {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  }
-  return date.toLocaleDateString('en-US', options)
 }
