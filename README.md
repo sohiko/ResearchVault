@@ -48,7 +48,10 @@ ResearchVaultは、IB（国際バカロレア）生を中心とした学生の�
 
 ## 使い方
 ### Chrome拡張
-1. （公開後）Chrome Web Storeからインストール予定
+
+[Chrome Web Store からインストール](https://chromewebstore.google.com/detail/dhagdlaiocfbmajlaehljcmoclnpbpak)
+
+1. 上記リンクからChrome拡張をインストール
 2. または開発者モードで `extension/` を指定し手動読み込み
 3. ページ閲覧中にアイコンクリックで保存
 4. テキストを選択し右クリックで「選択テキストを保存」
@@ -89,5 +92,6 @@ MIT License. 詳細は `LICENSE` を参照。
 ## リンクとサポート
 - GitHub: https://github.com/sohiko/ResearchVault
 - Issues: https://github.com/sohiko/ResearchVault/issues
+- Extension: https://chromewebstore.google.com/detail/dhagdlaiocfbmajlaehljcmoclnpbpak
 - アンケート: https://forms.office.com/r/3UEXYidDuy
 - フィードバック: アプリ内の機能リクエストから送信可能

@@ -131,7 +131,7 @@ const ExtensionBridge = () => {
   // 認証同期効果は削除（不要なため）
 
   const installExtension = () => {
-    window.open('https://chrome.google.com/webstore/detail/researchvault/extension-id', '_blank')
+    window.open('https://chromewebstore.google.com/detail/dhagdlaiocfbmajlaehljcmoclnpbpak', '_blank')
   }
 
   const retryConnection = () => {

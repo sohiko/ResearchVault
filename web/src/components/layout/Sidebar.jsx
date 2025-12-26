@@ -281,7 +281,7 @@ export default function Sidebar() {
               </div>
             </div>
             <button
-              onClick={() => blockedNavigate('/extension/install')}
+              onClick={() => window.open('https://chromewebstore.google.com/detail/dhagdlaiocfbmajlaehljcmoclnpbpak', '_blank')}
               className={`btn-primary w-full text-xs ${
                 hasOpenModals ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
               }`}
