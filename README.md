@@ -7,7 +7,7 @@ ResearchVaultは、IB（国際バカロレア）生を中心とした学生の�
 
 ## 提供形態
 - Webダッシュボード: https://rv.jamknife.jp （公開URL、想定利用経路）
-- Chrome拡張: Chrome Web Storeで公開予定（準備中）。公開までは開発者モードで `extension/` を手動読み込み可能。
+- Chrome拡張: https://chromewebstore.google.com/detail/dhagdlaiocfbmajlaehljcmoclnpbpak　からダウンロード。または、 `extension/` を手動読み込み可能。
 
 ## 目的と意義
 - 研究の過程で得た情報を「保存・整理・引用」まで一貫して管理し、記録漏れを防ぐ。
