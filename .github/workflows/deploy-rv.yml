@@ -31,10 +31,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build
         run: npm run build
@@ -45,6 +44,9 @@ jobs:
             echo "BUILD_DIR=dist" >> "$GITHUB_ENV"
           elif [ -d "build" ]; then
             echo "BUILD_DIR=build" >> "$GITHUB_ENV"
+          elif [ -d ".next" ]; then
+            echo "Next.js build output detected, but static deploy requires export output."
+            exit 1
           else
             echo "No build output directory found. Expected dist or build."
             exit 1
@@ -59,6 +61,13 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
 
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Ensure deploy directory exists
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -p "${{ secrets.VPS_PORT }}" \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "mkdir -p '${{ secrets.DEPLOY_PATH }}'"
 
       - name: Deploy with rsync
         run: |
