@@ -12,6 +12,7 @@
     "cheerio": "^1.1.2",
     "clsx": "^1.2.1",
     "date-fns": "^2.29.3",
+    "express": "^4.22.2",
     "framer-motion": "^10.16.4",
     "lucide-react": "^0.263.1",
     "pdfjs-dist": "5.4.296",
@@ -44,7 +45,9 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 50",
     "lint:fix": "eslint . --ext js,jsx --fix",
     "preview": "vite preview",
-    "start": "vite",
+    "start": "node server.js",
+    "start:prod": "npm run build && node server.js",
+    "dev:full": "npm run build && node server.js",
     "deploy": "npm run build && vercel --prod",
     "test": "echo \"No tests specified\" && exit 0"
   },

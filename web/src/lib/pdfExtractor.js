@@ -199,7 +199,7 @@ function parseJsonWithFallback(rawText) {
  * @returns {Promise<Object>} 抽出された情報
  */
 const GEMINI_MODEL = (import.meta?.env?.VITE_GEMINI_MODEL || '').trim() ||
-  'gemini-2.5-flash-lite'
+  'gemini-3.1-flash-lite'
 
 function isBlockedError(error) {
   const message = error?.message || ''

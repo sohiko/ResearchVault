@@ -383,6 +383,20 @@ export const useReferenceFetchQueue = () => {
   return context
 }
 
+async function parseJsonResponse(response) {
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    const snippet = (await response.text()).slice(0, 80)
+    if (snippet.trimStart().startsWith('<!DOCTYPE') || snippet.trimStart().startsWith('<html')) {
+      throw new Error(
+        'APIサーバーに接続できません。VPSでは静的ファイルだけでなく Node サーバー (npm run start) を起動してください。'
+      )
+    }
+    throw new Error('APIから無効な応答が返されました')
+  }
+  return response.json()
+}
+
 async function fetchReferenceInfo(url) {
   const response = await fetch('/api/reference-info', {
     method: 'POST',
@@ -393,11 +407,18 @@ async function fetchReferenceInfo(url) {
   })
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}))
-    throw new Error(errorBody.error || 'リンク情報の取得に失敗しました')
+    try {
+      const errorBody = await parseJsonResponse(response)
+      throw new Error(errorBody.error || 'リンク情報の取得に失敗しました')
+    } catch (error) {
+      if (error.message?.includes('APIサーバー')) {
+        throw error
+      }
+      throw new Error('リンク情報の取得に失敗しました')
+    }
   }
 
-  return response.json()
+  return parseJsonResponse(response)
 }
 
 async function saveReference(referencePayload) {

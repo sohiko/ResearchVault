@@ -1,0 +1,34 @@
+[Unit]
+Description=ResearchVault Web (Node API + static)
+Documentation=https://github.com/sohiko/ResearchVault
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# デプロイ先の Linux ユーザーに合わせて変更（例: ubuntu, deploy, www-data）
+User=ubuntu
+Group=ubuntu
+
+# リポジトリを clone した web/ ディレクトリの絶対パス
+WorkingDirectory=/var/www/ResearchVault/web
+
+Environment=NODE_ENV=production
+# dev.insas.jp が 3000 を使用しているため rv は 3001 を推奨
+Environment=PORT=3001
+# GitHub デプロイで生成する場合のみ。無くても起動可（先頭の -）
+EnvironmentFile=-/var/www/ResearchVault/web/.env
+
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+# PDF プロキシ等で時間がかかる場合
+TimeoutStopSec=30
+
+# ログ: journalctl -u researchvault -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=researchvault
+
+[Install]
+WantedBy=multi-user.target
