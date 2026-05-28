@@ -61,7 +61,26 @@ jobs:
           chmod 700 ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+          echo "=== VPS_HOST ==="
+          echo "${{ secrets.VPS_HOST }}"
+
+          echo "=== VPS_PORT ==="
+          echo "${{ secrets.VPS_PORT }}"
+
+          echo "=== ssh-keyscan ==="
+          ssh-keyscan -v -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>&1 || true
+
+          echo "=== known_hosts ==="
+          cat ~/.ssh/known_hosts
+
+          echo "=== SSH connection test ==="
+          ssh -v \
+            -i ~/.ssh/deploy_key \
+            -p "${{ secrets.VPS_PORT }}" \
+            -o StrictHostKeyChecking=no \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "echo SSH_OK" 2>&1 || true
 
       - name: Ensure deploy directory exists
         run: |
