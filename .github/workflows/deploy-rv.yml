@@ -23,6 +23,10 @@ jobs:
       name: production
       url: https://rv.insas.jp/
 
+    defaults:
+      run:
+        working-directory: web
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,16 +43,15 @@ jobs:
         run: npm run build
 
       - name: Detect build directory
+        working-directory: web
         run: |
           if [ -d "dist" ]; then
-            echo "BUILD_DIR=dist" >> "$GITHUB_ENV"
+            echo "BUILD_DIR=web/dist" >> "$GITHUB_ENV"
           elif [ -d "build" ]; then
-            echo "BUILD_DIR=build" >> "$GITHUB_ENV"
-          elif [ -d ".next" ]; then
-            echo "Next.js build output detected, but static deploy requires export output."
-            exit 1
+            echo "BUILD_DIR=web/build" >> "$GITHUB_ENV"
           else
             echo "No build output directory found. Expected dist or build."
+            ls -la
             exit 1
           fi
 
@@ -56,10 +59,8 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Ensure deploy directory exists
