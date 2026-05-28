@@ -48,7 +48,7 @@
     },
     "externally_connectable": {
         "matches": [
-            "https://rv.jamknife.jp/*",
+            "https://rv.insas.jp/*",
             "https://research-vault-eight.vercel.app/*",
             "http://localhost:3000/*"
         ]

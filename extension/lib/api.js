@@ -8,7 +8,7 @@ class API {
         // 本番環境のAPIエンドポイント
         this.baseURL = this.isLocalDevelopment() 
             ? 'http://localhost:3000/api'
-            : 'https://rv.jamknife.jp/api';
+            : 'https://rv.insas.jp/api';
             
 
             

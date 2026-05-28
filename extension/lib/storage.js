@@ -139,7 +139,7 @@ class StorageManager {
             autoSave: true,
             notifications: true,
             language: 'ja',
-            dashboardUrl: 'https://rv.jamknife.jp'
+            dashboardUrl: 'https://rv.insas.jp'
         };
     }
 

@@ -27,6 +27,11 @@ jobs:
         npm ci
         
     - name: Build
+      env:
+        VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        VITE_APP_URL: https://rv.insas.jp
+        VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
       run: |
         cd web
         npm run build

@@ -45,7 +45,7 @@
 - 危険行為の手順や助長表現は一切含めない`;
 
   const ALLOWED_REFERENCE_TYPES = ['website', 'article', 'journal', 'book', 'report'];
-  const GEMINI_MODEL = 'gemini-2.5-flash-lite';
+  const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
   function normalizeReferenceType(value) {
     const normalized = (value || '').toString().trim().toLowerCase();
@@ -89,7 +89,7 @@
     throw new Error('Failed to parse JSON from response');
   }
 
-  const PROXY_ENDPOINT = 'https://rv.jamknife.jp/api/pdf-proxy';
+  const PROXY_ENDPOINT = 'https://rv.insas.jp/api/pdf-proxy';
 
   async function downloadPDFViaProxy(url, proxyEndpoint = PROXY_ENDPOINT) {
     const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(url)}`;
