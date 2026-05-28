@@ -46,11 +46,11 @@ jobs:
         working-directory: web
         run: |
           if [ -d "dist" ]; then
-            echo "BUILD_DIR=web/dist" >> "$GITHUB_ENV"
+            echo "BUILD_DIR=$GITHUB_WORKSPACE/web/dist" >> "$GITHUB_ENV"
           elif [ -d "build" ]; then
-            echo "BUILD_DIR=web/build" >> "$GITHUB_ENV"
+            echo "BUILD_DIR=$GITHUB_WORKSPACE/web/build" >> "$GITHUB_ENV"
           else
-            echo "No build output directory found. Expected dist or build."
+            echo "No build output directory found."
             ls -la
             exit 1
           fi
