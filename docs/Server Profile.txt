@@ -1,0 +1,152 @@
+# Server Profile (final as-is) — insas.jp (Sakura VPS) — 2026-04-30 JST
+
+## Provider / Host
+-  Provider: Sakura Internet VPS
+-  Resources: vCPU 3, RAM 2GB, SSD 100GB
+-  Virtualization: KVM
+-  Hostname (FQDN): vps.insas.jp
+-  Public IPv4: 133.242.146.110
+-  IPv6: provider enabled; host routing for IPv6 not configured/unused (no ip -6 route). Services may still bind on [::] depending on daemon defaults.
+-  PTR (reverse DNS): unknown
+
+## OS
+-  Ubuntu 24.04.2 LTS (noble)
+-  Kernel: 6.8.0-100-generic (running)
+-  Note: pending kernel upgrade detected; expected kernel version shown by needrestart: 6.8.0-110-generic (reboot needed to load)
+
+## Access / Privileges / Ops
+-  SSH: port 10022/tcp, key auth only
+-  sshd effective settings: PermitRootLogin no; PasswordAuthentication no; PubkeyAuthentication yes
+-  Admin user: sohiko0619 (sudo)
+-  Deployment: manual upload from IDE
+
+## Firewall / Exposure (UFW)
+-  Sakura packet filter: disabled
+-  UFW: active; default deny incoming, allow outgoing; logging low
+-  Current allowed inbound:
+  - 10022/tcp (SSH)
+  - 80/tcp (HTTP)
+  - 443/tcp (HTTPS)
+  - 25/tcp (SMTP)
+  - 465/tcp (SMTPS)
+  - 587/tcp (Submission)
+  - 993/tcp (IMAPS)
+  - 995/tcp (POP3S)
+  - IPv6 equivalents for the above
+-  Removed/closed at firewall:
+  - 8080/tcp+udp removed
+  - 8443/tcp+udp removed
+  - 3306/tcp removed
+-  Note: Dovecot still listens on 110/143, but UFW does not allow those ports from the internet.
+
+## Web Server (Apache)
+-  Apache: 2.4.58 (Ubuntu)
+-  MPM: prefork
+-  PHP integration: mod_php (php_module loaded); no php-fpm detected
+-  Proxy modules enabled: proxy, proxy_http, proxy_wstunnel
+-  Listening: 0.0.0.0:80 and 0.0.0.0:443
+
+## Apache VirtualHosts / Docroots / Proxy
+-  insas.jp (alias: www.insas.jp)
+  - HTTP: /etc/apache2/sites-enabled/insas.conf
+    - DocumentRoot: /home/insas/www/public
+    - Forces HTTPS
+    - Contains WS/proxy rules targeting ws://localhost:8080/... (backend currently not listening)
+  - HTTPS: /etc/apache2/sites-enabled/insas-ssl.conf
+    - DocumentRoot: /home/insas/www/public
+    - TLS cert/key: /etc/letsencrypt/live/insas.jp/fullchain.pem + privkey.pem
+-  pay.insas.jp
+  - HTTP: /etc/apache2/sites-enabled/pay.insas.conf (forces HTTPS)
+  - HTTPS: /etc/apache2/sites-enabled/pay.insas-ssl.conf
+    - DocumentRoot: /home/insas/www/public/pay
+    - TLS cert/key: /etc/letsencrypt/live/insas.jp/fullchain.pem + privkey.pem
+-  mail.insas.jp
+  - HTTP: /etc/apache2/sites-enabled/mail.insas.conf (forces HTTPS)
+  - HTTPS: /etc/apache2/sites-enabled/mail.insas-le-ssl.conf
+    - DocumentRoot: /var/www/html
+    - TLS cert/key: /etc/letsencrypt/live/insas.jp/fullchain.pem + privkey.pem
+  - Webmail: unknown (vhost exists)
+-  hiyo.insas.jp (default vhost on :80/:443)
+  - HTTP: /etc/apache2/sites-enabled/hiyo.insas.conf (forces HTTPS)
+  - HTTPS: /etc/apache2/sites-enabled/hiyo.insas-le-ssl.conf
+    - DocumentRoot: /home/sohiko0619/www/insas/public/hiyo
+    - TLS cert/key: /etc/letsencrypt/live/insas.jp/fullchain.pem + privkey.pem
+-  rv.insas.jp (ResearchVault)
+  - HTTP: /etc/apache2/sites-enabled/rv.insas.jp.conf
+  - HTTPS: /etc/apache2/sites-enabled/rv.insas.jp-ssl.conf
+  - Static (deploy): /home/rv/www/public (dist from GitHub Actions / IDE)
+  - API (Node): /home/rv/www/app (server.js, api/, node_modules)
+  - Backend: 127.0.0.1:3001 (systemd: researchvault.service, User=rv)
+  - Note: dev.insas.jp uses 127.0.0.1:3000 — rv must not use 3000
+  - TLS: /etc/letsencrypt/live/rv.insas.jp/{fullchain.pem,privkey.pem}
+  - Do NOT modify insas.jp / dev.insas.jp vhosts when fixing rv API
+  - /var/www/ResearchVault is optional test clone, not production docroot
+
+## TLS / Let's Encrypt
+-  certbot: 5.5.0
+-  Primary cert in active use across Apache + Postfix:
+  - /etc/letsencrypt/live/insas.jp/{fullchain.pem,privkey.pem}
+-  Cert SANs include: insas.jp, www.insas.jp, mail.insas.jp, pay.insas.jp, hiyo.insas.jp
+-  A separate cert named hiyo.insas.jp exists, but vhost configs reference the insas.jp cert paths
+
+## Runtimes
+-  PHP: 8.3.6 (mysqli/mysqlnd/pdo_mysql present)
+-  Node.js: v22.22.2 (NodeSource, 2026-05-28), npm 10.x
+-  pm2: not installed/detected
+-  Node services: researchvault.service → 127.0.0.1:3001 (ResearchVault API+static); dev.insas.jp → :3000
+
+## Database
+-  Engine: MariaDB 10.11.13 (Ubuntu 24.04 packages)
+-  Service: mariadb.service enabled and running
+-  Current bind: bind-address set to 127.0.0.1 (localhost only)
+-  Firewall: port 3306 is NOT allowed by UFW (internet DB access closed)
+-  Users (selected): insas_user@% exists (kept by policy), insas_user@localhost, insas_user@127.0.0.1, newrelic@localhost, root@localhost, etc.
+-  Backups: present, stored on same VPS (method/schedule unknown)
+
+## Mail (Self-hosted)
+-  MTA: Postfix (enabled)
+  - myhostname=mail.insas.jp, mydomain=insas.jp, myorigin=insas.jp
+  - Mail storage: Maildir (home_mailbox=Maildir/)
+  - postscreen enabled; DNSBL zen.spamhaus.org
+  - TLS cert/key: /etc/letsencrypt/live/insas.jp/{fullchain.pem,privkey.pem}
+  - submission (587) effective policy (postconf -P): SASL auth enabled; TLS required (encrypt); TLS auth only yes
+  - smtps (465) effective policy (postconf -P): tls_wrappermode yes; SASL auth enabled; TLS auth only yes
+  - master.cf was cleaned: dangling/duplicate submission option lines were commented out; postfix reload/check succeeded
+-  IMAP/POP: Dovecot v2.3.21 (enabled/running)
+  - Listening observed previously: 110/143/993/995
+  - Dovecot auth_mechanisms: plain login
+  - Dovecot protocols enabled: imap, pop3, lmtp, sieve
+-  Listening confirmed after changes:
+  - SMTP: 25 (postscreen+master), 465 (master), 587 (master) on IPv4 and IPv6
+-  Mail accounts expected/used: admin, info, s-misaki, t-misaki, dev, privacy, misaki; also observed: support
+-  fail2ban:
+  - Installed and enabled
+  - Active jails include: sshd, postfix, apache-auth, apache-badbots
+  - sshd jail has active bans (was working)
+
+## DNS (Sakura DNS)
+-  A: @/www/mail/pay/hiyo -> 133.242.146.110
+-  MX: @ (priority 10) -> @
+-  SPF: v=spf1 mx a ~all
+-  DKIM: default._domainkey TXT present
+-  DMARC: _dmarc v=DMARC1; p=quarantine; rua/ruf=mailto:admin@insas.jp; fo=1
+-  Google site verification TXT present
+
+## Observability / New Relic
+-  Installed:
+  - newrelic-infra
+  - newrelic-daemon
+  - newrelic-php5 (+ common)
+  - nri-apache
+  - nri-mysql
+-  MariaDB logs showed aborted connections from newrelic@localhost previously
+
+## Backups / Artifacts
+-  Mail-related config backup created:
+  - /root/mail-config-backup_<timestamp>.tgz (contains /etc/postfix, /etc/dovecot, /etc/letsencrypt)
+
+## Security posture summary (as-is)
+-  SSH hardened (no root login, no password auth)
+-  Reduced exposed surface: closed DB public access; closed unused 8080/8443; cleaned UFW duplicates
+-  Mail services remain internet-exposed on standard ports; some hostile auth attempts observed in logs; fail2ban active
+-  Pending kernel upgrade suggests a reboot should be scheduled to apply kernel security/bugfix updates

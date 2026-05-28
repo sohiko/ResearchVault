@@ -161,6 +161,18 @@ sudo ss -tlnp | grep -E '3000|3001'
 
 ---
 
+## ワンコマンド初回セットアップ（コードデプロイ済みの場合）
+
+```bash
+cd /var/www/ResearchVault/web
+chmod +x deploy/setup-vps.sh
+./deploy/setup-vps.sh
+```
+
+その後 Apache を `deploy/rv.insas.jp.apache.conf` の :443 内容に合わせて編集。
+
+---
+
 ## チェックリスト
 
 - [ ] `server.js` が VPS の `web/` にある
@@ -168,3 +180,7 @@ sudo ss -tlnp | grep -E '3000|3001'
 - [ ] `researchvault.service` が active
 - [ ] `rv.insas.jp-ssl.conf` が `ProxyPass` → `3001`
 - [ ] `curl https://rv.insas.jp/api/reference-info` が JSON
+
+### いまの状態（2026-05-28 確認）
+
+`curl https://rv.insas.jp/api/reference-info` がまだ `Content-Type: text/html` の場合、**コードのデプロイは完了していても Apache が静的配信のまま**です。上記 Apache 変更が未適用です。

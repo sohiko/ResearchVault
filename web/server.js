@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PORT = Number(process.env.PORT) || 3000
-const DIST_DIR = path.join(__dirname, 'dist')
+const PORT = Number(process.env.PORT) || 3001
+const DIST_DIR = process.env.DIST_DIR || path.join(__dirname, 'dist')
 
 /** @type {Map<string, (req: import('express').Request, res: import('express').Response) => Promise<void>>} */
 const handlerCache = new Map()
