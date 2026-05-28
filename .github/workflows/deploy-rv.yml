@@ -1,0 +1,73 @@
+name: Deploy rv.insas.jp
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: deploy-rv-insas-jp
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and Deploy to rv.insas.jp
+    runs-on: ubuntu-latest
+
+    environment:
+      name: production
+      url: https://rv.insas.jp/
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Detect build directory
+        run: |
+          if [ -d "dist" ]; then
+            echo "BUILD_DIR=dist" >> "$GITHUB_ENV"
+          elif [ -d "build" ]; then
+            echo "BUILD_DIR=build" >> "$GITHUB_ENV"
+          else
+            echo "No build output directory found. Expected dist or build."
+            exit 1
+          fi
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh-keyscan -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy with rsync
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.VPS_PORT }}" \
+            "${BUILD_DIR}/" \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.DEPLOY_PATH }}/"
+
+      - name: Verify deployed site
+        run: |
+          curl -fsS https://rv.insas.jp/ > /dev/null
+          echo "Deployment completed: https://rv.insas.jp/"
