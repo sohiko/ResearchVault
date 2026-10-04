@@ -1,0 +1,56 @@
+ResearchVault — Vercel 運用
+
+GitHub: https://github.com/sohiko/ResearchVault
+Project: sohikos-projects/research-vault
+Project ID: prj_camJpC2bSZLYwJmSvrReACYZ1soq
+Root Directory: web
+Framework: Vite
+Node: 22.x (CI: 22.21.0)
+Install: npm ci / Build: npm run build / Output: dist
+Production branch: main
+Production URL: https://rv.insas.jp
+
+構成
+Web: web/src を Vite で静的ビルド。
+API: web/api の Vercel Node Functions。VPS 用 server.js は Vercel では起動しない。
+DB/Auth: 既存 Supabase pzplwtvnxikhykqsvcfs を継続使用。DB の移転や初期化は不要。
+Git integration が main の push で本番、その他ブランチで Preview を作成する。
+GitHub Actions は Lint・テスト・ビルドを実行。旧 VPS 配信 workflow は無効。
+Git integration のデプロイと GitHub Actions は独立しているため、main へ反映する前に検証する。
+
+Vercel の必要な環境変数（値はこの文書や Git に保存しない）
+VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY: ブラウザー用の公開設定。
+SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY: API 用。service role を VITE_* に入れない。
+VITE_APP_URL: https://rv.insas.jp
+その他の既存設定: VITE_GEMINI_API_KEY / RESEND_API_KEY / MAIL_FROM。
+VITE_* はビルド時に公開されるため秘密の共有キーを置かない。既存 Gemini の設計は別途改善対象。
+Production/Preview/Development の対象を確認し、変更後は再デプロイする。
+Preview も既存 DB を指すため、本番データの書き込みテストを行わない。
+
+Supabase Auth
+Site URL: https://rv.insas.jp/
+Redirect URLs: https://rv.insas.jp/auth/callback と https://rv.insas.jp/auth/reset-password。
+DB、ユーザー、メールテンプレート、RLS は今回のホスティング移行で変更しない。
+
+ローカル・リリース確認
+web/ で npm ci → npm run lint → npm test → npm run build。
+Vite 単独の npm run dev は API を実行しない。API を含む検証は Vercel Preview を使う。
+CLI で既存プロジェクトを link する場合はリポジトリ root から実行（Root Directory=web）。
+本番設定の候補を切り替えず作成する: vercel deploy --prod --skip-domain
+候補 URL で画面、SPA 深いリンク、API の JSON、認証なしの拒否、文献情報取得を確認。
+候補を本番へ: vercel promote <deployment URL>
+復旧: Vercel Dashboard の Instant Rollback または vercel rollback <previous deployment URL>。
+DB の変更はロールバック対象に含まれない。
+
+PDF
+Vercel の通常 Function response は4.5 MBまで。Base64 JSON に余裕を持たせ、PDF proxy は3 MiBまで。
+Content-Length と実読み込み量の両方を制限し、超過時413と手動入力案内を返す。
+直接取得できる PDF はブラウザーが先に直接取得するため、この proxy 上限の対象外。
+サーバー取得は45秒でタイムアウト。大きい PDF の処理方法は今後の機能改善対象。
+
+VPS/INSAS
+VPS の旧 RV 領域: /home/rv/www/app と /home/rv/www/public、researchvault.service。
+移行中は旧 RV を DNS キャッシュ利用者のため稼働させる。削除や共有 Apache reload を行わない。
+移行後の停止・撤去は DNS 反映と復旧方針を確認した後の別作業。
+INSAS のファイル、サービス、設定、OS/ネットワークには触れない。
+接続情報は Git 対象外の ops.local/connection.txt を参照。
