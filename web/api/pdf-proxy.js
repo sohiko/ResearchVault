@@ -7,6 +7,10 @@ export const config = {
   maxDuration: 60, // 最大60秒（大きなPDF対応）
 }
 
+// Base64 + JSON must fit Vercel's 4.5 MB response limit.
+const MAX_PDF_BYTES = 3 * 1024 * 1024
+const TOO_LARGE_ERROR = 'PDFが大きすぎます（プロキシ取得は3 MiBまで）。文献情報を手動で入力してください。'
+
 export default async function handler(req, res) {
   // CORSヘッダーを設定
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -55,6 +59,7 @@ export default async function handler(req, res) {
         'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
       },
       redirect: 'follow',
+      signal: AbortSignal.timeout(45000),
     })
 
     if (!response.ok) {
@@ -68,12 +73,24 @@ export default async function handler(req, res) {
     const contentType = response.headers.get('content-type') || ''
     console.log(`[pdf-proxy] Content-Type: ${contentType}`)
 
-    // PDFデータを取得
-    const arrayBuffer = await response.arrayBuffer()
-    const uint8Array = new Uint8Array(arrayBuffer)
+    if (Number(response.headers.get('content-length')) > MAX_PDF_BYTES) {
+      await response.body?.cancel()
+      return res.status(413).json({ error: TOO_LARGE_ERROR })
+    }
+
+    // Also bound chunked responses and decompressed bodies without Content-Length.
+    const chunks = []
+    let size = 0
+    for await (const chunk of response.body) {
+      size += chunk.byteLength
+      if (size > MAX_PDF_BYTES) {
+        return res.status(413).json({ error: TOO_LARGE_ERROR })
+      }
+      chunks.push(Buffer.from(chunk))
+    }
     
     // Base64エンコード
-    const base64 = Buffer.from(uint8Array).toString('base64')
+    const base64 = Buffer.concat(chunks, size).toString('base64')
     
     console.log(`[pdf-proxy] PDF fetched successfully: ${Math.round(base64.length / 1024)} KB (base64)`)
 
@@ -82,7 +99,7 @@ export default async function handler(req, res) {
       success: true,
       data: base64,
       contentType: contentType,
-      size: arrayBuffer.byteLength,
+      size,
     })
   } catch (error) {
     console.error('[pdf-proxy] Error:', error)
