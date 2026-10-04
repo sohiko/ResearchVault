@@ -224,7 +224,7 @@ class API {
                 throw new Error('メールアドレスとパスワードが必要です')
             }
 
-            const authUrl = 'https://research-vault-eight.vercel.app/api/extension/auth';
+            const authUrl = `${this.baseURL}/extension/auth`;
             
             const response = await fetch(authUrl, {
                 method: 'POST',
@@ -566,7 +566,7 @@ class API {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
             
-            const response = await fetch('https://research-vault-eight.vercel.app/api/extension/health', {
+            const response = await fetch(`${this.baseURL}/extension/health`, {
                 method: 'GET',
                 headers: {
                     'X-Extension-Version': '1.0.0',
@@ -610,7 +610,7 @@ class API {
      */
     async getHealthStatus() {
         try {
-            const response = await fetch('https://research-vault-eight.vercel.app/api/extension/health', {
+            const response = await fetch(`${this.baseURL}/extension/health`, {
                 method: 'GET',
                 headers: {
                     'X-Extension-Version': '1.0.0',
