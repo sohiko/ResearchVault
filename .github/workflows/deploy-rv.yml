@@ -1,9 +1,6 @@
-name: Deploy rv.insas.jp
+name: Archived VPS deploy (disabled after Vercel migration)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -16,6 +13,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Vercel Git integration now owns deployments. Keep the old recipe for reference only.
+    if: ${{ false }}
     name: Build and Deploy to rv.insas.jp
     runs-on: ubuntu-latest
 

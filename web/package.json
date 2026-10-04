@@ -49,7 +49,7 @@
     "start:prod": "npm run build && node server.js",
     "dev:full": "npm run build && node server.js",
     "deploy": "npm run build && vercel --prod",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "node --test tests/*.test.js"
   },
   "browserslist": {
     "production": [
@@ -84,5 +84,5 @@
   "bugs": {
     "url": "https://github.com/sohiko/ResearchVault/issues"
   },
-  "homepage": "https://research-vault.vercel.app"
+  "homepage": "https://rv.insas.jp"
 }
