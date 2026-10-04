@@ -2,13 +2,13 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
+const supabaseServiceKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.warn('Using fallback Supabase configuration. Please set environment variables for production.')
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
 
 export default async function handler(req, res) {
   // CORS設定
@@ -34,6 +34,10 @@ export default async function handler(req, res) {
     }
 
     const authToken = authHeader.split(' ')[1]
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false }
+    })
     const { data: { user }, error: authError } = await supabase.auth.getUser(authToken)
 
     if (authError || !user) {
@@ -42,11 +46,11 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
-        return handleGetProject(req, res, id, user.id, token)
+        return handleGetProject(req, res, id, user.id, token, supabase)
       case 'PUT':
-        return handleUpdateProject(req, res, id, user.id)
+        return handleUpdateProject(req, res, id, user.id, supabase)
       case 'DELETE':
-        return handleDeleteProject(req, res, id, user.id)
+        return handleDeleteProject(req, res, id, user.id, supabase)
       default:
         return res.status(405).json({ error: 'Method not allowed' })
     }
@@ -59,8 +63,12 @@ export default async function handler(req, res) {
   }
 }
 
-async function handleGetProject(req, res, projectId, userId, sharingToken) {
+async function handleGetProject(req, res, projectId, userId, sharingToken, supabase) {
   try {
+    if (sharingToken) {
+      const { error } = await supabase.rpc('authorize_project_link', { p_project_id: projectId, p_token: sharingToken })
+      if (error) {return res.status(403).json({ error: '共有リンクが正しくありません' })}
+    }
     // まずプロジェクトを取得（リンク共有の確認のため）
     const { data: project, error: projectError } = await supabase
       .from('projects')
@@ -121,6 +129,8 @@ async function handleGetProject(req, res, projectId, userId, sharingToken) {
       .is('deleted_at', null)
       .order('saved_at', { ascending: false })
 
+    const { data: people, error: peopleError } = await supabase.rpc('get_project_people', { p_project_id: projectId })
+    if (peopleError) {throw peopleError}
     const formattedProject = {
       id: project.id,
       name: project.name,
@@ -131,7 +141,7 @@ async function handleGetProject(req, res, projectId, userId, sharingToken) {
       isLinkSharingEnabled: project.is_link_sharing_enabled,
       linkSharingToken: accessType === 'owner' ? project.link_sharing_token : null, // オーナーのみトークンを返す
       ownerId: project.owner_id,
-      owner: project.profiles,
+      owner: people?.find(person => person.id === project.owner_id) || null,
       createdAt: project.created_at,
       updatedAt: project.updated_at,
       references: references || [],
@@ -148,7 +158,7 @@ async function handleGetProject(req, res, projectId, userId, sharingToken) {
   }
 }
 
-async function handleUpdateProject(req, res, projectId, userId) {
+async function handleUpdateProject(req, res, projectId, userId, supabase) {
   try {
     const { 
       name, 
@@ -228,8 +238,9 @@ async function handleUpdateProject(req, res, projectId, userId) {
 
     // トークン再生成
     if (regenerateToken && project.owner_id === userId) {
-      const { v4: uuidv4 } = await import('uuid')
-      updateData.link_sharing_token = uuidv4()
+      const { data: token, error } = await supabase.rpc('regenerate_link_sharing_token', { p_project_id: projectId })
+      if (error) {throw error}
+      updateData.link_sharing_token = token
     }
 
     const { data: updatedProject, error } = await supabase
@@ -271,7 +282,7 @@ async function handleUpdateProject(req, res, projectId, userId) {
   }
 }
 
-async function handleDeleteProject(req, res, projectId, userId) {
+async function handleDeleteProject(req, res, projectId, userId, supabase) {
   try {
     // 権限チェック
     const { data: project, error: checkError } = await supabase

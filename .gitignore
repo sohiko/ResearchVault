@@ -111,7 +111,6 @@ temp/
 
 # Supabase
 supabase/.temp/
-supabase/migrations/
 
 # Specs
 specs/

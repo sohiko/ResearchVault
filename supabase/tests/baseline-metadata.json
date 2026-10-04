@@ -1,0 +1,949 @@
+{
+  "tables": [
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "browsing_history_candidates"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "project_members"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "projects"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "bookmarks"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "tags"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "reference_tags"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "selected_texts"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "citation_settings"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "activity_logs"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "references"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "profiles"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "project_invitations"
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "rls": true,
+      "name": "feature_requests"
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() IS NOT NULL)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "project_members",
+      "permissive": "PERMISSIVE",
+      "policyname": "project_members_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update own profile",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can insert own profile",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = id)"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "project_members",
+      "permissive": "PERMISSIVE",
+      "policyname": "project_members_insert",
+      "schemaname": "public",
+      "with_check": "(auth.uid() IS NOT NULL)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() IS NOT NULL)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "project_members",
+      "permissive": "PERMISSIVE",
+      "policyname": "project_members_update",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((owner_id = auth.uid()) OR (id IN ( SELECT project_members.project_id\n   FROM project_members\n  WHERE ((project_members.user_id = auth.uid()) AND (project_members.role = 'admin'::text)))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "projects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Project owners and admins can update projects",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(owner_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "projects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Project owners can delete projects",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(auth.uid() IS NOT NULL)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "project_members",
+      "permissive": "PERMISSIVE",
+      "policyname": "project_members_delete",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tags",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can view all tags",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "tags",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can create tags",
+      "schemaname": "public",
+      "with_check": "(created_by = auth.uid())"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(created_by = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tags",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update own tags",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(reference_id IN ( SELECT \"references\".id\n   FROM \"references\"\n  WHERE (\"references\".saved_by = auth.uid())))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "reference_tags",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can manage reference tags for accessible references",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "citation_settings",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can manage own citation settings",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "activity_logs",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can view own activity logs",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Insert project references",
+      "schemaname": "public",
+      "with_check": "((saved_by = auth.uid()) AND ((project_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM project_members pm\n  WHERE ((pm.project_id = pm.project_id) AND (pm.user_id = auth.uid()))))))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((saved_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM project_members pm\n  WHERE ((pm.project_id = pm.project_id) AND (pm.user_id = auth.uid()) AND (pm.role = ANY (ARRAY['editor'::text, 'admin'::text]))))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Update project references",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "((saved_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM project_members pm\n  WHERE ((pm.project_id = pm.project_id) AND (pm.user_id = auth.uid()) AND (pm.role = 'admin'::text)))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Delete project references",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "projects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Insert own projects",
+      "schemaname": "public",
+      "with_check": "(owner_id = auth.uid())"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "true",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "activity_logs",
+      "permissive": "PERMISSIVE",
+      "policyname": "Enable all operations for authenticated users",
+      "schemaname": "public",
+      "with_check": "true"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "activity_logs",
+      "permissive": "PERMISSIVE",
+      "policyname": "Enable insert for activity logging",
+      "schemaname": "public",
+      "with_check": "true"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "activity_logs",
+      "permissive": "PERMISSIVE",
+      "policyname": "Enable read for activity logs",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "true",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Enable all operations for authenticated users",
+      "schemaname": "public",
+      "with_check": "true"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = owner_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "projects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update their own projects",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = owner_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "projects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can soft delete their own projects",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can insert references",
+      "schemaname": "public",
+      "with_check": "((saved_by = auth.uid()) AND ((project_id IS NULL) OR (project_id IN ( SELECT p.id\n   FROM projects p\n  WHERE (p.owner_id = auth.uid())))))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(saved_by = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update their references",
+      "schemaname": "public",
+      "with_check": "((saved_by = auth.uid()) AND ((project_id IS NULL) OR (project_id IN ( SELECT p.id\n   FROM projects p\n  WHERE (p.owner_id = auth.uid())))))"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(saved_by = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can delete their references",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "((created_by = auth.uid()) AND ((project_id IS NULL) OR (project_id IN ( SELECT p.id\n   FROM projects p\n  WHERE (p.owner_id = auth.uid())))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "selected_texts",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can manage selected texts",
+      "schemaname": "public",
+      "with_check": "((created_by = auth.uid()) AND ((project_id IS NULL) OR (project_id IN ( SELECT p.id\n   FROM projects p\n  WHERE (p.owner_id = auth.uid())))))"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "((created_by = auth.uid()) AND ((project_id IS NULL) OR (project_id IN ( SELECT p.id\n   FROM projects p\n  WHERE (p.owner_id = auth.uid())))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "bookmarks",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can manage bookmarks",
+      "schemaname": "public",
+      "with_check": "((created_by = auth.uid()) AND ((project_id IS NULL) OR (project_id IN ( SELECT p.id\n   FROM projects p\n  WHERE (p.owner_id = auth.uid())))))"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "projects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can insert their own projects",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = owner_id)"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can insert their own references",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = saved_by)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = saved_by)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update their own references",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = saved_by)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can soft delete their own references",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((auth.uid() = deleted_by) AND (deleted_at IS NOT NULL))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "projects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update deleted projects they deleted",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((auth.uid() = deleted_by) AND (deleted_at IS NOT NULL))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update deleted references they deleted",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "browsing_history_candidates",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can view their own candidates",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "browsing_history_candidates",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can insert their own candidates",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "browsing_history_candidates",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update their own candidates",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(auth.uid() = user_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "browsing_history_candidates",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can delete their own candidates",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "feature_requests",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can view their own feature requests",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "feature_requests",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admins can view all feature requests",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "feature_requests",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can create their own feature requests",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "feature_requests",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update their own feature requests",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "feature_requests",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can delete their own feature requests",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "project_invitations",
+      "permissive": "PERMISSIVE",
+      "policyname": "Authenticated users can create invitations",
+      "schemaname": "public",
+      "with_check": "((auth.uid() IS NOT NULL) AND (inviter_id = auth.uid()))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((inviter_id = auth.uid()) OR (invitee_id = auth.uid()))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "project_invitations",
+      "permissive": "PERMISSIVE",
+      "policyname": "Related users can update invitations",
+      "schemaname": "public",
+      "with_check": "((inviter_id = auth.uid()) OR (invitee_id = auth.uid()))"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(inviter_id = auth.uid())",
+      "roles": [
+        "public"
+      ],
+      "tablename": "project_invitations",
+      "permissive": "PERMISSIVE",
+      "policyname": "Inviters can delete invitations",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((created_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM projects p\n  WHERE ((p.id = selected_texts.project_id) AND (p.owner_id = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM project_members pm\n  WHERE ((pm.project_id = pm.project_id) AND (pm.user_id = auth.uid())))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "selected_texts",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can view selected texts",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((created_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM projects p\n  WHERE ((p.id = bookmarks.project_id) AND (p.owner_id = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM project_members pm\n  WHERE ((pm.project_id = pm.project_id) AND (pm.user_id = auth.uid())))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "bookmarks",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can view bookmarks",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((inviter_id = auth.uid()) OR (invitee_id = auth.uid()))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "project_invitations",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can view related invitations",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() IS NOT NULL)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "profiles_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((owner_id = auth.uid()) OR (id IN ( SELECT project_members.project_id\n   FROM project_members\n  WHERE (project_members.user_id = auth.uid()))) OR ((is_link_sharing_enabled = true) AND (auth.uid() IS NOT NULL)))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "projects",
+      "permissive": "PERMISSIVE",
+      "policyname": "projects_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((saved_by = auth.uid()) OR (project_id IN ( SELECT projects.id\n   FROM projects\n  WHERE (projects.owner_id = auth.uid()))) OR (project_id IN ( SELECT project_members.project_id\n   FROM project_members\n  WHERE (project_members.user_id = auth.uid()))) OR (project_id IN ( SELECT projects.id\n   FROM projects\n  WHERE ((projects.is_link_sharing_enabled = true) AND (auth.uid() IS NOT NULL)))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "references",
+      "permissive": "PERMISSIVE",
+      "policyname": "references_select",
+      "schemaname": "public",
+      "with_check": null
+    }
+  ],
+  "triggers": [
+    "CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+    "CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+    "CREATE TRIGGER update_references_updated_at BEFORE UPDATE ON \"references\" FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+    "CREATE TRIGGER update_citation_settings_updated_at BEFORE UPDATE ON citation_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+    "CREATE TRIGGER log_projects_activity AFTER INSERT OR DELETE OR UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION log_activity()",
+    "CREATE TRIGGER log_references_activity AFTER INSERT OR DELETE OR UPDATE ON \"references\" FOR EACH ROW EXECUTE FUNCTION log_activity()",
+    "CREATE TRIGGER trigger_soft_delete_project_references AFTER UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION soft_delete_project_references()",
+    "CREATE TRIGGER update_feature_requests_updated_at BEFORE UPDATE ON feature_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+    "CREATE TRIGGER update_project_invitations_updated_at BEFORE UPDATE ON project_invitations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+  ],
+  "functions": [
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "get_all_user_statistics()",
+      "definition": "CREATE OR REPLACE FUNCTION public.get_all_user_statistics()\n RETURNS TABLE(id uuid, name text, email text, owned_projects integer, member_projects integer, total_references integer, total_texts integer, total_bookmarks integer, created_at timestamp with time zone)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nBEGIN\n  RETURN QUERY\n  SELECT pr.id,\n         pr.name,\n         pr.email,\n         count(DISTINCT p.id) AS owned_projects,\n         count(DISTINCT pm.project_id) AS member_projects,\n         count(DISTINCT r.id) AS total_references,\n         count(DISTINCT st.id) AS total_texts,\n         count(DISTINCT b.id) AS total_bookmarks,\n         pr.created_at\n  FROM public.profiles pr\n  LEFT JOIN public.projects p         ON pr.id = p.owner_id\n  LEFT JOIN public.project_members pm ON pr.id = pm.user_id\n  LEFT JOIN public.\"references\" r     ON pr.id = r.saved_by\n  LEFT JOIN public.selected_texts st  ON pr.id = st.created_by\n  LEFT JOIN public.bookmarks b        ON pr.id = b.created_by\n  GROUP BY pr.id, pr.name, pr.email, pr.created_at;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "check_project_permission(uuid,uuid,text)",
+      "definition": "CREATE OR REPLACE FUNCTION public.check_project_permission(p_project_id uuid, p_user_id uuid, p_required_role text DEFAULT 'viewer'::text)\n RETURNS boolean\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n    user_role TEXT;\n    is_owner BOOLEAN;\nBEGIN\n    -- オーナーかチェック\n    SELECT EXISTS(\n        SELECT 1 FROM public.projects \n        WHERE id = p_project_id AND owner_id = p_user_id\n    ) INTO is_owner;\n    \n    IF is_owner THEN\n        RETURN TRUE;\n    END IF;\n    \n    -- メンバーロールをチェック\n    SELECT role INTO user_role\n    FROM public.project_members\n    WHERE project_id = p_project_id AND user_id = p_user_id;\n    \n    IF user_role IS NULL THEN\n        RETURN FALSE;\n    END IF;\n    \n    -- 権限レベルをチェック\n    CASE p_required_role\n        WHEN 'viewer' THEN RETURN user_role IN ('viewer', 'editor', 'admin');\n        WHEN 'editor' THEN RETURN user_role IN ('editor', 'admin');\n        WHEN 'admin' THEN RETURN user_role = 'admin';\n        ELSE RETURN FALSE;\n    END CASE;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "cleanup_test_data()",
+      "definition": "CREATE OR REPLACE FUNCTION public.cleanup_test_data()\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nBEGIN\n    -- 注意: この関数は開発環境でのみ使用してください\n    RAISE NOTICE 'Cleaning up test data...';\n    \n    DELETE FROM public.activity_logs;\n    DELETE FROM public.reference_tags;\n    DELETE FROM public.selected_texts;\n    DELETE FROM public.bookmarks;\n    DELETE FROM public.references;\n    DELETE FROM public.project_members;\n    DELETE FROM public.projects;\n    DELETE FROM public.citation_settings;\n    -- プロファイルとタグは保持\n    \n    RAISE NOTICE 'Test data cleanup completed.';\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "create_default_citation_settings(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.create_default_citation_settings(user_uuid uuid)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nBEGIN\n    INSERT INTO public.citation_settings (user_id, default_style, settings)\n    VALUES (\n        user_uuid,\n        'APA',\n        jsonb_build_object(\n            'apa_settings', jsonb_build_object(\n                'version', '7th',\n                'doi_format', 'https://doi.org/',\n                'hanging_indent', true,\n                'double_spacing', true\n            ),\n            'mla_settings', jsonb_build_object(\n                'version', '9th',\n                'hanging_indent', true,\n                'double_spacing', true\n            ),\n            'chicago_settings', jsonb_build_object(\n                'version', '17th',\n                'style', 'author-date',\n                'hanging_indent', true\n            )\n        )\n    )\n    ON CONFLICT (user_id) DO NOTHING;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "create_development_test_data()",
+      "definition": "CREATE OR REPLACE FUNCTION public.create_development_test_data()\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n    test_user_id UUID;\n    test_project_id UUID;\nBEGIN\n    -- この関数は開発環境でのみ実行すること\n    -- 本番環境では絶対に実行しないでください\n    \n    RAISE NOTICE 'Creating development test data...';\n    \n    -- テストユーザーのプロファイルが存在する場合のみ実行\n    SELECT id INTO test_user_id FROM public.profiles LIMIT 1;\n    \n    IF test_user_id IS NOT NULL THEN\n        -- デフォルト引用設定を作成\n        PERFORM create_default_citation_settings(test_user_id);\n        \n        -- IBプロジェクトテンプレートを作成\n        PERFORM create_ib_project_templates(test_user_id);\n        \n        -- 最初のプロジェクトにチュートリアル参照を追加\n        SELECT id INTO test_project_id FROM public.projects WHERE owner_id = test_user_id LIMIT 1;\n        \n        IF test_project_id IS NOT NULL THEN\n            PERFORM create_tutorial_references(test_user_id, test_project_id);\n        END IF;\n        \n        RAISE NOTICE 'Development test data created successfully for user: %', test_user_id;\n    ELSE\n        RAISE NOTICE 'No user profiles found. Test data not created.';\n    END IF;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "create_ib_project_templates(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.create_ib_project_templates(user_uuid uuid)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n    ee_project_id UUID;\n    tok_project_id UUID;\n    cas_project_id UUID;\nBEGIN\n    -- Extended Essay プロジェクト\n    INSERT INTO public.projects (id, name, description, owner_id, color, icon)\n    VALUES (\n        uuid_generate_v4(),\n        'Extended Essay',\n        'IB Extended Essay 研究プロジェクト。4000語の独立研究論文です。',\n        user_uuid,\n        '#84cc16',\n        '📝'\n    ) RETURNING id INTO ee_project_id;\n    \n    -- TOK Essay プロジェクト\n    INSERT INTO public.projects (id, name, description, owner_id, color, icon)\n    VALUES (\n        uuid_generate_v4(),\n        'TOK Essay',\n        'Theory of Knowledge エッセイプロジェクト。知識の本質について探究します。',\n        user_uuid,\n        '#f97316',\n        '💭'\n    ) RETURNING id INTO tok_project_id;\n    \n    -- CAS プロジェクト\n    INSERT INTO public.projects (id, name, description, owner_id, color, icon)\n    VALUES (\n        uuid_generate_v4(),\n        'CAS Activities',\n        'Creativity, Activity, Service プロジェクト。課外活動の記録と反思です。',\n        user_uuid,\n        '#ec4899',\n        '🎯'\n    ) RETURNING id INTO cas_project_id;\n    \n    -- プロジェクトオーナーをメンバーとして追加\n    INSERT INTO public.project_members (project_id, user_id, role)\n    VALUES \n        (ee_project_id, user_uuid, 'admin'),\n        (tok_project_id, user_uuid, 'admin'),\n        (cas_project_id, user_uuid, 'admin');\n        \nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "create_tutorial_references(uuid,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.create_tutorial_references(user_uuid uuid, project_uuid uuid)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n    ref_id UUID;\nBEGIN\n    -- サンプル参照1: 学術論文\n    INSERT INTO public.references (id, project_id, url, title, saved_by, memo, metadata)\n    VALUES (\n        uuid_generate_v4(),\n        project_uuid,\n        'https://www.jstor.org/stable/sample-paper',\n        'Sample Academic Paper on Research Methods',\n        user_uuid,\n        'これは研究方法に関する重要な論文です。第3章の統計手法が特に参考になります。',\n        jsonb_build_object(\n            'author', 'Smith, J. & Johnson, A.',\n            'publishedDate', '2023-03-15',\n            'description', 'A comprehensive study on modern research methodologies',\n            'siteName', 'JSTOR',\n            'type', 'article'\n        )\n    ) RETURNING id INTO ref_id;\n    \n    -- サンプル選択テキスト\n    INSERT INTO public.selected_texts (reference_id, text, context_before, context_after, project_id, created_by)\n    VALUES (\n        ref_id,\n        'Research methodology is fundamental to any academic inquiry.',\n        'In conclusion, we can state that ',\n        ' This principle guides our entire approach.',\n        project_uuid,\n        user_uuid\n    );\n    \n    -- サンプル参照2: ウェブサイト\n    INSERT INTO public.references (id, project_id, url, title, saved_by, memo, metadata)\n    VALUES (\n        uuid_generate_v4(),\n        project_uuid,\n        'https://www.ibo.org/programmes/diploma-programme/',\n        'Diploma Programme - International Baccalaureate',\n        user_uuid,\n        'IBディプロマプログラムの公式情報。Extended Essayの要件について詳しく記載されています。',\n        jsonb_build_object(\n            'author', 'International Baccalaureate Organization',\n            'description', 'Official information about the IB Diploma Programme',\n            'siteName', 'IBO',\n            'type', 'website'\n        )\n    );\n    \n    -- サンプル参照3: 書籍\n    INSERT INTO public.references (id, project_id, url, title, saved_by, memo, metadata)\n    VALUES (\n        uuid_generate_v4(),\n        project_uuid,\n        'https://www.example-publisher.com/academic-writing-guide',\n        'The Complete Guide to Academic Writing',\n        user_uuid,\n        'アカデミックライティングの包括的なガイド。引用方法とエッセイ構造について詳しく解説されています。',\n        jsonb_build_object(\n            'author', 'Williams, M.',\n            'publishedDate', '2022-09-20',\n            'description', 'A comprehensive guide to academic writing and citation',\n            'siteName', 'Academic Press',\n            'type', 'book'\n        )\n    );\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "get_database_statistics()",
+      "definition": "CREATE OR REPLACE FUNCTION public.get_database_statistics()\n RETURNS TABLE(table_name text, row_count bigint)\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nBEGIN\n    RETURN QUERY\n    SELECT 'profiles'::TEXT, COUNT(*)::BIGINT FROM public.profiles\n    UNION ALL\n    SELECT 'projects'::TEXT, COUNT(*)::BIGINT FROM public.projects\n    UNION ALL\n    SELECT 'project_members'::TEXT, COUNT(*)::BIGINT FROM public.project_members\n    UNION ALL\n    SELECT 'references'::TEXT, COUNT(*)::BIGINT FROM public.references\n    UNION ALL\n    SELECT 'selected_texts'::TEXT, COUNT(*)::BIGINT FROM public.selected_texts\n    UNION ALL\n    SELECT 'bookmarks'::TEXT, COUNT(*)::BIGINT FROM public.bookmarks\n    UNION ALL\n    SELECT 'tags'::TEXT, COUNT(*)::BIGINT FROM public.tags\n    UNION ALL\n    SELECT 'activity_logs'::TEXT, COUNT(*)::BIGINT FROM public.activity_logs;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "update_updated_at_column()",
+      "definition": "CREATE OR REPLACE FUNCTION public.update_updated_at_column()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  NEW.updated_at = timezone('utc'::text, now());\n  RETURN NEW;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "regenerate_link_sharing_token(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.regenerate_link_sharing_token(p_project_id uuid)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nDECLARE\n  new_token uuid;\nBEGIN\n  -- オーナーのみが実行可能\n  IF NOT EXISTS (\n    SELECT 1 FROM public.projects \n    WHERE id = p_project_id AND owner_id = auth.uid()\n  ) THEN\n    RAISE EXCEPTION 'Only project owner can regenerate sharing token';\n  END IF;\n\n  new_token := uuid_generate_v4();\n  \n  UPDATE public.projects \n  SET link_sharing_token = new_token, \n      updated_at = timezone('utc'::text, now())\n  WHERE id = p_project_id;\n  \n  RETURN new_token;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "log_activity()",
+      "definition": "CREATE OR REPLACE FUNCTION public.log_activity()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n    -- テーブル名に応じて適切なフィールドを選択\n    IF TG_TABLE_NAME = 'projects' THEN\n        INSERT INTO public.activity_logs (user_id, project_id, action, resource_type, resource_id, details)\n        VALUES (\n            NEW.owner_id,  -- projectsテーブルにはowner_idのみ存在\n            NEW.id,\n            TG_OP,\n            TG_TABLE_NAME,\n            NEW.id,\n            jsonb_build_object('operation', TG_OP, 'table', TG_TABLE_NAME)\n        );\n    ELSIF TG_TABLE_NAME = 'references' THEN\n        INSERT INTO public.activity_logs (user_id, project_id, action, resource_type, resource_id, details)\n        VALUES (\n            NEW.saved_by,  -- referencesテーブルにはsaved_byが存在\n            NEW.project_id,\n            TG_OP,\n            TG_TABLE_NAME,\n            NEW.id,\n            jsonb_build_object('operation', TG_OP, 'table', TG_TABLE_NAME)\n        );\n    ELSE\n        -- その他のテーブル用の汎用処理\n        INSERT INTO public.activity_logs (user_id, project_id, action, resource_type, resource_id, details)\n        VALUES (\n            COALESCE(NEW.saved_by, NEW.created_by, NEW.owner_id, NEW.user_id),\n            COALESCE(NEW.project_id, NEW.id),\n            TG_OP,\n            TG_TABLE_NAME,\n            NEW.id,\n            jsonb_build_object('operation', TG_OP, 'table', TG_TABLE_NAME)\n        );\n    END IF;\n    \n    RETURN COALESCE(NEW, OLD);\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "cleanup_old_trash()",
+      "definition": "CREATE OR REPLACE FUNCTION public.cleanup_old_trash()\n RETURNS void\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  DELETE FROM projects \n  WHERE deleted_at IS NOT NULL \n    AND deleted_at < NOW() - INTERVAL '30 days';\n  \n  DELETE FROM \"references\" \n  WHERE deleted_at IS NOT NULL \n    AND deleted_at < NOW() - INTERVAL '30 days';\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "soft_delete_project_references()",
+      "definition": "CREATE OR REPLACE FUNCTION public.soft_delete_project_references()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL THEN\n    UPDATE \"references\" \n    SET deleted_at = NEW.deleted_at, deleted_by = NEW.deleted_by\n    WHERE project_id = NEW.id AND deleted_at IS NULL;\n  END IF;\n  \n  IF NEW.deleted_at IS NULL AND OLD.deleted_at IS NOT NULL THEN\n    UPDATE \"references\" \n    SET deleted_at = NULL, deleted_by = NULL\n    WHERE project_id = NEW.id AND deleted_by = OLD.deleted_by;\n  END IF;\n  \n  RETURN NEW;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "handle_new_user()",
+      "definition": "CREATE OR REPLACE FUNCTION public.handle_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  INSERT INTO public.profiles (id, email, name)\n  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)));\n  RETURN NEW;\nEND;\n$function$\n"
+    },
+    {
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "signature": "check_reference_duplicate(uuid,text)",
+      "definition": "CREATE OR REPLACE FUNCTION public.check_reference_duplicate(p_project_id uuid, p_url text)\n RETURNS boolean\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nBEGIN\n    RETURN EXISTS (\n        SELECT 1 FROM public.references \n        WHERE project_id = p_project_id AND url = p_url\n    );\nEND;\n$function$\n"
+    }
+  ]
+}

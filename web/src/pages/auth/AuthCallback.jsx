@@ -18,18 +18,19 @@ export default function AuthCallback() {
         }
 
         if (session) {
-          // プロファイルの作成/更新
-          const { error: profileError } = await supabase
+          // 既存プロフィールは許可された表示項目だけを更新する。
+          const { data: existingProfile, error: lookupError } = await supabase
             .from('profiles')
-            .upsert({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
-              avatar_url: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
-              updated_at: new Date().toISOString()
-            }, {
-              onConflict: 'id'
-            })
+            .select('id').eq('id', session.user.id).maybeSingle()
+          if (lookupError) {throw lookupError}
+          const displayProfile = {
+            name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
+            avatar_url: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
+            updated_at: new Date().toISOString()
+          }
+          const { error: profileError } = existingProfile
+            ? await supabase.from('profiles').update(displayProfile).eq('id', session.user.id)
+            : await supabase.from('profiles').insert({ id: session.user.id, email: session.user.email, ...displayProfile })
 
           if (profileError) {
             console.error('Profile upsert error:', profileError)

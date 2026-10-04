@@ -1,0 +1,88 @@
+ResearchVault 権限修正・検証記録（2026-10-04 JST）
+
+本番反映済み
+Supabase: pzplwtvnxikhykqsvcfs
+20261004105523_restrict_unused_statistics_api
+20261004112223_harden_researchvault_permissions
+
+統計ビュー2件を security_invoker=true とし、PUBLIC/anon/authenticated の
+閲覧権限を撤回。get_all_user_statistics() の実行権限も撤回した。
+リポジトリ内に利用箇所はなく、型不一致だけを修正して公開し直してはいない。
+postgres/service_role の管理用途の権限は維持。
+
+プロフィールは本人のみ。is_admin のINSERT/UPDATE権限をクライアントから
+撤回し、管理者判定は Auth app_metadata.is_admin に移した。利用者が明示した
+アカウント1件だけを登録し、他の既存フラグからは昇格していない。
+管理者は再ログインまたはセッション更新が必要。
+プロフィール保存とログイン後同期は、許可された列のみ更新するよう修正。
+
+メンバー・資料・抜粋・ブックマーク・ログ・招待・タグ・フィードバックの
+RLSを用途ごとに見直した。共有リンクはDBでトークンを検証し、利用者と
+JWT session_idに紐づく読取専用の許可を非公開スキーマに保存する。
+トークン再生成で旧許可を失効。所有者チェックのある再生成関数と
+新規登録トリガーは用途を維持し、公開実行権限・search_pathを制限。
+共同編集者名は、認可された名前だけのRPCで表示する。招待先検索は
+プロジェクト管理権限を必要とする完全一致検索。
+APIの利用者データ取得は、呼出者JWTと公開キーを使用してRLSを適用。
+
+send-invitation-email v2 と clever-responder v4 を同じ修正ソースに更新。
+両方 ACTIVE、verify_jwt=true、同じバンドルSHA256:
+5500edb205499f362e92b6886dbf5bbd8e72368336c5812f15f2e89c88fdba6d
+登録済みの招待先とメールアドレスの一致、招待者・管理権限を確認し、
+HTMLをエスケープ、遷移先ドメインを固定、重複送信を抑制する。
+clever-responder の初回更新は自動承認レビューが別用途上書きの懸念で拒否。
+現行ソースが元の招待メール関数と完全一致する証拠を取得した後、更新が承認された。
+
+事前検証と本番適用
+PGliteの隔離PostgreSQLに実際の関数・トリガー・ポリシー定義を復元し、
+未ログイン・一般利用者A/B・管理者の合成データで89件の権限テストを実施。
+閲覧拒否、自己昇格、異なるプロジェクトの関連付け、閲覧者/編集者、共有
+リンク、トークン失効、招待受諾、宛先改ざん、ゴミ箱復元、新規登録を検証。
+生成したrollback-only SQLも同じ隔離DBで再実行した。
+API・メール境界のテストと既存PDFテスト20件も成功。メール送信はモック。
+本番ビルド成功。ESLintはエラー0、既存形式の警告45件。
+適用直前の本番ポリシーと関数が隔離テストの入力定義と一致することを確認。
+権限適用はトランザクション、lock_timeout=2秒、statement_timeout=30秒。
+ポリシー指紋892255062cdba95ef4840d4d03bdd20aとの一致を適用内で再確認。
+本番に合成データは作成していない。
+
+適用後検証
+本番41ポリシーが隔離テスト後の定義と一致。
+RLS、匿名実行権限、統計権限、is_admin列権限を実効ACLで確認。
+実在しない合成IDのJWTコンテキストによる本番拒否確認も成功。
+HTTP確認29件成功: サイト200、未認証/無効トークンAPI401、匿名の
+limit=0テーブルアクセスと統計RPC拒否、両メール関数の無認証拒否。
+実利用者のメール・APIキー・プロジェクト等は取得していない。
+実利用者としてのログイン後ブラウザE2Eと実メール配送は未実施。
+情報流出の有無を証明する調査は実施しておらず、流出は未確認。
+
+残存事項・広域調査
+Security AdvisorのERROR、匿名GraphQL公開、匿名SECURITY DEFINER実行、
+可変search_path警告は解消。残る認証済みGraphQLのスキーマ公開15件は
+RLS保護された必要なテーブル/ビュー。認証済みdefiner RPC6件は、用途別
+認可チェックを持つ意図的API。private.project_link_grantsのポリシー無しは
+クライアントアクセスを全面拒否する意図的構成。
+漏洩パスワード保護は無効のまま。Auth設定として別途検討が必要。
+postgresの新規publicオブジェクト既定権限は制限済み。supabase_adminが
+生成するオブジェクトの既定権限は、この接続ロールに変更権限がなく残る。
+将来のプラットフォーム生成オブジェクトは個別ACLの確認が必要。
+本番依存パッケージのnpm auditはHigh5/Moderate3、Critical0。
+詳細はdependency-audit-2026-10-04.json。権限修正と同時の依存一括更新は
+行っていない。開発依存も含めたビルド監査ではHigh21を含む28件。
+既存のアカウント削除はdelete_user RPCが本番に存在せず、今回の対象外。
+既存のFKによるプロジェクト完全削除制約、タグ名の全体一意制約も残る。
+過去に不正変更されたデータの復旧は、正当性を確認できる記録が必要なため
+自動でメンバーや所有者を削除・変更していない。
+
+再現
+npm ci --prefix supabase/tests
+npm --prefix supabase/tests test
+npm --prefix web test
+npm --prefix web run lint
+npm --prefix web run build
+node scripts/verify-production-permissions.mjs
+最後のスクリプトは本番への無認証・無効トークン・limit=0要求のみ。
+rollback-only SQLを本番で実行したとの主張はしていない。
+旧アプリや旧RLSへ戻すと権限問題が再発するため、自動的な全体巻戻しは避ける。
+既存の履歴が完全な初期化migrationでないため、新規DBへの全履歴リプレイは
+別途スキーマ初期化の整備が必要。

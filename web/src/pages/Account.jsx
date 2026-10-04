@@ -102,12 +102,13 @@ export default function Account() {
       // プロファイル情報を更新
       const { error: profileError } = await supabase
         .from('profiles')
-        .upsert({
-          id: user.id,
+        .update({
           name: profile.name,
-          email: profile.email,
           updated_at: new Date().toISOString()
         })
+        .eq('id', user.id)
+        .select('id')
+        .single()
 
       if (profileError) {
         throw profileError
@@ -183,12 +184,14 @@ export default function Account() {
 
       const { error } = await supabase
         .from('profiles')
-        .upsert({
-          id: user.id,
+        .update({
           gemini_api_key: geminiKeyInput.trim(),
           gemini_api_key_enabled: true,
           updated_at: new Date().toISOString()
         })
+        .eq('id', user.id)
+        .select('id')
+        .single()
 
       if (error) {
         throw error

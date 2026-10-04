@@ -27,13 +27,7 @@ export default function Feedback() {
       setError(null)
       
       // ユーザーが管理者かチェック
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single()
-      
-      const userIsAdmin = profileData?.is_admin || false
+      const userIsAdmin = user.app_metadata?.is_admin === true
       setIsAdmin(userIsAdmin)
       
       // フィードバックを取得
@@ -63,7 +57,14 @@ export default function Feedback() {
         throw fetchError
       }
       
-      setFeedbacks(data || [])
+      if (userIsAdmin) {
+        const { data: authors, error: authorError } = await supabase.rpc('get_feedback_authors')
+        if (authorError) {throw authorError}
+        const names = new Map((authors || []).map(author => [author.id, { name: author.name }]))
+        setFeedbacks((data || []).map(feedback => ({ ...feedback, profiles: names.get(feedback.user_id) })))
+      } else {
+        setFeedbacks(data || [])
+      }
     } catch (error) {
       console.error('Failed to load feedbacks:', error)
       setError('フィードバックの読み込みに失敗しました')

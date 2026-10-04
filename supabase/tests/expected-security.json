@@ -1,0 +1,496 @@
+{
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "activity_logs",
+      "policyname": "logs_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((user_id = auth.uid()) OR private.project_access(project_id, 'manage'::text))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bookmarks",
+      "policyname": "child_delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "private.child_access(reference_id, project_id, created_by, 'write'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bookmarks",
+      "policyname": "child_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((created_by = auth.uid()) AND private.child_access(reference_id, project_id, created_by, 'write'::text))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bookmarks",
+      "policyname": "child_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "private.child_access(reference_id, project_id, created_by, 'read'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bookmarks",
+      "policyname": "child_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "private.child_access(reference_id, project_id, created_by, 'write'::text)",
+      "with_check": "private.child_access(reference_id, project_id, created_by, 'write'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "browsing_history_candidates",
+      "policyname": "Users can delete their own candidates",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "DELETE",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "browsing_history_candidates",
+      "policyname": "Users can insert their own candidates",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "browsing_history_candidates",
+      "policyname": "Users can update their own candidates",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "browsing_history_candidates",
+      "policyname": "Users can view their own candidates",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "citation_settings",
+      "policyname": "Users can manage own citation settings",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "public"
+      ],
+      "cmd": "ALL",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "feature_requests",
+      "policyname": "feedback_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "feature_requests",
+      "policyname": "feedback_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((user_id = auth.uid()) OR private.is_app_admin())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "feature_requests",
+      "policyname": "feedback_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(user_id = auth.uid())",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(id = auth.uid())",
+      "with_check": "(id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "project_invitations",
+      "policyname": "invitations_delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "private.project_access(project_id, 'manage'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "project_invitations",
+      "policyname": "invitations_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((inviter_id = auth.uid()) AND private.project_access(project_id, 'manage'::text))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "project_invitations",
+      "policyname": "invitations_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((inviter_id = auth.uid()) OR (invitee_id = auth.uid()))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "project_invitations",
+      "policyname": "invitations_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "private.project_access(project_id, 'manage'::text)",
+      "with_check": "private.project_access(project_id, 'manage'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "project_members",
+      "policyname": "members_delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "((user_id = auth.uid()) OR private.project_access(project_id, 'manage'::text))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "project_members",
+      "policyname": "members_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "private.project_access(project_id, 'manage'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "project_members",
+      "policyname": "members_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "private.project_access(project_id, 'read'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "project_members",
+      "policyname": "members_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "private.project_access(project_id, 'manage'::text)",
+      "with_check": "private.project_access(project_id, 'manage'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "projects_delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(owner_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "projects_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(owner_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "projects_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "private.project_access(id, 'read'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "projects",
+      "policyname": "projects_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "private.project_access(id, 'write'::text)",
+      "with_check": "private.project_access(id, 'write'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "reference_tags",
+      "policyname": "reference_tags_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "private.reference_access(reference_id, 'read'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "reference_tags",
+      "policyname": "reference_tags_write",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "ALL",
+      "qual": "private.reference_access(reference_id, 'write'::text)",
+      "with_check": "private.reference_access(reference_id, 'write'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "references",
+      "policyname": "references_delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "private.reference_access(id, 'write'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "references",
+      "policyname": "references_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((saved_by = auth.uid()) AND ((project_id IS NULL) OR private.project_access(project_id, 'write'::text)))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "references",
+      "policyname": "references_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "private.reference_access(id, 'read'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "references",
+      "policyname": "references_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "private.reference_access(id, 'write'::text)",
+      "with_check": "(((project_id IS NULL) AND (saved_by = auth.uid())) OR private.project_access(project_id, 'write'::text))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "selected_texts",
+      "policyname": "child_delete",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "private.child_access(reference_id, project_id, created_by, 'write'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "selected_texts",
+      "policyname": "child_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((created_by = auth.uid()) AND private.child_access(reference_id, project_id, created_by, 'write'::text))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "selected_texts",
+      "policyname": "child_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "private.child_access(reference_id, project_id, created_by, 'read'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "selected_texts",
+      "policyname": "child_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "private.child_access(reference_id, project_id, created_by, 'write'::text)",
+      "with_check": "private.child_access(reference_id, project_id, created_by, 'write'::text)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tags",
+      "policyname": "tags_insert",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(created_by = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tags",
+      "policyname": "tags_read",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "((created_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM reference_tags rt\n  WHERE (rt.tag_id = tags.id))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tags",
+      "policyname": "tags_update",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(created_by = auth.uid())",
+      "with_check": "(created_by = auth.uid())"
+    }
+  ]
+}

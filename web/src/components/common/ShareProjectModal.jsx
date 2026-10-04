@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
+import { findProjectInvitee } from '../../lib/projectSecurity'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'react-hot-toast'
 import ConfirmDialog from './ConfirmDialog'
 import ProtectedModal from './ProtectedModal'
 import { useModalContext } from '../../hooks/useModalContext'
 import { useAuth } from '../../hooks/useAuth'
-import { Link, Copy, Mail, AlertTriangle, Check, X, UserPlus, Users, Globe, Lock } from 'lucide-react'
+import { Copy, Mail, AlertTriangle, X, UserPlus, Users, Globe, Lock } from 'lucide-react'
 import { renderProjectIcon } from '../../utils/iconRenderer'
 
 const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
@@ -108,11 +109,8 @@ const ShareProjectModal = ({ project, members, onClose, onUpdate }) => {
       setLoading(true)
 
       // ユーザーが存在するかチェック
-      const { data: userProfile, error: userError } = await supabase
-        .from('profiles')
-        .select('id, email, name')
-        .eq('email', inviteEmail.trim().toLowerCase())
-        .single()
+      const userProfile = await findProjectInvitee(project.id, inviteEmail)
+      const userError = null
 
       if (userError || !userProfile) {
         toast.error('指定されたメールアドレスのユーザーが見つかりません。このサービスに登録されているユーザーのみ招待できます。')

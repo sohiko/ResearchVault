@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { toast } from 'react-hot-toast'
+import { findProjectInvitee, projectWithPeople } from '../lib/projectSecurity'
 
 // プロジェクトコンテキストの作成
 const ProjectContext = createContext({
@@ -62,6 +63,7 @@ export function ProjectProvider({ children }) {
             *,
             owner:profiles!owner_id(name, email),
             project_members(
+              user_id,
               role,
               joined_at,
               profiles(name, email)
@@ -120,7 +122,12 @@ export function ProjectProvider({ children }) {
           })
       ])
 
-      const allProjects = projectsWithCounts
+      const allProjects = await Promise.all(projectsWithCounts.map(async project => {
+        const enriched = await projectWithPeople(project)
+        return { ...enriched, members: enriched.project_members?.map(member => ({
+          role: member.role, joinedAt: member.joined_at, user: member.profiles
+        })) || [{ role: 'owner', joinedAt: project.created_at, user: enriched.owner }] }
+      }))
 
       // 重複を排除して更新日順でソート
       const uniqueProjects = allProjects
@@ -313,11 +320,8 @@ export function ProjectProvider({ children }) {
   const inviteMember = async (projectId, email, role = 'viewer') => {
     try {
       // まず招待するユーザーが存在するかチェック
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .single()
+      const userData = await findProjectInvitee(projectId, email)
+      const userError = null
 
       if (userError || !userData) {
         toast.error('指定されたメールアドレスのユーザーが見つかりません')
@@ -327,7 +331,7 @@ export function ProjectProvider({ children }) {
       // 既にメンバーかチェック
       const { data: existingMember } = await supabase
         .from('project_members')
-        .select('id')
+        .select('user_id')
         .eq('project_id', projectId)
         .eq('user_id', userData.id)
         .single()

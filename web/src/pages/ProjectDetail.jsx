@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { authorizeProjectLink, projectPeople, projectWithPeople } from '../lib/projectSecurity'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useModalContext } from '../hooks/useModalContext'
@@ -156,7 +157,7 @@ export default function ProjectDetail() {
         .eq('user_id', user.id)
     }
 
-    setProject(projectData)
+    setProject(await projectWithPeople(projectData))
     setAccessType(currentAccessType)
     setMemberRole(currentMemberRole)
   }, [id, user, hasOpenModals, sharingToken])
@@ -220,7 +221,8 @@ export default function ProjectDetail() {
 
     if (error) throw error
 
-    setMembers(data || [])
+    const people = await projectPeople(id)
+    setMembers((data || []).map(member => ({ ...member, profiles: people.get(member.user_id) })))
   }, [id, user, hasOpenModals])
 
   const loadCitationSettings = useCallback(async () => {
@@ -250,6 +252,7 @@ export default function ProjectDetail() {
       setLoading(true)
       setError(null)
       
+      if (sharingToken) { await authorizeProjectLink(id, sharingToken) }
       await Promise.all([
         loadProject(),
         loadReferences(),
@@ -262,7 +265,7 @@ export default function ProjectDetail() {
     } finally {
       setLoading(false)
     }
-  }, [hasOpenModals, loadProject, loadReferences, loadMembers, loadCitationSettings])
+  }, [hasOpenModals, loadProject, loadReferences, loadMembers, loadCitationSettings, id, sharingToken])
 
   // ページフォーカス時の自動リロードを無効化（モーダルがあるページなので完全に無効）
   usePageFocus(() => {}, [], {
@@ -377,7 +380,7 @@ export default function ProjectDetail() {
 
       if (error) throw error
 
-      setProject(data)
+      setProject(await projectWithPeople(data))
       setShowEditModal(false)
       toast.success('プロジェクトを更新しました')
     } catch (error) {

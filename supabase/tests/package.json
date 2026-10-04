@@ -1,0 +1,7 @@
+{
+  "name": "researchvault-permission-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node ../../scripts/test-permissions.mjs" },
+  "devDependencies": { "@electric-sql/pglite": "0.3.14" }
+}

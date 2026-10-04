@@ -2,9 +2,9 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
+const supabaseServiceKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
 
 export default async function handler(req, res) {
   // CORS設定
@@ -24,6 +24,10 @@ export default async function handler(req, res) {
     }
 
     const token = authHeader.split(' ')[1]
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false }
+    })
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
@@ -32,11 +36,11 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
-        return handleGetCandidates(req, res, user.id)
+        return handleGetCandidates(req, res, user.id, supabase)
       case 'POST':
-        return handleCreateCandidate(req, res, user.id)
+        return handleCreateCandidate(req, res, user.id, supabase)
       case 'PUT':
-        return handleUpdateCandidate(req, res, user.id)
+        return handleUpdateCandidate(req, res, user.id, supabase)
       default:
         return res.status(405).json({ error: 'Method not allowed' })
     }
@@ -49,7 +53,7 @@ export default async function handler(req, res) {
   }
 }
 
-async function handleGetCandidates(req, res, userId) {
+async function handleGetCandidates(req, res, userId, supabase) {
   try {
     const { limit = 20, dismissed = false } = req.query
 
@@ -78,7 +82,7 @@ async function handleGetCandidates(req, res, userId) {
   }
 }
 
-async function handleCreateCandidate(req, res, userId) {
+async function handleCreateCandidate(req, res, userId, supabase) {
   try {
     const { url, title, favicon, visitedAt, domain } = req.body
 
@@ -185,7 +189,7 @@ async function handleCreateCandidate(req, res, userId) {
   }
 }
 
-async function handleUpdateCandidate(req, res, userId) {
+async function handleUpdateCandidate(req, res, userId, supabase) {
   try {
     const { id, dismissed, action } = req.body
 

@@ -2,13 +2,13 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+const supabaseServiceKey = process.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.warn('Using fallback Supabase configuration. Please set environment variables for production.')
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
 
 export default async function handler(req, res) {
   // CORS設定
@@ -28,6 +28,10 @@ export default async function handler(req, res) {
     }
 
     const token = authHeader.split(' ')[1]
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false }
+    })
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
@@ -36,13 +40,13 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
-        return handleGetInvitations(req, res, user.id)
+        return handleGetInvitations(req, res, user.id, supabase)
       case 'POST':
-        return handleCreateInvitation(req, res, user.id)
+        return handleCreateInvitation(req, res, user.id, supabase)
       case 'PUT':
-        return handleUpdateInvitation(req, res, user.id)
+        return handleUpdateInvitation(req, res, user.id, supabase)
       case 'DELETE':
-        return handleDeleteInvitation(req, res, user.id)
+        return handleDeleteInvitation(req, res, user.id, supabase)
       default:
         return res.status(405).json({ error: 'Method not allowed' })
     }
@@ -56,7 +60,7 @@ export default async function handler(req, res) {
 }
 
 // 招待一覧を取得
-async function handleGetInvitations(req, res, userId) {
+async function handleGetInvitations(req, res, userId, supabase) {
   try {
     const { projectId, type } = req.query
 
@@ -101,7 +105,7 @@ async function handleGetInvitations(req, res, userId) {
 }
 
 // 新規招待を作成
-async function handleCreateInvitation(req, res, userId) {
+async function handleCreateInvitation(req, res, userId, supabase) {
   try {
     const { projectId, inviteeEmail, role, message, sendEmail } = req.body
 
@@ -149,11 +153,8 @@ async function handleCreateInvitation(req, res, userId) {
     }
 
     // 招待先ユーザーの存在確認
-    const { data: inviteeProfile, error: inviteeError } = await supabase
-      .from('profiles')
-      .select('id, email, name')
-      .eq('email', inviteeEmail.trim().toLowerCase())
-      .single()
+    const { data: inviteeRows, error: inviteeError } = await supabase.rpc('find_project_invitee', { p_project_id: projectId, p_email: inviteeEmail })
+    const inviteeProfile = inviteeRows?.[0]
 
     if (inviteeError || !inviteeProfile) {
       return res.status(400).json({ 
@@ -265,7 +266,7 @@ async function handleCreateInvitation(req, res, userId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`
+            'Authorization': req.headers.authorization
           },
           body: JSON.stringify({
             invitationId: invitation.id,
@@ -304,103 +305,19 @@ async function handleCreateInvitation(req, res, userId) {
 }
 
 // 招待を更新（承認/拒否）
-async function handleUpdateInvitation(req, res, userId) {
-  try {
-    const { invitationId, status } = req.body
-
-    if (!invitationId) {
-      return res.status(400).json({ error: '招待IDが必要です' })
-    }
-
-    if (!status || !['accepted', 'rejected', 'cancelled'].includes(status)) {
-      return res.status(400).json({ error: '有効なステータスを指定してください' })
-    }
-
-    // 招待の取得
-    const { data: invitation, error: getError } = await supabase
-      .from('project_invitations')
-      .select('*, projects (id, owner_id)')
-      .eq('id', invitationId)
-      .single()
-
-    if (getError || !invitation) {
-      return res.status(404).json({ error: '招待が見つかりません' })
-    }
-
-    // 権限チェック
-    const isInviter = invitation.inviter_id === userId
-    const isInvitee = invitation.invitee_id === userId
-
-    if (status === 'cancelled' && !isInviter) {
-      return res.status(403).json({ error: '招待をキャンセルする権限がありません' })
-    }
-
-    if ((status === 'accepted' || status === 'rejected') && !isInvitee) {
-      return res.status(403).json({ error: 'この招待に応答する権限がありません' })
-    }
-
-    // 既に処理済みの招待は変更不可
-    if (invitation.status !== 'pending') {
-      return res.status(400).json({ error: 'この招待は既に処理されています' })
-    }
-
-    // 招待を更新
-    const { data: updatedInvitation, error: updateError } = await supabase
-      .from('project_invitations')
-      .update({
-        status: status,
-        responded_at: new Date().toISOString()
-      })
-      .eq('id', invitationId)
-      .select()
-      .single()
-
-    if (updateError) {
-      console.error('Update invitation error:', updateError)
-      return res.status(500).json({ error: '招待の更新に失敗しました' })
-    }
-
-    // 承認された場合、プロジェクトメンバーに追加
-    if (status === 'accepted') {
-      const { error: memberError } = await supabase
-        .from('project_members')
-        .insert({
-          project_id: invitation.project_id,
-          user_id: invitation.invitee_id,
-          role: invitation.role
-        })
-
-      if (memberError) {
-        console.error('Add member error:', memberError)
-        // メンバー追加に失敗した場合、招待を元に戻す
-        await supabase
-          .from('project_invitations')
-          .update({ status: 'pending', responded_at: null })
-          .eq('id', invitationId)
-        return res.status(500).json({ error: 'メンバーの追加に失敗しました' })
-      }
-    }
-
-    const statusMessages = {
-      accepted: '招待を承認しました',
-      rejected: '招待を拒否しました',
-      cancelled: '招待をキャンセルしました'
-    }
-
-    return res.status(200).json({
-      success: true,
-      invitation: updatedInvitation,
-      message: statusMessages[status]
-    })
-
-  } catch (error) {
-    console.error('Update invitation unexpected error:', error)
-    return res.status(500).json({ error: '招待の更新に失敗しました' })
+async function handleUpdateInvitation(req, res, userId, supabase) {
+  const { invitationId, status } = req.body
+  if (!invitationId || !['accepted', 'rejected', 'cancelled'].includes(status)) {
+    return res.status(400).json({ error: '有効な招待IDとステータスが必要です' })
   }
+  const { data, error } = await supabase.rpc('respond_project_invitation', {
+    p_invitation_id: invitationId, p_status: status
+  })
+  if (error) {return res.status(403).json({ error: '招待への応答が許可されていません' })}
+  return res.status(200).json({ success: true, invitation: data })
 }
-
 // 招待を削除
-async function handleDeleteInvitation(req, res, userId) {
+async function handleDeleteInvitation(req, res, userId, supabase) {
   try {
     const { invitationId } = req.query
 
