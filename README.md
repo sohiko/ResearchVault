@@ -3,6 +3,12 @@
 
 # ResearchVault
 
+## 現在の本番運用
+
+Web と API は Vercel、認証・データベースは Supabase を利用します。本番 URL は https://rv.insas.jp です。Vercel の `research-vault` プロジェクトはこのリポジトリの `web/` を Root Directory とし、`main` への push で本番デプロイします。
+
+運用手順・環境変数・確認方法は [Vercel 運用メモ](docs/deploy-vercel.txt) を参照してください。VPS 向け手順は旧構成の資料です。`.github/workflows/deploy-rv.yml` は無効化され、VPS への配信を行いません。
+
 ResearchVaultは、IB（国際バカロレア）生を中心とした学生の研究活動を支える参照管理システムです。Chrome拡張機能とWebダッシュボードを組み合わせ、調査・引用・整理を落ち着いたワークフローで一元化します。
 
 ## 提供形態
@@ -37,16 +43,16 @@ ResearchVaultは、IB（国際バカロレア）生を中心とした学生の�
 - Chrome拡張: Manifest V3 / JavaScript (ES6+) / Chrome Storage API / HTML / CSS
 - フロントエンド: React 18+ / Tailwind CSS / React Router v6
 - バックエンド: Supabase (PostgreSQL, Storage, Auth)
-- ホスティング: VPS（本番: https://rv.insas.jp ）、開発時は Vercel CLI も利用可
+- ホスティング: Vercel（本番: https://rv.insas.jp ）
 
 ## セットアップ
-前提: Node.js 18+, npmまたはyarn, Git, Chromeブラウザ
+前提: Node.js 22.21.0+, npm, Git, Chromeブラウザ
 
 1. リポジトリを取得: `git clone https://github.com/sohiko/ResearchVault.git`
 2. 必要に応じて `web/` 直下で依存を導入: `cd web && npm install` または `yarn`
 3. Supabaseの環境変数を設定（`.env`などにキーを配置）
 
-### VPS 本番デプロイ（Ubuntu + Apache2 + systemd）
+### 旧 VPS デプロイ資料（移行前の構成）
 
 Vercel の serverless API (`web/api/`) は **Apache で静的ファイルだけ配信していると動きません**（文献作成で JSON の代わりに HTML が返る）。
 
