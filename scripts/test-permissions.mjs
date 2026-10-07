@@ -47,6 +47,7 @@ for (const policy of baseline.policies) {
 }
 const migration = fs.readFileSync(migrationPath, 'utf8')
 await db.exec(`BEGIN; ${migration}; COMMIT;`)
+await db.exec(fs.readFileSync('supabase/migrations/20261007170905_fix_reference_insert_returning.sql', 'utf8'))
 fs.writeFileSync('supabase/tests/expected-security.json',JSON.stringify({
   policies: (await db.query("SELECT * FROM pg_policies WHERE schemaname='public' ORDER BY tablename,policyname")).rows
 },null,2)+'\n')
@@ -235,4 +236,6 @@ const portable=verificationSql.join(';\n')
 await originalExec('RESET ROLE; ROLLBACK;')
 await originalExec(`BEGIN; ${portable}; RESET ROLE; ROLLBACK;`)
 fs.writeFileSync('supabase/tests/verify-permissions.sql',`-- Only synthetic fixtures; always rollback. Never remove the final ROLLBACK.\nBEGIN;\n${portable};\nRESET ROLE;\nROLLBACK;\nSELECT ${checks} AS passed_checks;\n`)
+await originalExec(fs.readFileSync('supabase/tests/reference-returning.sql', 'utf8'))
+console.log('Reference INSERT/UPDATE RETURNING and access-denial regressions passed')
 await db.close()

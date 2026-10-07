@@ -393,7 +393,7 @@
         "authenticated"
       ],
       "cmd": "SELECT",
-      "qual": "private.reference_access(id, 'read'::text)",
+      "qual": "((((project_id IS NULL) AND (saved_by = ( SELECT auth.uid() AS uid))) OR ((project_id IS NOT NULL) AND private.project_access(project_id, 'read'::text))) AND ((deleted_at IS NULL) OR (saved_by = ( SELECT auth.uid() AS uid)) OR private.project_access(project_id, 'manage'::text)))",
       "with_check": null
     },
     {

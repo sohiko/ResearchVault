@@ -11,7 +11,8 @@ import React, {
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { extractReferenceFromPDF } from '../lib/pdfExtractor'
+import { readReferenceUrl } from '../lib/referenceReader'
+import { buildReferencePayload } from '../lib/referencePayload'
 import { useNavigate } from 'react-router-dom'
 import { useReferenceAction } from './ReferenceActionContext'
 import { resolveGeminiApiKey } from '../lib/userGemini'
@@ -102,29 +103,11 @@ function queueReducer(state, action) {
 export const ReferenceFetchQueueProvider = ({ children }) => {
   const [state, dispatch] = useReducer(queueReducer, initialState)
   const processingRef = useRef(false)
+  const [processing, setProcessing] = useState(false)
   const { user } = useAuth()
   const envGeminiApiKey = import.meta.env.VITE_GEMINI_API_KEY
-  const [geminiKeyConfig, setGeminiKeyConfig] = useState({
-    apiKey: envGeminiApiKey || null,
-    source: envGeminiApiKey ? 'env' : 'none'
-  })
   const navigate = useNavigate()
   const { requestReferenceEdit } = useReferenceAction()
-
-  const refreshGeminiKey = useCallback(async () => {
-    const resolved = await resolveGeminiApiKey(user?.id, envGeminiApiKey)
-    setGeminiKeyConfig(resolved)
-  }, [envGeminiApiKey, user?.id])
-
-  useEffect(() => {
-    refreshGeminiKey()
-  }, [refreshGeminiKey])
-
-  useEffect(() => {
-    const handleKeyUpdate = () => refreshGeminiKey()
-    window.addEventListener('gemini-key-updated', handleKeyUpdate)
-    return () => window.removeEventListener('gemini-key-updated', handleKeyUpdate)
-  }, [refreshGeminiKey])
 
   const enqueueFetch = useCallback((payload) => {
     if (!payload?.url) {
@@ -168,91 +151,11 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
           payload: { statusMessage: 'リンク種別を判定しています...' }
         })
 
-        const referenceInfo = await fetchReferenceInfo(task.url)
-
-        let extractedData = referenceInfo.metadata || {}
-
-        let geminiFallback = false
-
-        const activeGeminiKey = geminiKeyConfig.apiKey
-
-        if (referenceInfo.isPdf) {
-          if (!activeGeminiKey) {
-            throw new Error('Gemini APIキーが設定されていません。アカウント設定からキーを保存してください。')
-          }
-
-          dispatch({
-            type: 'UPDATE',
-            id: task.id,
-            payload: { statusMessage: 'PDFを解析しています (Gemini)...' }
-          })
-
-          try {
-            extractedData = await extractReferenceFromPDF(task.url, activeGeminiKey)
-          } catch (error) {
-            const isRateLimit =
-              error?.code === 'GEMINI_RATE_LIMIT' ||
-              String(error?.message || '').includes('429')
-          const isBlocked =
-            error?.code === 'GEMINI_BLOCKED' ||
-            String(error?.blockReason || '').length > 0 ||
-            String(error?.message || '').includes('block')
-
-          if (isRateLimit || isBlocked) {
-              const fallbackData = {
-              extractionMethod: isBlocked ? 'gemini-blocked' : 'gemini-rate-limited',
-              geminiError: error.message,
-              geminiBlockReason: error.blockReason || null
-              }
-
-              extractedData = { ...(extractedData || {}), ...fallbackData }
-
-              dispatch({
-                type: 'UPDATE',
-                id: task.id,
-                payload: {
-                statusMessage: isBlocked
-                  ? 'Geminiがコンテンツをブロックしたため、既存情報のみで保存します'
-                  : 'Geminiの使用上限に達したため、既存情報のみで保存します'
-                }
-              })
-
-            toast.error(
-              isBlocked
-                ? 'Geminiがコンテンツをブロックしました。既存のメタデータのみで保存します。'
-                : 'Gemini APIの使用上限を超過しました。既存のメタデータのみで参照を保存します。'
-            )
-            } else {
-              const fallbackData = {
-                extractionMethod: 'gemini-failed',
-                geminiError: error.message
-              }
-
-              extractedData = { ...(extractedData || {}), ...fallbackData }
-              geminiFallback = true
-
-              dispatch({
-                type: 'UPDATE',
-                id: task.id,
-                payload: {
-                  statusMessage: 'Gemini解析に失敗したため、既存情報のみで保存します'
-                }
-              })
-
-              toast.error(
-                'Gemini解析に失敗しました。最小限の情報で保存しました。手動での追記を推奨します。',
-                { duration: 6000 }
-              )
-            }
-          }
-        } else {
-          dispatch({
-            type: 'UPDATE',
-            id: task.id,
-            payload: { statusMessage: 'ページ情報を解析しています...' }
-          })
-        }
-
+        const { apiKey: activeGeminiKey } = await resolveGeminiApiKey(user.id, envGeminiApiKey)
+        dispatch({ type: 'UPDATE', id: task.id, payload: { statusMessage: '文献情報を読み取っています...' } })
+        const { info: referenceInfo, metadata: extractedData } = await readReferenceUrl(task.url, activeGeminiKey)
+        const geminiFallback = !!extractedData.extractionWarning
+        if (geminiFallback) {toast.error(extractedData.extractionWarning, { duration: 6000 })}
         const referencePayload = buildReferencePayload({
           task,
           extractedData,
@@ -266,6 +169,10 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
           payload: { statusMessage: '参照を保存しています...' }
         })
 
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user?.id !== user.id) {
+          throw new Error('アカウントが変更されたため、情報取得を中断しました')
+        }
         const referenceRecord = await saveReference(referencePayload)
 
         dispatch({
@@ -307,7 +214,7 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
         toast.error(error.message || '参照情報の取得に失敗しました')
       }
     },
-    [geminiKeyConfig, navigate, requestReferenceEdit, user]
+    [envGeminiApiKey, navigate, requestReferenceEdit, user]
   )
 
   useEffect(() => {
@@ -324,11 +231,13 @@ export const ReferenceFetchQueueProvider = ({ children }) => {
     }
 
     processingRef.current = true
+    setProcessing(true)
 
     processTask(nextTask).finally(() => {
       processingRef.current = false
+      setProcessing(false)
     })
-  }, [processTask, state.tasks, user])
+  }, [processTask, state.tasks, user, processing])
 
   useEffect(() => {
     const hasActiveTasks = state.tasks.some((task) =>
@@ -383,44 +292,6 @@ export const useReferenceFetchQueue = () => {
   return context
 }
 
-async function parseJsonResponse(response) {
-  const contentType = response.headers.get('content-type') || ''
-  if (!contentType.includes('application/json')) {
-    const snippet = (await response.text()).slice(0, 80)
-    if (snippet.trimStart().startsWith('<!DOCTYPE') || snippet.trimStart().startsWith('<html')) {
-      throw new Error(
-        'APIサーバーに接続できません。VPSでは静的ファイルだけでなく Node サーバー (npm run start) を起動してください。'
-      )
-    }
-    throw new Error('APIから無効な応答が返されました')
-  }
-  return response.json()
-}
-
-async function fetchReferenceInfo(url) {
-  const response = await fetch('/api/reference-info', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ url })
-  })
-
-  if (!response.ok) {
-    try {
-      const errorBody = await parseJsonResponse(response)
-      throw new Error(errorBody.error || 'リンク情報の取得に失敗しました')
-    } catch (error) {
-      if (error.message?.includes('APIサーバー')) {
-        throw error
-      }
-      throw new Error('リンク情報の取得に失敗しました')
-    }
-  }
-
-  return parseJsonResponse(response)
-}
-
 async function saveReference(referencePayload) {
   const { data, error } = await supabase
     .from('references')
@@ -435,235 +306,9 @@ async function saveReference(referencePayload) {
   return data
 }
 
-function buildReferencePayload({ task, extractedData, referenceInfo, userId }) {
-  const manual = task.manualFields || {}
-  const infoMetadata = referenceInfo.metadata || {}
-  const now = new Date().toISOString()
-
-  const mergedAuthors = formatAuthors(
-    manual.authors,
-    extractedData.authors || infoMetadata.authors
-  )
-
-  const description =
-    manual.description ||
-    extractedData.description ||
-    infoMetadata.description ||
-    ''
-
-  const tags = Array.isArray(task.tags) ? task.tags : []
-
-  const rawReferenceType =
-    manual.reference_type ||
-    manual.referenceType ||
-    extractedData.referenceType ||
-    extractedData.reference_type ||
-    extractedData.type ||
-    infoMetadata.referenceType ||
-    infoMetadata.reference_type
-
-  const inferredType = inferReferenceType({
-    rawType: rawReferenceType,
-    extractedData,
-    infoMetadata,
-    referenceInfo,
-    task
-  })
-
-  const referenceType = normalizeReferenceType(inferredType)
-
-  return {
-    title:
-      manual.title ||
-      extractedData.title ||
-      infoMetadata.title ||
-      task.url ||
-      'Untitled Reference',
-    url: task.url,
-    memo: manual.memo || null,
-    authors: mergedAuthors,
-    published_date:
-      manual.publishedDate ||
-      extractedData.publishedDate ||
-      infoMetadata.publishedDate ||
-      null,
-    accessed_date:
-      manual.accessedDate || new Date().toISOString().split('T')[0],
-    project_id: task.projectId || null,
-    reference_type: referenceType,
-    publisher:
-      manual.publisher || extractedData.publisher || infoMetadata.siteName || null,
-    pages: manual.pages || extractedData.pages || null,
-    isbn: manual.isbn || extractedData.isbn || null,
-    doi: manual.doi || extractedData.doi || null,
-    journal_name:
-      manual.journal_name || extractedData.journal_name || null,
-    volume: manual.volume || extractedData.volume || null,
-    issue: manual.issue || extractedData.issue || null,
-    edition: manual.edition || extractedData.edition || null,
-    saved_at: now,
-    saved_by: userId,
-    metadata: {
-      description: description || null,
-      tags,
-      siteName: infoMetadata.siteName || null,
-      language: infoMetadata.language || null,
-      keywords: infoMetadata.keywords || [],
-      source: {
-        url: task.url,
-        isPdf: referenceInfo.isPdf || false,
-        method: extractedData.extractionMethod || null
-      }
-    }
-  }
-}
-
-function formatAuthors(manualAuthors = [], extractedAuthors = []) {
-  const normalizedManual =
-    manualAuthors
-      ?.map((author, index) => {
-        if (!author) {
-          return null
-        }
-        if (typeof author === 'string') {
-          return {
-            name: author.trim(),
-            order: index + 1
-          }
-        }
-        const name = author.name?.trim()
-        if (!name) {
-          return null
-        }
-        return {
-          name,
-          order: author.order || index + 1
-        }
-      })
-      .filter(Boolean) || []
-
-  if (normalizedManual.length > 0) {
-    return normalizedManual
-  }
-
-  const normalizedExtracted =
-    extractedAuthors
-      ?.map((author, index) => {
-        if (!author) {
-          return null
-        }
-        if (typeof author === 'string') {
-          return {
-            name: author.trim(),
-            order: index + 1
-          }
-        }
-        if (author.name) {
-          return {
-            name: author.name.trim(),
-            order: author.order || index + 1
-          }
-        }
-        return null
-      })
-      .filter(Boolean) || []
-
-  return normalizedExtracted.length > 0 ? normalizedExtracted : null
-}
-
-function normalizeReferenceType(value) {
-  const normalized = (value || '').toLowerCase()
-  const allowed = ['website', 'article', 'journal', 'book', 'report']
-  if (allowed.includes(normalized)) {
-    return normalized
-  }
-  if (normalized.includes('journal')) {
-    return 'journal'
-  }
-  if (normalized.includes('article') || normalized.includes('paper')) {
-    return 'article'
-  }
-  if (normalized.includes('book')) {
-    return 'book'
-  }
-  if (normalized.includes('report')) {
-    return 'report'
-  }
-  return 'website'
-}
-
-function inferReferenceType({ rawType, extractedData = {}, infoMetadata = {}, referenceInfo = {}, task = {} }) {
-  const normalizedRaw = (rawType || '').toLowerCase()
-  const isPdf = !!referenceInfo.isPdf
-  const url = task.url || referenceInfo.url || ''
-  const domain = (() => {
-    try {
-      return new URL(url).hostname.toLowerCase()
-    } catch {
-      return ''
-    }
-  })()
-
-  const hasDoi = !!(extractedData.doi || infoMetadata.doi)
-  const hasIsbn = !!(extractedData.isbn || infoMetadata.isbn)
-  const hasJournalSignals =
-    !!(extractedData.journalName ||
-      extractedData.journal_name ||
-      infoMetadata.journalName ||
-      infoMetadata.journal_name ||
-      extractedData.volume ||
-      extractedData.issue ||
-      extractedData.pages)
-
-  const filename = (() => {
-    try {
-      return new URL(url).pathname.toLowerCase()
-    } catch {
-      return ''
-    }
-  })()
-
-  const maybeReportByFilename = ['report', 'whitepaper', 'wp', 'policy', 'survey', 'workingpaper', 'discussion', 'special_report']
-    .some(keyword => filename.includes(keyword))
-
-  const isGovOrEdu = /(go\.jp|gov|gob|\.edu|ac\.jp|ac\.uk|edu\.cn|edu)/.test(domain)
-  const isKnownReportDomain = ['mof.go.jp', 'pri.go.jp', 'ilo.org', 'oecd.org', 'imf.org', 'worldbank.org']
-    .some(d => domain.includes(d))
-
-  // If Gemini already returned a non-website, respect it
-  if (normalizedRaw && normalizedRaw !== 'website') {
-    return normalizedRaw
-  }
-
-  // PDFでDOIや巻号があれば論文扱い
-  if (isPdf && (hasDoi || hasJournalSignals)) {
-    return 'article'
-  }
-
-  // ISBNがあれば書籍
-  if (hasIsbn) {
-    return 'book'
-  }
-
-  // 政府・研究機関ドメインやファイル名のシグナルでレポート優先
-  if (isPdf && (isGovOrEdu || isKnownReportDomain || maybeReportByFilename)) {
-    return 'report'
-  }
-
-  // PDFで非ウェブならレポートを既定に
-  if (isPdf) {
-    return 'report'
-  }
-
-  // それ以外は元の値（websiteを含む）
-  return normalizedRaw || 'website'
-}
-
 function generateTaskId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()
   }
   return `task_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
 }
-
-

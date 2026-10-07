@@ -1,3 +1,6 @@
+import { readPdfDocument, validatePdfBytes } from '../lib/pdfDocument.js'
+import { loadServerPdfJs } from '../lib/pdfServer.js'
+
 /**
  * PDFプロキシAPI
  * CORS制限を回避するため、サーバーサイドでPDFをダウンロードしてBase64で返す
@@ -28,9 +31,12 @@ export default async function handler(req, res) {
 
   try {
     // URLを取得（GETの場合はクエリパラメータ、POSTの場合はボディから）
-    const pdfUrl = req.method === 'GET' 
-      ? req.query.url 
+    const pdfUrl = req.method === 'GET'
+      ? req.query.url
       : req.body?.url
+    const textMode = req.method === 'POST' && req.body?.format === 'text'
+    const maxBytes = textMode ? 20 * 1024 * 1024 : MAX_PDF_BYTES
+    const tooLargeError = textMode ? 'PDFが大きすぎます（テキスト解析は20 MiBまで）' : TOO_LARGE_ERROR
 
     if (!pdfUrl) {
       return res.status(400).json({ error: 'URL is required' })
@@ -64,8 +70,8 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error(`[pdf-proxy] Failed to fetch PDF: ${response.status} ${response.statusText}`)
-      return res.status(response.status).json({ 
-        error: `Failed to fetch PDF: ${response.status} ${response.statusText}` 
+      return res.status(response.status).json({
+        error: `Failed to fetch PDF: ${response.status} ${response.statusText}`
       })
     }
 
@@ -73,9 +79,9 @@ export default async function handler(req, res) {
     const contentType = response.headers.get('content-type') || ''
     console.log(`[pdf-proxy] Content-Type: ${contentType}`)
 
-    if (Number(response.headers.get('content-length')) > MAX_PDF_BYTES) {
+    if (Number(response.headers.get('content-length')) > maxBytes) {
       await response.body?.cancel()
-      return res.status(413).json({ error: TOO_LARGE_ERROR })
+      return res.status(413).json({ error: tooLargeError })
     }
 
     // Also bound chunked responses and decompressed bodies without Content-Length.
@@ -83,15 +89,25 @@ export default async function handler(req, res) {
     let size = 0
     for await (const chunk of response.body) {
       size += chunk.byteLength
-      if (size > MAX_PDF_BYTES) {
-        return res.status(413).json({ error: TOO_LARGE_ERROR })
+      if (size > maxBytes) {
+        return res.status(413).json({ error: tooLargeError })
       }
       chunks.push(Buffer.from(chunk))
     }
-    
+
     // Base64エンコード
-    const base64 = Buffer.concat(chunks, size).toString('base64')
-    
+    const bytes = Buffer.concat(chunks, size)
+    validatePdfBytes(bytes)
+    if (textMode) {
+      const pdfjs = await loadServerPdfJs()
+      const document = await readPdfDocument(bytes, pdfjs)
+      if (!document.content.trim()) {
+        return res.status(422).json({ error: 'このPDFにはテキスト層がありません。画像PDFはブラウザーから直接取得できるURLとGemini APIキーが必要です。' })
+      }
+      return res.status(200).json({ success: true, ...document, size })
+    }
+    const base64 = bytes.toString('base64')
+
     console.log(`[pdf-proxy] PDF fetched successfully: ${Math.round(base64.length / 1024)} KB (base64)`)
 
     // Base64データを返す
@@ -103,10 +119,9 @@ export default async function handler(req, res) {
     })
   } catch (error) {
     console.error('[pdf-proxy] Error:', error)
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Failed to fetch PDF',
-      message: error.message 
+      message: error.message
     })
   }
 }
-
