@@ -4,6 +4,30 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pzplwtvnxikhykqsvcfs.supabase.co'
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cGx3dHZueGlraHlrcXN2Y2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NTg3NzQsImV4cCI6MjA3NDMzNDc3NH0.k8h6E0QlW2549ILvrR5NeMdzJMmhmekj6O_GZ3C43V0'
 
+/**
+ * anon ロールはテーブル GRANT / RLS により読み取れない（設計どおり）。
+ * PostgREST が Postgres から返した権限エラーは「到達済み」とみなす。
+ * ネットワーク障害・タイムアウト・5xx などは到達不能のままにする。
+ */
+export function isDatabaseReachable(error) {
+  if (!error) {
+    return true
+  }
+
+  const code = String(error.code || '')
+  const message = String(error.message || '').toLowerCase()
+
+  if (code === '42501') {
+    return true
+  }
+
+  if (message.includes('permission denied') || message.includes('row-level security')) {
+    return true
+  }
+
+  return false
+}
+
 export default async function handler(req, res) {
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -26,7 +50,7 @@ export default async function handler(req, res) {
       try {
         const supabase = createClient(supabaseUrl, supabaseAnonKey)
         const { error } = await supabase.from('projects').select('id').limit(1)
-        databaseStatus = !error
+        databaseStatus = isDatabaseReachable(error)
       } catch (dbError) {
         console.warn('Database health check failed:', dbError)
         databaseStatus = false
