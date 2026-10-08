@@ -1,5 +1,5 @@
 import { readPdfDocument, validatePdfBytes } from '../lib/pdfDocument.js'
-import { loadServerPdfJs } from '../lib/pdfServer.js'
+import { loadServerPdfJs, serverPdfResources } from '../lib/pdfServer.js'
 
 /**
  * PDFプロキシAPI
@@ -100,7 +100,7 @@ export default async function handler(req, res) {
     validatePdfBytes(bytes)
     if (textMode) {
       const pdfjs = await loadServerPdfJs()
-      const document = await readPdfDocument(bytes, pdfjs)
+      const document = await readPdfDocument(bytes, pdfjs, serverPdfResources)
       if (!document.content.trim()) {
         return res.status(422).json({ error: 'このPDFにはテキスト層がありません。画像PDFはブラウザーから直接取得できるURLとGemini APIキーが必要です。' })
       }

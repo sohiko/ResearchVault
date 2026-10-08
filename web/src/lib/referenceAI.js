@@ -55,16 +55,18 @@ export async function generateReference({ apiKey, content = '', metadata = {}, p
   // For readable text, reject unsupported bibliographic claims before saving.
   // Scanned PDFs have no text layer, so their visual extraction needs user review.
   if (!pdfBase64) {
-    const source = `${JSON.stringify(metadata)}\n${content}`.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ')
+    const source = `${JSON.stringify(metadata)}\n${content}`.normalize('NFKC').toLowerCase().replace(/\s+/g, '')
     for (const field of fields) {
       const quote = typeof parsed.evidence?.[field] === 'string' ? parsed.evidence[field].trim() : ''
       const normalize = value => value.normalize('NFKC').toLowerCase().replace(/\s+/g, '')
       const valueInQuote = field === 'publishedDate'
         ? parsePublicationDate(quote).date === result.publishedDate || normalize(quote).includes(normalize(parsed.publishedDate || ''))
         : normalize(quote).includes(normalize(result[field]))
-      if (!quote || !source.includes(quote.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ')) || !valueInQuote) {result[field] = ''}
+      if (!quote || !source.includes(quote.normalize('NFKC').toLowerCase().replace(/\s+/g, '')) || !valueInQuote) {result[field] = ''}
     }
-    result.authors = result.authors.filter(author => source.includes(author.name.normalize('NFKC').toLowerCase()))
+    const authorSource = source.replace(/[,，、]/g, '')
+    result.authors = result.authors.filter(author => authorSource.includes(author.name.normalize('NFKC').toLowerCase().replace(/[\s,，、]/g, '')))
+      .map((author, index) => ({ ...author, order: index + 1 }))
     if (!result.publishedDate) { result.publishedDatePrecision = null; result.publishedDateOriginal = '' }
   }
   return { ...result, extractionMethod: pdfBase64 ? 'gemini-pdf' : 'gemini-text', extractionModel: GEMINI_MODEL }

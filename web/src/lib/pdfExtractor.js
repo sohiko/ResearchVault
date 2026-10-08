@@ -62,7 +62,11 @@ export async function extractReferenceFromPDF(url, apiKey, onProgress = null) {
       const pdfjs = await import('pdfjs-dist/build/pdf.mjs')
       const { default: workerUrl } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
       pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
-      document = await readPdfDocument(downloaded.bytes, pdfjs)
+      document = await readPdfDocument(downloaded.bytes, pdfjs, {
+        cMapUrl: `/pdfjs/${pdfjs.version}/cmaps/`,
+        cMapPacked: true,
+        standardFontDataUrl: `/pdfjs/${pdfjs.version}/standard_fonts/`
+      })
     } catch (error) {
       parseWarning = `PDFのテキスト解析に失敗しました: ${error.message}`
       if (!apiKey) {throw new Error(parseWarning)}

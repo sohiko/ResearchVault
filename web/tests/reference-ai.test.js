@@ -44,3 +44,11 @@ test('evidence spanning PDF line breaks is preserved', async () => {
   const { result } = await aiRequest(candidate({ title: 'Long title', evidence: { title: 'Long\ntitle' } }), { content: 'Long\ntitle' })
   assert.equal(result.title, 'Long title')
 })
+
+test('Japanese bibliography survives glyph spacing in older PDF text', async () => {
+  const { result } = await aiRequest(candidate({ title: '日本語の論文', authors: [{ name: '上園 慶子' }, { name: '架空 著者' }, { name: '川崎 晃一' }],
+    evidence: { title: '日本語の論文' } }), { content: '日 本 語 の 論 文\n上 園 慶 子\n川崎, 晃一' })
+  assert.equal(result.title, '日本語の論文')
+  assert.deepEqual(result.authors.map(author => author.name), ['上園 慶子', '川崎 晃一'])
+  assert.deepEqual(result.authors.map(author => author.order), [1, 2])
+})
