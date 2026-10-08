@@ -1,3 +1,4 @@
+import referenceAiHandler from '../lib/referenceAiServer.js'
 import { readPdfDocument, validatePdfBytes } from '../lib/pdfDocument.js'
 import { loadServerPdfJs, serverPdfResources } from '../lib/pdfServer.js'
 
@@ -27,6 +28,10 @@ export default async function handler(req, res) {
 
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  if (req.method === 'POST' && req.body?.format === 'ai') {
+    return referenceAiHandler(req, res)
   }
 
   try {

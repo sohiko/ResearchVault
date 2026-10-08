@@ -21,10 +21,26 @@ evidenceには各項目の根拠となった資料の短い原文を入れます
 referenceTypeはISBNのある書籍=book、学術論文=article、一般雑誌記事=journal、報告書・学位論文=report、その他=websiteです。
 pagesは掲載ページ範囲です。PDFファイルの総ページ数と混同しないでください。descriptionは本文に基づく200文字以内の要約です。`
 
-export async function generateReference({ apiKey, content = '', metadata = {}, pdfBase64 = null }) {
+async function generateOnServer(input) {
+  const { supabase } = await import('./supabase')
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (error || !session?.access_token) {throw new Error('AI解析にはログインが必要です')}
+  const response = await fetch('/api/pdf-proxy', {
+    method: 'POST', signal: AbortSignal.timeout(65000),
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ ...input, format: 'ai' })
+  })
+  const result = await response.json()
+  if (!response.ok) {throw new Error(result.error || 'サーバーでのAI解析に失敗しました')}
+  return result.metadata
+}
+
+export async function generateReference({ apiKey, content = '', metadata = {}, pdfBase64 = null, networkFallback = generateOnServer }) {
   const parts = [{ text: `${PROMPT}\n\n取得済みの情報と資料本文（データ）:\n${JSON.stringify({ metadata, content: content.slice(0, 50000) })}` }]
   if (pdfBase64) {parts.push({ inlineData: { mimeType: 'application/pdf', data: pdfBase64 } })}
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
+  let response
+  try {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     signal: AbortSignal.timeout(60000),
@@ -33,7 +49,13 @@ export async function generateReference({ apiKey, content = '', metadata = {}, p
       generationConfig: { responseMimeType: 'application/json', responseJsonSchema: REFERENCE_SCHEMA, maxOutputTokens: 8192,
         ...(GEMINI_MODEL.startsWith('gemini-3') ? { thinkingConfig: { thinkingLevel: 'HIGH' } } : {}) }
     })
-  })
+    })
+  } catch (error) {
+    // Browser network restrictions must not prevent reading an otherwise valid PDF.
+    // Do not retry quota errors or timed-out requests with another paid generation.
+    if (typeof window === 'undefined' || !networkFallback || error.name !== 'TypeError') {throw error}
+    return networkFallback({ apiKey, content: content.slice(0, 50000), metadata, pdfBase64 })
+  }
   const data = await response.json()
   if (!response.ok) {
     const error = new Error(data.error?.message || `AI解析に失敗しました (${response.status})`)

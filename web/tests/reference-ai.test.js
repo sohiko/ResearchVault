@@ -52,3 +52,22 @@ test('Japanese bibliography survives glyph spacing in older PDF text', async () 
   assert.deepEqual(result.authors.map(author => author.name), ['上園 慶子', '川崎 晃一'])
   assert.deepEqual(result.authors.map(author => author.order), [1, 2])
 })
+
+test('browser network failures use a server fallback; quotas do not', async () => {
+  const originalFetch = globalThis.fetch
+  const originalWindow = globalThis.window
+  globalThis.window = {}
+  let calls = 0
+  const networkFallback = async input => { calls++; assert.equal(input.content, 'PDF body'); return { title: 'Server title' } }
+  try {
+    globalThis.fetch = async () => {throw new TypeError('Failed to fetch')}
+    assert.equal((await generateReference({ apiKey: 'fixture-key', content: 'PDF body', networkFallback })).title, 'Server title')
+    assert.equal(calls, 1)
+    globalThis.fetch = async () => Response.json({ error: { message: 'quota' } }, { status: 429 })
+    await assert.rejects(generateReference({ apiKey: 'fixture-key', networkFallback }), error => error.code === 'GEMINI_RATE_LIMIT')
+    assert.equal(calls, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalWindow === undefined) {delete globalThis.window} else {globalThis.window = originalWindow}
+  }
+})
